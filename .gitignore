@@ -14,7 +14,7 @@ dist*/
 autodoc*
 
 .vscode/
-__pycache__/
+**/__pycache__/
 
 # cbc files
 cbc.exe
