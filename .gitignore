@@ -1,0 +1,21 @@
+MODEL_RUNS/
+archives/
+switch_model.egg-info/
+
+*pyc
+**parse_table_datacmds.py
+.idea
+.DS_Store
+gurobi.log
+
+venv
+build*/
+dist*/
+autodoc*
+
+.vscode/
+__pycache__
+
+# cbc files
+cbc.exe
+coin-license.txt

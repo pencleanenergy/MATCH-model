@@ -13,6 +13,12 @@ from switch_model.reporting import write_table
 dependencies = 'switch_model.timescales', 'switch_model.balancing.load_zones',\
     'switch_model.financials', 'switch_model.energy_sources.properties.properties'
 
+def define_arguments(argparser):
+    argparser.add_argument('--select_variants', choices=[None,'select'], default=None,
+        help=
+            "Run linear relaxation of variant selection"
+    )
+
 def define_components(mod):
     """
 
@@ -196,8 +202,8 @@ def define_components(mod):
     mod.gen_max_age = Param(mod.GENERATION_PROJECTS, within=PositiveIntegers, default=25)
     mod.gen_is_variable = Param(mod.GENERATION_PROJECTS, within=Boolean)
     mod.gen_is_baseload = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
+    mod.gen_is_storage = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_is_cogen = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
-    mod.gen_is_distributed = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_scheduled_outage_rate = Param(mod.GENERATION_PROJECTS,
         within=PercentFraction, default=0)
     mod.gen_forced_outage_rate = Param(mod.GENERATION_PROJECTS,
@@ -231,6 +237,11 @@ def define_components(mod):
     mod.BASELOAD_GENS = Set(
         initialize=mod.GENERATION_PROJECTS,
         filter=lambda m, g: m.gen_is_baseload[g])
+    mod.STORAGE_GENS = Set(initialize=mod.GENERATION_PROJECTS, 
+                           filter=lambda m, g: m.gen_is_storage[g])
+    mod.NON_STORAGE_GENS = Set(
+        initialize=mod.GENERATION_PROJECTS,
+        filter=lambda m, g: not m.gen_is_storage[g])
 
     def GENS_BY_TECHNOLOGY_init(m, t):
         if not hasattr(m, 'GENS_BY_TECH_dict'):
@@ -323,7 +334,6 @@ def define_components(mod):
         mod.PREDETERMINED_GEN_BLD_YRS,
         within=NonNegativeReals)
     mod.min_data_check('gen_predetermined_cap')
-
 
     def gen_build_can_operate_in_period(m, g, build_year, period):
         if build_year in m.PERIODS:
@@ -443,35 +453,87 @@ def define_components(mod):
             m.BuildGen[g, p] <= m.BuildMinGenCap[g, p] *
                 mod._gen_max_cap_for_binary_constraints))
 
+
+    # Mutually-exclusive project variants
+    #####################################
+    # The following components enforce building only one of several mutually-exclusive project variants.
+    # Note that this adds binary variables to the model.
+
+    
+    """
+    TODO:
+    - [x] Define set of generators that are part of a variant group so that we can index binary variable with fewer options (GENS_WITH_VARIANTS)
+    - [x] Populate GENS_WITH_VARIANTS
+    - [x] Define set of variant group names (VARIANT_GROUPS)
+    - [x] Assign generators to each variant group (GENS_IN_VARIANT_GROUP)
+    - [x] Define binary variable (BuildVariants[g])
+    - [x] Define linking constraint x <= My
+    - [x] Define mutual exclusivity constraint sum(BuildVariants) <= 1
+    """
+    #create a new set of generator projects that are part of a mutually exclusive group
+    mod.GENS_WITH_VARIANTS = Set(within=mod.GENERATION_PROJECTS)
+
+    #need to create a set of the group names
+    mod.VARIANT_GROUPS = Set() 
+
+    #create a parameter that describes which group each generator is in
+    mod.gen_variant_group = Param (
+        mod.GENS_WITH_VARIANTS, 
+        within=mod.VARIANT_GROUPS)
+
+    if mod.options.select_variants == 'select':
+
+        # Create binary decision variable for each generator that has a variant
+        
+        # NOTE: This is currently implemented as a linear relaxation to improve solve time
+        mod.BuildVariants = Var(
+            mod.GENS_WITH_VARIANTS,
+            within=NonNegativeReals,
+            bounds=(0,1))
+        
+        """
+        # NOTE: Binary version of decision variable
+        mod.BuildVariants = Var(
+            mod.GENS_WITH_VARIANTS,
+            within=Binary)
+        """
+
+        # I need a linking constraint such that BuildGen <= max_capacity * BuildVariants
+        mod.BuildVariants_Linking_Constraint = Constraint(
+            mod.GENS_WITH_VARIANTS, mod.PERIODS,
+            rule = lambda m, g, p: m.GenCapacity[g, p] <= m.gen_capacity_limit_mw[g] * m.BuildVariants[g]
+        )
+
+        # create a set describing which generators are in each group
+        def GENS_IN_VARIANT_GROUP_init(m, gr):
+            if not hasattr(m, 'GENS_IN_VARIANT_GROUP_dict'):
+                m.GENS_IN_VARIANT_GROUP_dict = {_gr: [] for _gr in m.VARIANT_GROUPS}
+                for g in m.GENS_WITH_VARIANTS:
+                    m.GENS_IN_VARIANT_GROUP_dict[m.gen_variant_group[g]].append(g)
+            result = m.GENS_IN_VARIANT_GROUP_dict.pop(gr)
+            if not m.GENS_IN_VARIANT_GROUP_dict:
+                del m.GENS_IN_VARIANT_GROUP_dict
+            return result
+        mod.GENS_IN_VARIANT_GROUP = Set(
+            mod.VARIANT_GROUPS,
+            initialize=GENS_IN_VARIANT_GROUP_init
+        )
+
+        #enforce constraint that only one variant of a group can be built
+        # I need to sum the binary values of all of the project in each set
+        #constraint should be indexed by group the sum for the group should <= 1
+        mod.Enforce_Single_Project_Variant = Constraint(
+            mod.VARIANT_GROUPS,
+            rule=lambda m, gr: sum(m.BuildVariants[g] for g in m.GENS_IN_VARIANT_GROUP[gr]) <= 1)
+    
+
     # Costs
     mod.ppa_energy_cost = Param (mod.GENERATION_PROJECTS, within=NonNegativeReals)
     mod.ppa_capacity_cost = Param (mod.GENERATION_PROJECTS, within=NonNegativeReals) 
     mod.min_data_check('ppa_energy_cost','ppa_capacity_cost')
-    """
-    mod.gen_overnight_cost = Param(
-        mod.GEN_BLD_YRS,
-        within=NonNegativeReals)
-    mod.gen_fixed_om = Param(
-        mod.GEN_BLD_YRS,
-        within=NonNegativeReals)
-    mod.min_data_check('gen_overnight_cost', 'gen_fixed_om')
-    """
+
 
     # Derived annual costs
-    """
-    mod.gen_capital_cost_annual = Param(
-        mod.GEN_BLD_YRS,
-        initialize=lambda m, g, bld_yr: (
-            (m.gen_overnight_cost[g, bld_yr] +
-                m.gen_connect_cost_per_mw[g]) *
-            crf(m.interest_rate, m.gen_max_age[g])))
-
-    mod.GenCapitalCosts = Expression(
-        mod.GENERATION_PROJECTS, mod.PERIODS,
-        rule=lambda m, g, p: sum(
-            m.BuildGen[g, bld_yr] * m.gen_capital_cost_annual[g, bld_yr]
-            for bld_yr in m.BLD_YRS_FOR_GEN_PERIOD[g, p]))
-    """
     mod.GenCapacityCost = Expression(
         mod.GENERATION_PROJECTS, mod.PERIODS,
         rule=lambda m, g, p: sum(
@@ -506,8 +568,7 @@ def load_inputs(mod, switch_data, inputs_dir):
     Optional columns are:
         gen_dbid, gen_scheduled_outage_rate, gen_forced_outage_rate,
         gen_capacity_limit_mw, gen_unit_size, gen_ccs_energy_load,
-        gen_ccs_capture_efficiency, gen_min_build_capacity, gen_is_cogen,
-        gen_is_distributed
+        gen_ccs_capture_efficiency, gen_min_build_capacity, gen_is_cogen
 
     The following file lists existing builds of projects, and is
     optional for simulations where there is no existing capacity:
@@ -528,17 +589,17 @@ def load_inputs(mod, switch_data, inputs_dir):
         optional_params=['gen_dbid', 'gen_is_baseload', 'gen_scheduled_outage_rate',
         'gen_forced_outage_rate', 'gen_capacity_limit_mw', 'gen_unit_size',
         'gen_ccs_energy_load', 'gen_ccs_capture_efficiency',
-        'gen_min_build_capacity', 'gen_is_cogen', 'gen_is_distributed','gen_excess_max'],
+        'gen_min_build_capacity', 'gen_is_cogen', 'gen_excess_max', 'gen_variant_group'],
         index=mod.GENERATION_PROJECTS,
         param=(mod.gen_dbid, mod.gen_tech, mod.gen_energy_source,
-               mod.gen_load_zone, mod.gen_is_variable,
+               mod.gen_load_zone, mod.gen_is_variable, mod.gen_is_storage,
                mod.gen_is_baseload, mod.gen_scheduled_outage_rate,
                mod.gen_forced_outage_rate, mod.gen_capacity_limit_mw,
                mod.gen_unit_size, mod.gen_ccs_energy_load,
                mod.gen_ccs_capture_efficiency, mod.gen_full_load_heat_rate,
                mod.ppa_energy_cost, mod.gen_min_build_capacity,
                mod.ppa_capacity_cost, mod.gen_is_cogen,
-               mod.gen_is_distributed, mod.gen_excess_max))
+               mod.gen_excess_max, mod.gen_variant_group, mod.gen_pricing_node))
     # Construct sets of capacity-limited, ccs-capable and unit-size-specified
     # projects. These sets include projects for which these parameters have
     # a value
@@ -551,6 +612,11 @@ def load_inputs(mod, switch_data, inputs_dir):
     if 'gen_ccs_capture_efficiency' in switch_data.data():
         switch_data.data()['CCS_EQUIPPED_GENS'] = {
             None: list(switch_data.data(name='gen_ccs_capture_efficiency').keys())}
+    if 'gen_variant_group' in switch_data.data():
+        switch_data.data()['GENS_WITH_VARIANTS'] = {
+            None: list(switch_data.data(name='gen_variant_group').keys())}
+        switch_data.data()['VARIANT_GROUPS'] = {
+            None: list(set(switch_data.data(name='gen_variant_group').values()))} #NOTE: This may be more efficient than building csvs to define sets if it works
     switch_data.load_aug(
         optional=True,
         filename=os.path.join(inputs_dir, 'gen_build_predetermined.csv'),

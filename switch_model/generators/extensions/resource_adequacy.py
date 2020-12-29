@@ -62,7 +62,7 @@ https://www.caiso.com/Documents/Jan29_2016_Comments_2017Track1Proposals_Resource
 
 """
 
-import os
+import os 
 from pyomo.environ import *
 import pandas as pd
 
@@ -76,6 +76,12 @@ dependencies = (
     'switch_model.generators.storage'
 )
 
+def define_arguments(argparser):
+    argparser.add_argument('--sell_excess_RA', choices=['none', 'sell'], default='none',
+        help=
+            "Whether or not to consider sold excess RA in the objective function. "
+            "Specify 'none' to disable."
+    )
 
 def define_components(mod):
     """
@@ -90,6 +96,10 @@ def define_components(mod):
     tp_month[t] defines which month (1-12) each timepoint belongs to
     
     """
+    
+    # Define Sets
+    #############
+    
     #set of months
     mod.MONTHS = Set(ordered=True, initialize=[1,2,3,4,5,6,7,8,9,10,11,12])
 
@@ -105,15 +115,14 @@ def define_components(mod):
         dimen=2,
         doc="A set of (r, a) that describes which local reliability areas contribute to each RA Requirement.")
 
+    mod.RA_MONTHS = Set(dimen=2,
+        initialize=lambda m: m.RA_REQUIREMENT_CATEGORIES * m.MONTHS,
+        doc="The cross product of RA requirements and Months, used for indexing.")
+    
     #describe the local reliability area that each generator is in
     mod.gen_reliability_area = Param (
         mod.GENERATION_PROJECTS, 
         within=mod.LOCAL_RELIABILITY_AREAS)
-
-
-    mod.RA_MONTHS = Set(dimen=2,
-        initialize=lambda m: m.RA_REQUIREMENT_CATEGORIES * m.MONTHS,
-        doc="The cross product of RA requirements and Months, used for indexing.")
 
     def GENS_IN_AREA_init(m, a):
         if not hasattr(m, 'GENS_IN_AREA_dict'):
@@ -132,6 +141,9 @@ def define_components(mod):
     #specify which month each timepoint is associated with
     # mod.tp_month = Param(mod.TIMEPOINTS, within=mod.MONTHS)
 
+    # Define Parameters
+    ###################
+
     #specify the ra requirement for each resource type and month
     mod.ra_requirement = Param(
         mod.PERIODS, mod.RA_MONTHS,
@@ -147,17 +159,29 @@ def define_components(mod):
         mod.PERIODS, mod.RA_MONTHS,
         within=NonNegativeReals)
 
+    #specify the resell value of RA
+    mod.ra_resell_value = Param(
+        mod.PERIODS, mod.RA_MONTHS,
+        within=NonNegativeReals,
+        default=0) 
+
     #specify the market cost of flexible RA
     mod.flexible_ra_cost = Param(
         mod.PERIODS, mod.MONTHS,
         within=NonNegativeReals)
 
+    #specify the resell value of flexible RA
+    mod.flexible_ra_resell_value = Param(
+        mod.PERIODS, mod.MONTHS,
+        within=NonNegativeReals,
+        default=0)
+
     mod.gen_capacity_value = Param(
         mod.PERIODS, mod.ENERGY_SOURCES, mod.MONTHS,
         within=NonNegativeReals)
-    
-    ## NEED TO CONSIDER WHAT ZONE THE GENERATOR IS IN
 
+    
+    
     #calculate monthly RA of all generators in each LRA
     
     mod.RAValueByArea = Expression (
@@ -179,31 +203,15 @@ def define_components(mod):
         rule=AvailableRACapacity_rule)
 
     #calculate RA open position
-    mod.RAOpenPosition = Expression(
+    mod.RAOpenPosition = Var(
         mod.PERIODS, mod.RA_MONTHS,
-        rule=lambda m, p, r, mo: m.ra_requirement[p,r,mo] - m.AvailableRACapacity[p,r,mo])
+        within=NonNegativeReals)
 
-    """
-    COST_DOMAIN_PTS = [-999999999.,0.,0.,999999999.]
-    #TODO: allow user to specify discount for selling RA
-    COST_RANGE_PTS = [0.,0.,1.,1.]
-
-    #setup a piecewise expression to only optimize for RA open position, but not excess RA
-    mod.RACostDiscount = Var(
+    #specify that the open position should be 0 if the available capacity > the requirement. and otherwise should make up the difference
+    mod.RA_Purchase_Constraint = Constraint(
         mod.PERIODS, mod.RA_MONTHS,
-        within=NonNegativeReals
+        rule=lambda m, p, r, mo: m.RAOpenPosition[p,r,mo] + m.AvailableRACapacity[p,r,mo] >= m.ra_requirement[p,r,mo]
     )
-
-    # https://github.com/Pyomo/pyomo/tree/master/examples/pyomo/piecewise
-    mod.Cost_Discount_Constraint = Piecewise(
-        mod.PERIODS, mod.RA_MONTHS, #indexing sets
-        mod.RACostDiscount, mod.RAOpenPosition, #range and domain vaiables
-        pw_pts=COST_DOMAIN_PTS,
-        pw_constr_type='EQ',
-        f_rule=COST_RANGE_PTS,
-        pw_repn='INC'
-    )
-    """
 
     #calculate cost of RA open position
     mod.AnnualRAOpenPositionCostByRequirement = Expression (
@@ -215,8 +223,18 @@ def define_components(mod):
         mod.PERIODS, 
         rule=lambda m, p: sum(m.AnnualRAOpenPositionCostByRequirement[p,r] for r in m.RA_REQUIREMENT_CATEGORIES))
 
+    #calculate excess RA by category
+    mod.RAExcess = Expression(
+        mod.PERIODS, mod.RA_MONTHS,
+        rule=lambda m, p, r, mo: m.AvailableRACapacity[p,r,mo] - m.ra_requirement[p,r,mo] + m.RAOpenPosition[p,r,mo])
 
-    #create separate function to calculate flex RA
+    #calculate the resell value of excess RA
+    mod.AnnualRAExcessValue = Expression (
+        mod.PERIODS, 
+        rule=lambda m, p: sum(m.RAExcess[p,r,mo] * m.ra_resell_value[p,r,mo] for mo in m.MONTHS for r in m.RA_REQUIREMENT_CATEGORIES))
+
+    # Flexible RA
+    #############
 
     #calculate monthly flexible RA value of portfolio
     def AvailableFlexRACapacity_rule(m,p):
@@ -233,43 +251,33 @@ def define_components(mod):
         rule=AvailableFlexRACapacity_rule)
 
     #calculate flexible RA open position
-    mod.FlexRAOpenPosition = Expression (
+    mod.FlexRAOpenPosition = Var(
         mod.PERIODS, mod.MONTHS,
-        rule=lambda m, p, mo: m.flexible_ra_requirement[p,mo] - m.AvailableFlexRACapacity[p])
+        within=NonNegativeReals)
 
-    #calculate cost of RA open position
-    """
-    def AnnualFlexRAOpenPositionCost_rule(m,p):
-        cost = sum(m.FlexRAOpenPosition[p,mo] * m.flexible_ra_cost[p,mo] 
-            for mo in m.MONTHS 
-            if ((value(m.FlexRAOpenPosition[p,mo]) >= 0) or ((value(m.FlexRAOpenPosition[p,mo]) < 0) and (value(m.FlexRAOpenPosition[p,mo]) > value(m.RAOpenPosition[p,"system_RA",mo])))))
-        sell_bundled = sum(m.RAOpenPosition[p,"system_RA",mo] * m.flexible_ra_cost[p,mo] 
-            for mo in m.MONTHS 
-            if ((value(m.FlexRAOpenPosition[p,mo]) < 0) and (value(m.FlexRAOpenPosition[p,mo]) < value(m.RAOpenPosition[p,"system_RA",mo]))))
-        total_cost = cost + sell_bundled
-        return total_cost
-    """
-   
-    """
-    #setup a piecewise expression to only optimize for RA open position, but not excess RA
-    mod.FlexRACostDiscount = Var(
+    mod.FlexRA_Purchase_Constraint = Constraint(
         mod.PERIODS, mod.MONTHS,
-        within=NonNegativeReals
+        rule=lambda m, p, mo: m.FlexRAOpenPosition[p,mo] + m.AvailableFlexRACapacity[p] >= m.flexible_ra_requirement[p,mo]
     )
 
-    # https://github.com/Pyomo/pyomo/tree/master/examples/pyomo/piecewise
-    mod.Flex_Cost_Discount_Constraint = Piecewise(
-        mod.PERIODS, mod.MONTHS, #indexing sets
-        mod.FlexRACostDiscount, mod.FlexRAOpenPosition, #range and domain vaiables
-        pw_pts=COST_DOMAIN_PTS,
-        pw_constr_type='EQ',
-        f_rule=COST_RANGE_PTS,
-        pw_repn='INC'
-    )
-    """
+    #calculate the cost of the flex RA open position
     mod.AnnualFlexRAOpenPositionCost = Expression (
         mod.PERIODS,
         rule=lambda m,p: sum(m.FlexRAOpenPosition[p,mo] * m.flexible_ra_cost[p,mo] for mo in m.MONTHS))
+
+    #calculate excess flex RA
+    mod.FlexRAExcess = Expression(
+        mod.PERIODS, mod.MONTHS,
+        rule=lambda m, p, mo: m.AvailableFlexRACapacity[p] - m.flexible_ra_requirement[p,mo] + m.FlexRAOpenPosition[p,mo])
+
+    #calculate the resell value of excess RA
+    mod.AnnualFlexRAExcessValue = Expression (
+        mod.PERIODS, 
+        rule=lambda m, p: sum(m.FlexRAExcess[p,mo] * m.flexible_ra_resell_value[p,mo] for mo in m.MONTHS))
+
+
+    # Calculate total RA Open Position Cost
+    #######################################
 
     #add RA and flex RA costs together
     mod.TotalRAOpenPositionCost = Expression (
@@ -277,7 +285,17 @@ def define_components(mod):
         rule=lambda m, p: m.AnnualRAOpenPositionCost[p] + m.AnnualFlexRAOpenPositionCost[p])
 
     #add to objective function
-    #mod.Cost_Components_Per_Period.append('TotalRAOpenPositionCost')
+    mod.Cost_Components_Per_Period.append('TotalRAOpenPositionCost')
+
+    #TODO: test if I need to do anything else for inputs
+    if mod.options.sell_excess_RA == 'sell':
+        mod.TotalRAExcessValue = Expression(
+            mod.PERIODS,
+            rule=lambda m, p: -m.AnnualRAExcessValue[p] - m.AnnualFlexRAExcessValue[p]
+        )
+
+        #add to objective function
+        mod.Cost_Components_Per_Period.append('TotalRAExcessValue')
 
 
 
@@ -321,15 +339,17 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_requirement.csv'),
         auto_select=True,
-        param=(mod.ra_requirement, mod.ra_cost))
+        optional_params=['ra_resell_value'],
+        param=(mod.ra_requirement, mod.ra_cost, mod.ra_resell_value))
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'flexible_ra_requirement.csv'),
         auto_select=True,
-        param=(mod.flexible_ra_requirement, mod.flexible_ra_cost))
+        optional_params=['flexible_ra_resell_value'],
+        param=(mod.flexible_ra_requirement, mod.flexible_ra_cost, mod.flexible_ra_resell_value))
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_capacity_value.csv'),
         auto_select=True,
-        param=(mod.gen_capacity_value))
+        param=(mod.gen_capacity_value,))
 
 
 
@@ -344,8 +364,13 @@ def post_solve(instance, outdir):
         "Month": mo,
         "RA_Requirement_Need_MW": value(instance.ra_requirement[p,r,mo]),
         "Available_RA_Capacity_MW": value(instance.AvailableRACapacity[p,r,mo]),
+        "RA_Position_MW": value(instance.AvailableRACapacity[p,r,mo] - instance.ra_requirement[p,r,mo]),
         "Open_Position_MW": value(instance.RAOpenPosition[p,r,mo]),
+        "Excess_RA_MW":  value(instance.RAExcess[p,r,mo]),
+        "RA_Cost": value(instance.ra_cost[p,r,mo]),
+        "RA_Value": value(instance.ra_resell_value[p,r,mo]),
         "Open_Position_Cost": value(instance.RAOpenPosition[p,r,mo] * instance.ra_cost[p,r,mo]),
+        "Excess_RA_Value": value(instance.RAExcess[p,r,mo] * instance.ra_resell_value[p,r,mo])
     } for (r, mo) in instance.RA_MONTHS for p in instance.PERIODS]
     RA_df = pd.DataFrame(ra_dat)
     RA_df.set_index(["Period","RA_Requirement","Month"], inplace=True)
@@ -356,8 +381,13 @@ def post_solve(instance, outdir):
         "Month": mo,
         "RA_Requirement_Need_MW": value(instance.flexible_ra_requirement[p,mo]),
         "Available_RA_Capacity_MW": value(instance.AvailableFlexRACapacity[p]),
+        "RA_Position_MW": value(instance.AvailableFlexRACapacity[p] - instance.flexible_ra_requirement[p,mo]),
         "Open_Position_MW": value(instance.FlexRAOpenPosition[p,mo]),
+        "Excess_RA_MW": value(instance.FlexRAExcess[p,mo]),
+        "RA_Cost": value(instance.flexible_ra_cost[p,mo]),
+        "RA_Value": value(instance.flexible_ra_resell_value[p,mo]),
         "Open_Position_Cost": value(instance.FlexRAOpenPosition[p,mo] * instance.flexible_ra_cost[p,mo]),
+        "Excess_RA_Value": value(instance.FlexRAExcess[p,mo] * instance.flexible_ra_resell_value[p,mo])
     } for mo in instance.MONTHS for p in instance.PERIODS]
     FRA_df = pd.DataFrame(flex_dat)
     FRA_df.set_index(["Period","RA_Requirement","Month"], inplace=True)

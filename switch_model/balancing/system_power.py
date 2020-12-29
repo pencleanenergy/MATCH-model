@@ -2,6 +2,8 @@
 Defines components to allow for some load to be served by system power rather than time-coincident
 renewables. 
 
+This module is mutually exclusive with the balance_subset module
+
 """
 
 import os
@@ -40,14 +42,7 @@ def define_components(mod):
         mod.ZONE_TIMEPOINTS,
         within=Reals)
     
-    #Calculate the system power required to balance load in each timepoint in each load zone
-    """
-    #implementation of system power as an expression
-    mod.SystemPower = Expression(
-        mod.LOAD_ZONES, mod.TIMEPOINTS, #for each timepoint in each load zone
-        rule=lambda m, z, t: (m.zone_demand_mw[z, t] - m.ZoneTotalCentralDispatch[z,t])
-    )
-    """
+
     #implementation of system power as a decision variable
     mod.SystemPower = Var(
         mod.LOAD_ZONES, mod.TIMEPOINTS,
@@ -74,6 +69,23 @@ def define_components(mod):
         mod.PERIODS, mod.LOAD_ZONES, # for each zone in each period
         rule=lambda m, p, z: (
             m.AnnualSystemPower[z,p] <= ((1 - m.renewable_target[p]) * m.zone_total_demand_in_period_mwh[z,p]))
+    )
+
+    # SUBSET DAYS
+    #############
+
+    mod.tp_in_subset = Param(mod.TIMEPOINTS, within=Boolean, default=False)
+
+    # specify the timepoints that are in the subset days
+    mod.SUBSET_TIMEPOINTS = Set(
+        initialize=mod.TIMEPOINTS,
+        filter=lambda m, t: m.tp_in_subset[t]
+    )
+
+    # On the representative day(s), DispatchGen >= Load for each timepoint
+    mod.Enforce_Time_Coincidence_During_Subset = Constraint(
+        mod.LOAD_ZONES, mod.SUBSET_TIMEPOINTS,
+        rule = lambda m, z, t: m.ZoneTotalGeneratorDispatch[z,t] >= m.zone_demand_mw[z,t]
     )
 
 def load_inputs(mod, switch_data, inputs_dir):
@@ -103,6 +115,13 @@ def load_inputs(mod, switch_data, inputs_dir):
         index=mod.PERIODS,
         param=(mod.renewable_target,))
 
+    # load optional data specifying subset days
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'days.csv'),
+        select=('timepoint_id','tp_in_subset'),
+        index=mod.TIMEPOINTS,
+        param=(mod.tp_in_subset))
+
 def post_solve(instance, outdir):
     system_power_dat = [{
         "timestamp": instance.tp_timestamp[t],
@@ -119,8 +138,3 @@ def post_solve(instance, outdir):
     SP_df = pd.DataFrame(system_power_dat)
     SP_df.set_index(["load_zone","timestamp"], inplace=True)
     SP_df.to_csv(os.path.join(outdir, "system_power.csv"))
-
-    system_power_summary = SP_df.groupby(['load_zone','period']).sum()
-    system_power_summary.to_csv(
-        os.path.join(outdir, "system_power_summary.csv"),
-        columns=["System_Power_GWh_per_year", "Annual_System_Power_Cost"])

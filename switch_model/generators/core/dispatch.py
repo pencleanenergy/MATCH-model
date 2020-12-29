@@ -204,6 +204,12 @@ def define_components(mod):
             (g, tp)
                 for g in m.FUEL_BASED_GENS
                     for tp in m.TPS_FOR_GEN[g]))
+    mod.NON_STORAGE_GEN_TPS = Set(
+        dimen=2,
+        initialize=lambda m: (
+            (g, tp)
+                for g in m.NON_STORAGE_GENS
+                    for tp in m.TPS_FOR_GEN[g]))
     mod.GEN_TP_FUELS = Set(
         dimen=3,
         initialize=lambda m: (
@@ -211,39 +217,40 @@ def define_components(mod):
                 for (g, t) in m.FUEL_BASED_GEN_TPS
                     for f in m.FUELS_FOR_GEN[g]))
 
+
+    #TODO: Move pricing nodes to a different module
+    mod.PRICING_NODES = Set()
+    mod.NODE_TIMEPOINTS = Set(dimen=2,
+        initialize=lambda m: m.PRICING_NODES * m.TIMEPOINTS,
+        doc="The cross product of trading hubs and timepoints, used for indexing.")
+
+    mod.gen_pricing_node = Param(
+        mod.GENERATION_PROJECTS, 
+        validate=lambda m,val,g: val in m.PRICING_NODES)
+    mod.nodal_price = Param(
+        mod.NODE_TIMEPOINTS,
+        within=Reals)
+
     mod.GenCapacityInTP = Expression(
         mod.GEN_TPS,
         rule=lambda m, g, t: m.GenCapacity[g, m.tp_period[t]])
+    
     mod.DispatchGen = Var(
-        mod.GEN_TPS,
+        mod.NON_STORAGE_GEN_TPS,
         within=NonNegativeReals)
-    mod.ZoneTotalCentralDispatch = Expression(
+    
+    mod.ZoneTotalGeneratorDispatch = Expression(
         mod.LOAD_ZONES, mod.TIMEPOINTS,
         rule=lambda m, z, t: \
             sum(m.DispatchGen[p, t]
                 for p in m.GENS_IN_ZONE[z]
-                if (p, t) in m.GEN_TPS and not m.gen_is_distributed[p]) -
+                if (p, t) in m.NON_STORAGE_GEN_TPS) -
             sum(m.DispatchGen[p, t] * m.gen_ccs_energy_load[p]
                 for p in m.GENS_IN_ZONE[z]
-                if (p, t) in m.GEN_TPS and p in m.CCS_EQUIPPED_GENS),
+                if (p, t) in m.NON_STORAGE_GEN_TPS and p in m.CCS_EQUIPPED_GENS),
         doc="Net power from grid-tied generation projects.")
-    mod.Zone_Power_Injections.append('ZoneTotalCentralDispatch')
+    mod.Zone_Power_Injections.append('ZoneTotalGeneratorDispatch')
 
-    # Divide distributed generation into a separate expression so that we can
-    # put it in the distributed node's power balance equations if local_td is
-    # included.
-    mod.ZoneTotalDistributedDispatch = Expression(
-        mod.LOAD_ZONES, mod.TIMEPOINTS,
-        rule=lambda m, z, t: \
-            sum(m.DispatchGen[g, t]
-                for g in m.GENS_IN_ZONE[z]
-                if (g, t) in m.GEN_TPS and m.gen_is_distributed[g]),
-        doc="Total power from distributed generation projects."
-    )
-    try:
-        mod.Distributed_Power_Injections.append('ZoneTotalDistributedDispatch')
-    except AttributeError:
-        mod.Zone_Power_Injections.append('ZoneTotalDistributedDispatch')
 
     def init_gen_availability(m, g):
         if m.gen_is_baseload[g]:
@@ -305,7 +312,8 @@ def define_components(mod):
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
             m.DispatchGen[g, t] * m.ppa_energy_cost[g]
-            for g in m.GENS_IN_PERIOD[m.tp_period[t]]),
+            for g in m.GENS_IN_PERIOD[m.tp_period[t]]
+            if g in m.NON_STORAGE_GENS),
         doc="Summarize costs for the objective function")
     mod.Cost_Components_Per_TP.append('GenPPACostInTP')
 
@@ -328,7 +336,19 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'variable_capacity_factors.csv'),
         autoselect=True,
         index=mod.VARIABLE_GEN_TPS_RAW,
-        param=(mod.gen_max_capacity_factor,))
+        param=(mod.gen_max_capacity_factor))
+
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'pricing_nodes.csv'),
+        set=mod.PRICING_NODES)
+    
+    #load trading hub data
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'nodal_prices.csv'),
+        select=('pricing_node','timepoint','nodal_price'),
+        index=mod.NODE_TIMEPOINTS,
+        param=[mod.nodal_price]
+    )
 
 
 def post_solve(instance, outdir):
@@ -356,9 +376,9 @@ def post_solve(instance, outdir):
         output_file=os.path.join(outdir, "dispatch-wide.csv"),
         headings=("timestamp",)+tuple(sorted(instance.GENERATION_PROJECTS)),
         values=lambda m, t: (m.tp_timestamp[t],) + tuple(
-            m.DispatchGen[p, t] if (p, t) in m.GEN_TPS
+            m.DispatchGen[p, t] if (p, t) in m.NON_STORAGE_GEN_TPS
             else 0.0
-            for p in sorted(m.GENERATION_PROJECTS)
+            for p in sorted(m.NON_STORAGE_GENS)
         )
     )
 
@@ -375,19 +395,20 @@ def post_solve(instance, outdir):
         "DispatchGen_MW": value(instance.DispatchGen[g, t]),
         "Energy_GWh_typical_yr": value(
             instance.DispatchGen[g, t] * instance.tp_weight_in_year[t] / 1000),
-        "Excess_Gen_MW": value(instance.ExcessByGen[g,t]) if instance.gen_is_variable[g] else 0,
-        "Excess_Energy_GWh_per_yr": value(instance.ExcessByGen[g,t] * instance.tp_weight_in_year[t] / 1000) if instance.gen_is_variable[g] else 0,
+        "Excess_Gen_MW": value(instance.ExcessGen[g,t]),
+        "Excess_Energy_GWh_per_yr": value(instance.ExcessGen[g,t] * instance.tp_weight_in_year[t] / 1000),
+        "Total_Gen_MW": value(instance.DispatchGen[g,t] + instance.ExcessGen[g,t]),
         "Annual_PPA_Energy_Cost": value(
             instance.DispatchGen[g, t] * instance.ppa_energy_cost[g] *
             instance.tp_weight_in_year[t]),
         "Annual_Excess_Energy_Cost":value(
-            instance.ExcessByGen[g,t] * instance.ppa_energy_cost[g] *
-            instance.tp_weight_in_year[t] if instance.gen_is_variable[g] else 0),
+            instance.ExcessGen[g,t] * instance.ppa_energy_cost[g] *
+            instance.tp_weight_in_year[t]),
         "DispatchEmissions_tCO2_per_typical_yr": value(sum(
             instance.DispatchEmissions[g, t, f] * instance.tp_weight_in_year[t]
               for f in instance.FUELS_FOR_GEN[g]
         )) if instance.gen_uses_fuel[g] else 0
-    } for g, t in instance.GEN_TPS ]
+    } for g, t in instance.NON_STORAGE_GEN_TPS]
     dispatch_full_df = pd.DataFrame(dispatch_normalized_dat)
     dispatch_full_df.set_index(["generation_project", "timestamp"], inplace=True)
     dispatch_full_df.to_csv(os.path.join(outdir, "dispatch.csv"))

@@ -24,6 +24,16 @@ def define_dynamic_lists(mod):
     mod.Zone_Power_Injections = []
     mod.Zone_Power_Withdrawals = []
 
+"""
+#TODO: Finish this
+def define_arguments(argparser):
+    argparser.add_argument('--annual_balance', choices=['excess', 'no_excess'], default='excess',
+        help=
+            "Whether excess generation is allowed." 
+            "If 'excess' (default), excess generation is allowed"
+            "If 'no_excess', the total available generation must equal the total annual load"
+    )
+"""
 
 def define_components(mod):
     """
@@ -84,6 +94,7 @@ def define_components(mod):
     mod.zone_demand_mw = Param(
         mod.ZONE_TIMEPOINTS,
         within=NonNegativeReals)
+    """
     mod.zone_ccs_distance_km = Param(
         mod.LOAD_ZONES,
         within=NonNegativeReals,
@@ -91,6 +102,7 @@ def define_components(mod):
     mod.zone_dbid = Param(
         mod.LOAD_ZONES,
         default=lambda m, z: z)
+    """
     mod.min_data_check('LOAD_ZONES', 'zone_demand_mw')
     try:
         mod.Distributed_Power_Withdrawals.append('zone_demand_mw')
@@ -109,6 +121,12 @@ def define_components(mod):
         initialize=lambda m, z, p: (
             sum(m.zone_demand_mw[z, t] * m.tp_weight[t]
                 for t in m.TPS_IN_PERIOD[p])))
+
+    """
+    #TODO: define optional no excess constraint
+
+
+    """
 
 
 def define_dynamic_components(mod):
@@ -163,9 +181,7 @@ def load_inputs(mod, switch_data, inputs_dir):
     # message if some columns are not found.
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'load_zones.csv'),
-        auto_select=True,
-        index=mod.LOAD_ZONES,
-        param=(mod.zone_ccs_distance_km, mod.zone_dbid))
+        set=mod.LOAD_ZONES)
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'loads.csv'),
         auto_select=True,
