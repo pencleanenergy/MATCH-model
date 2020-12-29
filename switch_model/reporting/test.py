@@ -38,7 +38,7 @@ for s in scenarios:
     test = str(outdir).split('/')[-1]
     print(test)
 # %%
-
+# TODO: Add this code to the end of the solve-scenarios script
 #merge all of the scenario reports together
 import pandas as pd
 
