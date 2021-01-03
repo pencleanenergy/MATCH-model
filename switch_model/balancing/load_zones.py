@@ -1,4 +1,5 @@
 # Copyright (c) 2015-2019 The Switch Authors. All rights reserved.
+# Modifications copyright (c) 2021 Gregory J. Miller. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
@@ -50,26 +51,6 @@ def define_components(mod):
     and should not include distribution losses. zone_demand_mw must be
     non-negative.
 
-    zone_dbid[z] stores an external database id for each load zone. This
-    is optional and defaults to the name of the load zone. It will be
-    printed out when results are exported.
-
-    zone_ccs_distance_km[z] describes the length of a pipeline in
-    kilometers that would need to be built to transport CO2 from a load
-    zones central bus to the nearest viable CCS reservoir. This
-    parameter is optional and defaults to 0.
-
-    EXTERNAL_COINCIDENT_PEAK_DEMAND_ZONE_PERIODS is a set of load zones and
-    periods (z,p) that have zone_expected_coincident_peak_demand specified.
-
-    zone_expected_coincident_peak_demand[z,p] is an optional parameter than can
-    be used to externally specify peak load planning requirements in MW.
-    Currently local_td and planning_reserves determine capacity requirements
-    use zone_expected_coincident_peak_demand as well as load timeseries. Do not
-    specify this parameter if you wish for the model to endogenously determine
-    capacity requirements after accounting for both load and Distributed
-    Energy Resources (DER).
-
     Derived parameters:
 
     zone_total_demand_in_period_mwh[z,p] describes the total energy demand
@@ -84,25 +65,12 @@ def define_components(mod):
     mod.zone_demand_mw = Param(
         mod.ZONE_TIMEPOINTS,
         within=NonNegativeReals)
-    mod.zone_ccs_distance_km = Param(
-        mod.LOAD_ZONES,
-        within=NonNegativeReals,
-        default=0.0)
-    mod.zone_dbid = Param(
-        mod.LOAD_ZONES,
-        default=lambda m, z: z)
     mod.min_data_check('LOAD_ZONES', 'zone_demand_mw')
     try:
         mod.Distributed_Power_Withdrawals.append('zone_demand_mw')
     except AttributeError:
         mod.Zone_Power_Withdrawals.append('zone_demand_mw')
 
-    mod.EXTERNAL_COINCIDENT_PEAK_DEMAND_ZONE_PERIODS = Set(
-        dimen=2, within=mod.LOAD_ZONES * mod.PERIODS,
-        doc="Zone-Period combinations with zone_expected_coincident_peak_demand data.")
-    mod.zone_expected_coincident_peak_demand = Param(
-        mod.EXTERNAL_COINCIDENT_PEAK_DEMAND_ZONE_PERIODS,
-        within=NonNegativeReals)
     mod.zone_total_demand_in_period_mwh = Param(
         mod.LOAD_ZONES, mod.PERIODS,
         within=NonNegativeReals,
@@ -149,13 +117,11 @@ def load_inputs(mod, switch_data, inputs_dir):
     files are noted with a *.
 
     load_zones.csv
-        LOAD_ZONE, zone_ccs_distance_km*, zone_dbid*
+        LOAD_ZONE
 
     loads.csv
         LOAD_ZONE, TIMEPOINT, zone_demand_mw
 
-    zone_coincident_peak_demand.csv*
-        LOAD_ZONE, PERIOD, zone_expected_coincident_peak_demand
 
     """
     # Include select in each load() function so that it will check out
@@ -163,19 +129,11 @@ def load_inputs(mod, switch_data, inputs_dir):
     # message if some columns are not found.
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'load_zones.csv'),
-        auto_select=True,
-        index=mod.LOAD_ZONES,
-        param=(mod.zone_ccs_distance_km, mod.zone_dbid))
+        set=mod.LOAD_ZONES)
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'loads.csv'),
         auto_select=True,
         param=(mod.zone_demand_mw))
-    switch_data.load_aug(
-        optional=True,
-        filename=os.path.join(inputs_dir, 'zone_coincident_peak_demand.csv'),
-        index=mod.EXTERNAL_COINCIDENT_PEAK_DEMAND_ZONE_PERIODS,
-        select=('LOAD_ZONE', 'PERIOD', 'zone_expected_coincident_peak_demand'),
-        param=(mod.zone_expected_coincident_peak_demand))
 
 
 def post_solve(instance, outdir):
