@@ -25,6 +25,16 @@ def define_dynamic_lists(mod):
     mod.Zone_Power_Injections = []
     mod.Zone_Power_Withdrawals = []
 
+"""
+#TODO: Finish this
+def define_arguments(argparser):
+    argparser.add_argument('--annual_balance', choices=['excess', 'no_excess'], default='excess',
+        help=
+            "Whether excess generation is allowed." 
+            "If 'excess' (default), excess generation is allowed"
+            "If 'no_excess', the total available generation must equal the total annual load"
+    )
+"""
 
 def define_components(mod):
     """
@@ -77,6 +87,12 @@ def define_components(mod):
         initialize=lambda m, z, p: (
             sum(m.zone_demand_mw[z, t] * m.tp_weight[t]
                 for t in m.TPS_IN_PERIOD[p])))
+
+    """
+    #TODO: define optional no excess constraint
+
+
+    """
 
 
 def define_dynamic_components(mod):

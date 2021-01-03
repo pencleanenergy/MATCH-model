@@ -250,7 +250,6 @@ def define_components(mod):
     mod.gen_is_baseload = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_is_storage = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_is_cogen = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
-
     mod.gen_scheduled_outage_rate = Param(mod.GENERATION_PROJECTS,
         within=PercentFraction, default=0)
     mod.gen_forced_outage_rate = Param(mod.GENERATION_PROJECTS,
@@ -507,7 +506,6 @@ def define_components(mod):
     # Mutually-exclusive project variants
     #####################################
     # The following components enforce building only one of several mutually-exclusive project variants.
-
     #create a new set of generator projects that are part of a mutually exclusive group
     mod.GENS_WITH_VARIANTS = Set(within=mod.GENERATION_PROJECTS)
 

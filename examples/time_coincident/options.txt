@@ -1,3 +1,0 @@
---verbose
---sorted-output
---solver cbc

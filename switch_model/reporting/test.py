@@ -57,3 +57,32 @@ df_build.to_csv(f'../../{run_folder}/outputs/portfolio_comparison.csv', index=Fa
 
 
 # %%
+
+scenarios = ['base_100_variant']
+
+for s in scenarios:
+    inputs_dir = f'C:/Users/gmiller/switch/input_test/inputs/{s}'
+    outdir = f'C:/Users/gmiller/switch/input_test/outputs/{s}'
+
+    test = str(outdir).split('/')[-1]
+    print(test)
+# %%
+# TODO: Add this code to the end of the solve-scenarios script
+#merge all of the scenario reports together
+import pandas as pd
+
+scenarios = os.listdir('C:/Users/gmiller/switch/time_coincident_scenarios/outputs/')
+
+i = 0
+for s in scenarios:
+    output_file = f'C:/Users/gmiller/switch/time_coincident_scenarios/outputs/{s}/scenario_summary.csv'
+
+    if i == 0:
+        df = pd.read_csv(output_file, index_col=0)
+        i += 1
+    else:
+        df2 = pd.read_csv(output_file, index_col=0)
+        df = df.merge(df2, how='left', left_index=True, right_index=True)
+
+df.to_csv('C:/Users/gmiller/switch/time_coincident_scenarios/outputs/scenario_comparison.csv')
+# %%
