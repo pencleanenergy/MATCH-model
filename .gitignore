@@ -1,5 +1,7 @@
 archives/
 switch_model.egg-info/
+MODEL_RUNS/
+RESEARCH/
 
 *pyc
 **parse_table_datacmds.py
