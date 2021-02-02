@@ -415,12 +415,12 @@ def generate_inputs(model_workspace, timezone):
                 ra_requirement.to_csv(input_dir / 'ra_requirement.csv', index=False)
                 flexible_ra_requirement.to_csv(input_dir / 'flexible_ra_requirement.csv', index=False)
                 energy_source_list = list(generation_projects_info['gen_energy_source'].unique())
-                ra_capacity_value = ra_capacity_value[ra_capacity_value['gen_energy_source'].isin(energy_source_list)]
-                ra_capacity_value.to_csv(input_dir / 'ra_capacity_value.csv', index=False)
+                ra_capacity_value_scenario = ra_capacity_value[ra_capacity_value['gen_energy_source'].isin(energy_source_list)]
+                ra_capacity_value_scenario.to_csv(input_dir / 'ra_capacity_value.csv', index=False)
 
                 lra_list = list(local_reliability_areas['LOCAL_RELIABILITY_AREA'])
-                ra_requirement_areas = ra_requirement_areas[ra_requirement_areas['LOCAL_RELIABILITY_AREA'].isin(lra_list)]
-                ra_requirement_areas.to_csv(input_dir / 'ra_requirement_areas.csv', index=False)
+                ra_requirement_areas_scenario = ra_requirement_areas[ra_requirement_areas['LOCAL_RELIABILITY_AREA'].isin(lra_list)]
+                ra_requirement_areas_scenario.to_csv(input_dir / 'ra_requirement_areas.csv', index=False)
                 ra_requirement_categories.to_csv(input_dir / 'ra_requirement_categories.csv', index=False)
             
             # system_power_cost.csv
