@@ -4,8 +4,8 @@
 
 """
 Defines a simple Demand Response Shift Service for the Switch model.
-Load in a certain load zone may be shifted between timepoints within the same day 
-at no cost, which allows assessing the potential value of
+Load in a certain load zone may be shifted between timepoints belonging to the
+same timeseries at no cost, which allows assessing the potential value of
 demand shifting. This does not include a Shed Service (curtailment of load),
 nor a Shimmy Service (fast dispatch for load following or regulation).
 
@@ -23,12 +23,6 @@ def define_components(mod):
     """
     Adds components to a Pyomo abstract model object to describe a demand
     response shift service.
-
-    DAYS is the set of individual days in a non-leap year, numbered from 1 to 365.
-
-    tp_day[t] describes which day number each timepoint is located in.
-
-    TPS_IN_DAYS is a set that describes the list of timepoints in each day in DAYS.
 
     dr_shift_down_limit[(z,t in ZONE_TIMEPOINTS)] is a parameter
     that describes the maximum reduction in demand for load-shifting demand
@@ -51,11 +45,9 @@ def define_components(mod):
     node and will not reflect efficiency losses in the distribution network.
 
     DR_Shift_Net_Zero[z,ts in TIMESERIES] is a constraint that forces all the
-    changes in the demand to balance out over the course of each day.
+    changes in the demand to balance out over the course of each timeseries.
 
     """
-    # Define day sets and parameters
-
     mod.DAYS = Set(ordered=True, initialize=range(1, 366))
 
     mod.tp_day = Param(mod.TIMEPOINTS, within=mod.DAYS)
@@ -66,8 +58,6 @@ def define_components(mod):
         within=mod.TIMEPOINTS,
         initialize=lambda m, d: [
             t for t in m.TIMEPOINTS if m.tp_day[t] == d])
-
-    # Define decision variable and bounds for load shifting
 
     mod.dr_shift_down_limit = Param(
         mod.LOAD_ZONES, mod.TIMEPOINTS,
@@ -90,7 +80,7 @@ def define_components(mod):
     mod.DR_Shift_Net_Zero = Constraint(
         mod.LOAD_ZONES, mod.DAYS,
         rule=lambda m, z, d:
-        sum(m.ShiftDemand[z, t] for t in m.TPS_IN_DAYS[d]) == 0.0) #modify to balance over a single day
+        sum(m.ShiftDemand[z, t] for t in m.TPS_IN_DAYS[d]) == 0.0)
 
     try:
         mod.Distributed_Power_Withdrawals.append('ShiftDemand')
@@ -106,9 +96,6 @@ def load_inputs(mod, switch_data, inputs_dir):
     dr_data.csv
         LOAD_ZONE, TIMEPOINT, dr_shift_down_limit, dr_shift_up_limit
 
-    days.csv
-        timepoint_id, tp_day
-
     """
 
     switch_data.load_aug(
@@ -119,5 +106,6 @@ def load_inputs(mod, switch_data, inputs_dir):
 
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'days.csv'),
-        autoselect=True,
+        select=('timepoint_id','tp_day'),
+        index=mod.TIMEPOINTS,
         param=(mod.tp_day))

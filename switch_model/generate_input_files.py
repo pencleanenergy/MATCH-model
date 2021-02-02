@@ -271,6 +271,7 @@ def generate_inputs(model_workspace, timezone):
 
             # summary_report.ipynb
             shutil.copy('reporting/summary_report.ipynb', input_dir)
+            shutil.copy('reporting/summary_report_public.ipynb', input_dir)
 
             df_periods.to_csv(input_dir / 'periods.csv', index=False)
             df_timeseries.to_csv(input_dir / 'timeseries.csv', index=False)
@@ -306,9 +307,6 @@ def generate_inputs(model_workspace, timezone):
             df_timepoints = df_timepoints.reset_index(drop=True)
             df_timepoints['timepoint_id'] = df_timepoints.index + 1
             df_timepoints[['timepoint_id','timestamp','timeseries']].to_csv(input_dir / 'timepoints.csv', index=False)
-
-            # months.csv
-            df_timepoints[['timepoint_id','tp_month']].to_csv(input_dir / 'months.csv', index=False)
 
             # days.csv
             df_timepoints[['timepoint_id','tp_day','tp_in_subset']].to_csv(input_dir / 'days.csv', index=False)
