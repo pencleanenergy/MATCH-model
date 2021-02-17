@@ -307,16 +307,11 @@ def generate_inputs(model_workspace, timezone):
             df_timepoints['timepoint_id'] = df_timepoints.index + 1
             df_timepoints[['timepoint_id','timestamp','timeseries']].to_csv(input_dir / 'timepoints.csv', index=False)
 
-            # months.csv
-            df_timepoints[['timepoint_id','tp_month']].to_csv(input_dir / 'months.csv', index=False)
-
             # days.csv
             df_timepoints[['timepoint_id','tp_day','tp_in_subset']].to_csv(input_dir / 'days.csv', index=False)
 
             df_financials.to_csv(input_dir / 'financials.csv', index=False)
 
-            
-            
             # gen_build_years.csv
             gen_build_years = set_gens[['GENERATION_PROJECT']]
             gen_build_years['build_year'] = year

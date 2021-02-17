@@ -270,13 +270,7 @@ def load_inputs(mod, switch_data, inputs_dir):
 
     """
 
-    """
-    # don't need tp month b/c RA is not indexed by tp
-    switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'months.csv'),
-        auto_select=True,
-        param=(mod.tp_month))
-    """
+
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'generation_projects_info.csv'),
         auto_select=True,
