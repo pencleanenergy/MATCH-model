@@ -1,0 +1,20 @@
+name: switch_247
+channels:
+  - nrel
+  - conda-forge
+  - defaults
+dependencies:
+  - glpk
+  - ipykernel
+  - ipython
+  - nbconvert
+  - nbformat
+  - nrel-pysam
+  - nrel-pysam-stubs
+  - numpy
+  - pandas
+  - pint
+  - plotly
+  - python
+  - pytz
+  - xlrd

@@ -1,9 +1,5 @@
-This contains version 2 of the Switch electricity planning model.
-This optimization model is modular and can be used with varying levels
-of complexity. Look in the examples directory for demonstrations of
-using Switch for investment planning or production cost simulation. The
-examples enable varying levels of model complexity by choosing which
-modules to include.
+This contains "Switch 24x7", a time-coincident renewable energy portfolio
+planning model that is based on version 2 of the Switch electricity planning model.
 
 See INSTALL for installation instructions.
 
@@ -16,9 +12,47 @@ TESTING
 To test the entire codebase, run this command from the root directory:
 	python run_tests.py
 
-EXAMPLES
-To run an example, navigate to an example directory and run the command:
-	switch solve --verbose --log-run
+DIRECTORY STRUCTURE
+
+switch_model: Contains the codebase for the project
+	|_ balancing
+		|_ demand response
+			|_ iterative: not currently used
+			|_ simple.py: defines DR/load shift resources
+		|_ load_zones.py: defines load zones
+		|_ renewable_target.py: defines renewable energy goals
+	|_ energy sources: modules for describing generator energy sources/fuels
+		|_ fuel_costs: not currently used
+		|_ properties.py: loads fuel properties
+	|_ generators: modules for defining generating resources
+		|_ core
+			|_ commit: not used because no unit commitment
+			|_ build.py: defines how to build/select projects
+			|_ dispatch.py: defines how to dispatch generators in each timepoint
+			|_ gen_discrete_build.py: forces discrete increments of a project to be built
+			|_ no_commit.py: defines limits on generator dispatch in the absence of unit commitment constraints
+		|_ extensions
+			|_ congestion_pricing.py: adds nodal pricing dynamics to the model
+			|_ hydro_simple.py: artefact from Switch 2.0 for modeling hydro dispatch
+			|_ resource_adequacy.py: defines RA requirements and positions
+			|_ storage.py: defines how to build and dispatch energy storage 
+	|_ reporting: code for generating model outputs
+		|_ generate_report.py: generates summary reports for each model scenario
+		|_ summary_report.ipynb: jupyter notebook template for generating html model report
+		|_ summary_report_public.ipynb: template for public report (strips out generator-specific info)
+	|_ upgrade: artefact from Switch 2.0l not currently in use
+	|_
+MODEL_RUNS: Containing folder for any model runs. See "CONFIGURING A MODEL RUN" for details
+	|_ model_inputs.xlsx: spreadsheet template for model inputs
+tests: artefact from Switch 2.0, not currently in use
+
+SETUP 
+1. Download local repo
+1. Download solver
+2. Install environmnent
+3. install switch
+Download CBC solver executable from https://ampl.com/products/solvers/open-source/
+
 
 CONFIGURING YOUR OWN MODELS
 
