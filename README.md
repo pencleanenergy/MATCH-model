@@ -11,7 +11,7 @@ components they define, and what input files they expect.
 See "INSTALL.md" for instructions on how to download and install switch 24x7 on your machine. 
 
 # DIRECTORY STRUCTURE
-
+```
 📦switch_model
  ┣ 📂balancing
  ┃ ┣ 📂demand_response
@@ -53,7 +53,7 @@ See "INSTALL.md" for instructions on how to download and install switch 24x7 on 
  ┣ 📜timescales.py
  ┣ 📜utilities.py
  ┗ 📜version.py
-
+```
 
 # CONFIGURING MODEL RUNS
 
@@ -69,7 +69,9 @@ The spreadsheet contains some placeholder data that you can write over. You can 
 
 3. Generate model input files
 Open `run_scenarios.ipynb` and complete steps 1 and 2 under the "Generate Model Inputs" heading, following any directions listed.
-This step will take the data entered into the excel spreadsheet and format it for use in the model. This will generate 
+This step will take the data entered into the excel spreadsheet and format it for use in the model. 
+
+This will generate:  
 
 	📂model_run_name
 	┣ 📂generator_set_1: holds solar and wind resource data for each set of generators
