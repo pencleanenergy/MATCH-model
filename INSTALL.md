@@ -15,7 +15,6 @@ particular, it is possible to install Switch and most of its dependencies using
 the pip package manager if you have that installed and working well, but you
 will need to do additional work to install glpk or coincbc, and possibly git.
 
-
 # Install Conda and Python
 
 Download and install Miniconda from
@@ -67,14 +66,6 @@ You can download the CBC solver executable from https://ampl.com/products/solver
 
 Once the CBC is downloaded and unzipped, move cbc.exe and coin-license.txt to the "switch_model" directory. 
 
-
-
-# Install Switch and its Dependencies
-
-
-
-
-
 # Install a Proprietary Solver (Optional)
 
 To solve larger models, you will need to install the cplex or gurobi solvers,
@@ -96,6 +87,3 @@ these solvers, which will require either purchasing a license, using a
 time-limited trial version, or using an academic-licensed version. The
 small-size free or community versions (typically 1000 variables and constraints)
 will not be enough for any realistic model.
-
-
-

@@ -386,7 +386,6 @@ def post_solve(instance, outdir):
 
     dispatch_normalized_dat = [{
         "generation_project": g,
-        "gen_dbid": instance.gen_dbid[g],
         "gen_tech": instance.gen_tech[g],
         "gen_load_zone": instance.gen_load_zone[g],
         "gen_energy_source": instance.gen_energy_source[g],

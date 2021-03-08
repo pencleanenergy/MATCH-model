@@ -35,7 +35,7 @@ def generate_inputs(model_workspace, timezone):
     
     print('Writing options.txt...')
     # Scenarios
-    xl_scenarios = pd.read_excel(io=model_inputs, sheet_name='scenarios')
+    xl_scenarios = pd.read_excel(io=model_inputs, sheet_name='scenarios').dropna(axis=1, how='all')
 
     scenario_list = list(xl_scenarios.iloc[:, 3:].columns)
 
@@ -67,7 +67,7 @@ def generate_inputs(model_workspace, timezone):
     print('Loading data from excel spreadsheet...')
     # Load all of the data from the excel file
 
-    xl_general = pd.read_excel(io=model_inputs, sheet_name='general')
+    xl_general = pd.read_excel(io=model_inputs, sheet_name='general').dropna(axis=1, how='all')
 
     year = int(xl_general.loc[xl_general['Parameter'] == 'Model Year', 'Input'].item())
     timezone = xl_general.loc[xl_general['Parameter'] == 'Timezone', 'Input'].item()
@@ -96,14 +96,14 @@ def generate_inputs(model_workspace, timezone):
 
     # Read data from the excel file
 
-    xl_gen = pd.read_excel(io=model_inputs, sheet_name='generation')
+    xl_gen = pd.read_excel(io=model_inputs, sheet_name='generation').dropna(axis=1, how='all')
     if xl_gen.isnull().values.any():
         raise ValueError("The generation tab contains a missing value. Please fix")
 
-    xl_load = pd.read_excel(io=model_inputs, sheet_name='load', header=[0,1], index_col=0)
+    xl_load = pd.read_excel(io=model_inputs, sheet_name='load', header=[0,1], index_col=0).dropna(axis=1, how='all')
 
     # ra_requirement.csv
-    xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements')
+    xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements').dropna(axis=1, how='all')
     ra_requirement = xl_ra_req[xl_ra_req['RA_RESOURCE'] != 'flexible_RA']
     ra_requirement['period'] = year
     ra_requirement = ra_requirement[['period','RA_RESOURCE','tp_month','ra_requirement','ra_cost','ra_resell_value']]
@@ -116,7 +116,7 @@ def generate_inputs(model_workspace, timezone):
     flexible_ra_requirement = flexible_ra_requirement[['period','tp_month','flexible_ra_requirement','flexible_ra_cost','flexible_ra_resell_value']]
 
     # ra_capacity_value.csv
-    ra_capacity_value = pd.read_excel(io=model_inputs, sheet_name='RA_capacity_value')
+    ra_capacity_value = pd.read_excel(io=model_inputs, sheet_name='RA_capacity_value').dropna(axis=1, how='all')
     ra_capacity_value['period'] = year
     ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','gen_capacity_value']]
 
@@ -126,9 +126,9 @@ def generate_inputs(model_workspace, timezone):
     # ra_requirement_categories.csv
     ra_requirement_categories = ra_requirement[['RA_RESOURCE']].drop_duplicates(ignore_index=True).rename(columns={'RA_RESOURCE':'RA_REQUIREMENT'})
 
-    xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1)
+    xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
 
-    xl_shift = pd.read_excel(io=model_inputs, sheet_name='load_shift', header=[0,1], index_col=0)
+    xl_shift = pd.read_excel(io=model_inputs, sheet_name='load_shift', header=[0,1], index_col=0).dropna(axis=1, how='all')
 
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
@@ -159,7 +159,7 @@ def generate_inputs(model_workspace, timezone):
 
 
         if 'manual' in vcf_input_types:
-            manual_vcf = pd.read_excel(io=model_inputs, sheet_name='manual_capacity_factors', index_col='Datetime').reset_index(drop=True)
+            manual_vcf = pd.read_excel(io=model_inputs, sheet_name='manual_capacity_factors', index_col='Datetime').dropna(axis=1, how='all').reset_index(drop=True)
             if manual_vcf.isnull().values.any():
                 raise ValueError("The manual_capacity_factor tab contains a missing value. Please fix")
             #only keep columns for the current scenario
@@ -174,7 +174,7 @@ def generate_inputs(model_workspace, timezone):
 
         if 'SAM' in vcf_input_types:
             #get SAM template data
-            sam_templates = pd.read_excel(io=model_inputs, sheet_name='SAM_templates')
+            sam_templates = pd.read_excel(io=model_inputs, sheet_name='SAM_templates').dropna(axis=1, how='all')
             
             #get the information for the relevant generators
             sam_inputs = vcf_inputs[vcf_inputs['capacity_factor_input'] == 'SAM']

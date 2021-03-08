@@ -459,11 +459,17 @@ def load_aug(switch_data, optional=False, auto_select=False,
     # How many index columns do we expect?
     # Grab the dimensionality of the index param if it was provided.
     if 'index' in kwds:
-        num_indexes = kwds['index'].dimen
+        # if no dimensions are defined, default to 1
+        if isinstance(kwds['index'].dimen, int):
+            num_indexes = kwds['index'].dimen
+        else:
+            num_indexes = 1
     # Next try the first parameter's index.
     elif len(params) > 0:
         try:
             num_indexes = params[0].index_set().dimen
+            if ~isinstance(num_indexes, int):
+                num_indexes = 0
         except (ValueError, AttributeError):
             num_indexes = 0
     # Default to 0 if both methods failed.

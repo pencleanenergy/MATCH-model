@@ -408,6 +408,7 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'generation_projects_info.csv'),
         auto_select=True,
+        index=mod.GENERATION_PROJECTS,
         optional_params=['storage_charge_to_discharge_ratio', 'storage_energy_to_power_ratio', 'storage_max_annual_cycles'],
         param=(mod.storage_roundtrip_efficiency, mod.storage_charge_to_discharge_ratio, mod.storage_energy_to_power_ratio, mod.storage_max_annual_cycles, mod.storage_hybrid_generation_project, mod.storage_hybrid_capacity_ratio, mod.storage_leakage_loss))
     

@@ -12,9 +12,13 @@ dependencies:
   - nrel-pysam
   - nrel-pysam-stubs
   - numpy
+  - openpyxl
   - pandas
   - pint
   - plotly
+  - pyomo<5.6.9a0
   - python
   - pytz
+  - pyutilib<6.0a0
+  - requests
   - xlrd
