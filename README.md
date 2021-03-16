@@ -166,10 +166,33 @@ To test the entire codebase, run this command from the root directory:
 	python run_tests.py
 
 # Development TODO
+
+## Cleanup
 - [ ] Combine no_commit.py with dispatch.py
 - [ ] Remove unused modules (especially in reporting directory)
-- [ ] Create inputs directory where cbc executable can be saved
-- [ ] Update code for newer versions of Pyomo / Python
-- [ ] Figure out how to prevent storage from charging and discharging in same timepoitn
-- [ ] Remove DispatchGen as a decision variable for renewable generators to improve solve time
 - [ ] Eliminate option to select required modules in the input spreadsheet
+- [ ] Update code for newer versions of Pyomo / Python
+- [ ] Create inputs directory where cbc executable can be saved
+- [ ] Rename SystemPower as GridPower
+- [ ] Rename from switch?
+
+## Bug Fixes
+- [ ] If solving scenarios in parallel, scenario summary reports should only be run once all scenarios are finished solving
+- [ ] Investigate why miniscule amounts of certain resources are built (rounding issues?)
+
+## Model Formulation / Calibration
+- [ ] Remove DispatchGen as a decision variable for renewable generators to improve solve time
+- [ ] Figure out how to prevent storage from charging and discharging in same timepoitn
+- [ ] Only allow grid power consumption if not enough storage/generation (and/or investigate cost incentives)
+- [ ] Investigate why annual goal is not leading to just buying the cheapest generator
+- [ ] Re-write cost components for objective function
+- [ ] Investigate whether hybrid generators can be modeled as a single resource
+- [ ] Investigate implementing opportunitistic/greedy storage charging
+- [ ] Allow for load shift to have costs
+- [ ] Investigate hydro dispatch implementation
+- [ ] Allow for "Standard Delivery" (Grid-mix) renewables to count
+- [ ] Allow for optimizing for month-hour averages
+
+
+
+

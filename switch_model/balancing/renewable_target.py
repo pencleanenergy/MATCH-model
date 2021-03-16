@@ -85,7 +85,9 @@ def define_components(mod):
     )
     
     # add system power cost to objective function so that its cost can be balanced against generator cost
-    mod.Cost_Components_Per_TP.append('SystemPowerCost')
+    # NOTE: (3/9/21) if system power cost is negative, it encourages use of system power when not needed. 
+    # To fix this, we should ignore the cost of system power in the objective function so that it is used only when needed
+    #mod.Cost_Components_Per_TP.append('SystemPowerCost')
 
     if mod.options.goal_type == "hourly":
         

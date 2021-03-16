@@ -1,10 +1,10 @@
 recursive-include tests *
 recursive-include examples *
-include README
+include README.md
 include LICENSE
 include AUTHORS
 include CHANGELOG.txt
-include INSTALL
+include INSTALL.md
 include DEV_INSTALL.txt
 include how_to_collaborate.txt
 include run_tests.py
