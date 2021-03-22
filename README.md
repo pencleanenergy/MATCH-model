@@ -167,22 +167,14 @@ To test the entire codebase, run this command from the root directory:
 
 # Development TODO
 
-## Cleanup
-- [ ] Combine no_commit.py with dispatch.py
-- [ ] Remove unused modules (especially in reporting directory)
-- [ ] Eliminate option to select required modules in the input spreadsheet
-- [ ] Update code for newer versions of Pyomo / Python
-- [ ] Create inputs directory where cbc executable can be saved
-- [ ] Rename SystemPower as GridPower
-- [ ] Rename from switch?
-
 ## Bug Fixes
 - [ ] If solving scenarios in parallel, scenario summary reports should only be run once all scenarios are finished solving
 - [ ] Investigate why miniscule amounts of certain resources are built (rounding issues?)
 
 ## Model Formulation / Calibration
-- [ ] Remove DispatchGen as a decision variable for renewable generators to improve solve time
-- [ ] Figure out how to prevent storage from charging and discharging in same timepoitn
+- [ ] Only make DispatchGen a decision variable for dispatchable generators (not variable renewables)
+- [ ] Configure sets of dispatchable vs non-dispatchable generators
+- [ ] Figure out how to prevent storage from charging and discharging in same timepoint
 - [ ] Only allow grid power consumption if not enough storage/generation (and/or investigate cost incentives)
 - [ ] Investigate why annual goal is not leading to just buying the cheapest generator
 - [ ] Re-write cost components for objective function
@@ -191,8 +183,21 @@ To test the entire codebase, run this command from the root directory:
 - [ ] Allow for load shift to have costs
 - [ ] Investigate hydro dispatch implementation
 - [ ] Allow for "Standard Delivery" (Grid-mix) renewables to count
+- [ ] Allow for dispatchable resources
 - [ ] Allow for optimizing for month-hour averages
+- [ ] Configure target that maximizes time-coincidence with 100% volumetric matching, or which matches shape 
+	- (maximize correlation coefficient?)
+	- (minimize abolute error between load and generation?)
+	- (assign a cost penalty to over-procurement? Set constraint on maximum over-procurement?)
 
-
+## Cleanup
+- [ ] Combine no_commit.py with dispatch.py
+- [ ] Remove unused modules (especially in reporting directory)
+- [ ] Eliminate option to select required modules in the input spreadsheet
+- [ ] Update code for newer versions of Pyomo / Python
+- [ ] Create inputs directory where cbc executable can be saved
+- [ ] Rename SystemPower as GridPower
+- [ ] Rename from switch?
+- [ ] In report plots, show battery charging AND discharging as green line modifying demand
 
 
