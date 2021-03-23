@@ -761,6 +761,8 @@ def solve(model):
     # result.solution.status, but also cleared) is in
     # pyomo.opt.SolutionStatus.['optimal', 'bestSoFar', 'feasible', 'globallyOptimal', 'locallyOptimal'],
     # but this seems pretty foolproof (if undocumented).
+    # NOTE [3/22/2021]: this is breaking the code with an IndexError: list index out of range for model.solutions[-1]._entry['variable']
+    """
     if len(model.solutions[-1]._entry['variable']) == 0:
         # no solution returned
         print("Solver terminated without a solution.")
@@ -770,6 +772,7 @@ def solve(model):
         if model.options.solver == 'glpk' and results.solver.termination_condition == TerminationCondition.other:
             print("Hint: glpk has been known to classify infeasible problems as 'other'.")
         raise RuntimeError("Solver failed to find an optimal solution.")
+    """
 
     # Report any warnings; these are written to stderr so users can find them in
     # error logs (e.g. on HPC systems). These can occur, e.g., if solver reaches
@@ -777,7 +780,7 @@ def solve(model):
     if results.solver.status == SolverStatus.warning:
         warn(
             "Solver terminated with warning.\n"
-            + "  Solution Status: {}\n".format(model.solutions[-1].status)
+            + "  Solution Status: {}\n".format(results.solver.status)
             + "  Termination Condition: {}".format(results.solver.termination_condition)
         )
 

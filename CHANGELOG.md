@@ -1,4 +1,15 @@
 -------------------------------------------------------------------------------
+Release 2021.03.XX
+-------------------------------------------------------------------------------
+
+- Rename variable "DispatchStorage" with "DischargeStorage"
+- Remove generators.core.commit modules
+- Update generators.extensions.congestion_pricing.py
+  - Remove "DLAPLoadCostInTP" from objective function
+  - Add congestion costs to objective function
+  - Add output for nodal costs in each timepoint, including overprocured load cost
+
+-------------------------------------------------------------------------------
 Switch 2.0.5
 -------------------------------------------------------------------------------
 This release standardizes all inputs and outputs as .csv files.

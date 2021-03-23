@@ -129,14 +129,14 @@ Typical outputs will look like:
 	┃ ┃ ┣ 📜BuildMinGenCap.csv
 	┃ ┃ ┣ 📜BuildStorageEnergy.csv
 	┃ ┃ ┣ 📜ChargeStorage.csv
-	┃ ┃ ┣ 📜congestion_costs_by_gen.csv
+	┃ ┃ ┣ 📜nodal_costs_by_gen.csv
 	┃ ┃ ┣ 📜costs_itemized.csv
 	┃ ┃ ┣ 📜cost_components.csv
 	┃ ┃ ┣ 📜dispatch-wide.csv
 	┃ ┃ ┣ 📜dispatch.csv
 	┃ ┃ ┣ 📜DispatchBaseloadByPeriod.csv
 	┃ ┃ ┣ 📜DispatchGen.csv
-	┃ ┃ ┣ 📜DispatchStorage.csv
+	┃ ┃ ┣ 📜DischargeStorage.csv
 	┃ ┃ ┣ 📜dispatch_annual_summary.csv
 	┃ ┃ ┣ 📜dispatch_zonal_annual_summary.csv
 	┃ ┃ ┣ 📜electricity_cost.csv
@@ -170,25 +170,38 @@ To test the entire codebase, run this command from the root directory:
 ## Bug Fixes
 - [ ] If solving scenarios in parallel, scenario summary reports should only be run once all scenarios are finished solving
 - [ ] Investigate why miniscule amounts of certain resources are built (rounding issues?)
+- [ ] Figure out how to deal with scenarios where nodal revenues > PPA cost, leading to unbounded problems
+- [ ] Address FileNotFoundError when running NbConvertApp during post-solve (issue with subprocess.py?)
 
 ## Model Formulation / Calibration
-- [ ] Only make DispatchGen a decision variable for dispatchable generators (not variable renewables)
-- [ ] Configure sets of dispatchable vs non-dispatchable generators
-- [ ] Figure out how to prevent storage from charging and discharging in same timepoint
-- [ ] Only allow grid power consumption if not enough storage/generation (and/or investigate cost incentives)
-- [ ] Investigate why annual goal is not leading to just buying the cheapest generator
-- [ ] Re-write cost components for objective function
 - [ ] Investigate whether hybrid generators can be modeled as a single resource
 - [ ] Investigate implementing opportunitistic/greedy storage charging
 - [ ] Allow for load shift to have costs
-- [ ] Investigate hydro dispatch implementation
-- [ ] Allow for "Standard Delivery" (Grid-mix) renewables to count
-- [ ] Allow for dispatchable resources
 - [ ] Allow for optimizing for month-hour averages
 - [ ] Configure target that maximizes time-coincidence with 100% volumetric matching, or which matches shape 
 	- (maximize correlation coefficient?)
 	- (minimize abolute error between load and generation?)
 	- (assign a cost penalty to over-procurement? Set constraint on maximum over-procurement?)
+
+## Supply-Demand Balance Constraint
+- [ ] Figure out how to prevent storage from charging and discharging in same timepoint
+- [ ] Only allow grid power consumption if not enough storage/generation (and/or investigate cost incentives)
+
+## Decision Variables
+- [ ] Only make DispatchGen a decision variable for dispatchable generators (not variable renewables)
+- [ ] Configure sets of dispatchable vs non-dispatchable generators
+- [ ] Allow for dispatchable resources
+
+## Cost Vector/Objective Function
+- [x] Investigate why annual goal is not leading to just buying the cheapest generator
+	- issue was cost incentives
+- [x] Re-write cost components for objective function
+- [ ] Determine whether we need to account for congestion costs with storage resources
+
+## Future edits for non-PCE scenarios
+- [ ] Investigate hydro dispatch implementation
+- [ ] Allow for "Standard Delivery" (Grid-mix) renewables to count
+- [ ] Set up capability for both physical and virtual PPAs, including contracts for difference
 
 ## Cleanup
 - [ ] Combine no_commit.py with dispatch.py

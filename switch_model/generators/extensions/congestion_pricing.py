@@ -2,7 +2,11 @@
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
-This module adds the 
+This module adds the capability to track nodal prices at both the generation node and delivery node. 
+Currently, this is configured to track costs related to physical PPAs, in which the buyer is responsible
+for scheduling the energy in the wholesale market, and thus earns any wholesale market revenue. 
+This is in contrast to a virtual power purchase agreement, which are often set up as contracts for difference (CFD)
+in which the buyer pays the contract price and also settles the difference between the contract price and wholesale market price.
 """
 
 import os
@@ -26,27 +30,23 @@ def define_components(mod):
     mod.DLAPLoadCostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(m.zone_demand_mw[z,t] * m.nodal_price[z,t] for z in m.LOAD_ZONES))
-    mod.Cost_Components_Per_TP.append('DLAPLoadCostInTP')
 
+    # Pnode Revenue is earned from injecting power into the grid 
     mod.DispatchedGenPnodeRevenue = Expression(
         mod.NON_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: (m.DispatchGen[g,t] * m.nodal_price[m.gen_pricing_node[g],t]))
-
+        rule=lambda m, g, t: ((m.DispatchGen[g,t]) * m.nodal_price[m.gen_pricing_node[g],t]))
     mod.DispatchedGenPnodeRevenueInTP = Expression(
         mod.TIMEPOINTS,
-        rule=lambda m,t: - sum(m.DispatchedGenPnodeRevenue[g,t] for g in m.NON_STORAGE_GENS))
-    mod.Cost_Components_Per_TP.append('DispatchedGenPnodeRevenueInTP')
-
-    # Other calculations for post-solve
-    ###################################
+        rule=lambda m,t: sum(m.DispatchedGenPnodeRevenue[g,t]  for g in m.NON_STORAGE_GENS))
 
     mod.ExcessGenPnodeRevenue = Expression(
         mod.NON_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: (m.ExcessGen[g,t]) * m.nodal_price[m.gen_pricing_node[g],t])
+        rule=lambda m, g, t: ((m.ExcessGen[g, t]) * m.nodal_price[m.gen_pricing_node[g],t]))
     mod.ExcessGenPnodeRevenueInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m,t: sum(m.ExcessGenPnodeRevenue[g,t] for g in m.NON_STORAGE_GENS))
 
+    # The delivery cost is the cost of offtaking the generated energy at the demand node
     mod.GenDeliveryCost = Expression(
         mod.NON_STORAGE_GEN_TPS,
         rule=lambda m, g, t: m.DispatchGen[g,t] * m.nodal_price[m.gen_load_zone[g],t])
@@ -67,6 +67,15 @@ def define_components(mod):
     mod.CongestionCostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m,t: sum(m.GenCongestionCost[g,t] for g in m.NON_STORAGE_GENS))
+    # Add congestion cost to the objective function
+    mod.Cost_Components_Per_TP.append('CongestionCostInTP')
+
+    # Overprocured load is a "virtual" cost that is not actually faced. Instead, it is the cost of "delivering"
+    # generation in excess of load at any timepoint
+    mod.OverprocuredLoadCostInTP = Expression(
+        mod.TIMEPOINTS,
+        rule=lambda m,t: (m.GenDeliveryCostInTP[t] + m.ExcessGenDeliveryCostInTP[t] - m.DLAPLoadCostInTP[t])
+    )
 
 
 def post_solve(instance, outdir):
@@ -84,9 +93,25 @@ def post_solve(instance, outdir):
         "Excess Delivery Cost": value(instance.ExcessGenDeliveryCost[g,t]),
         "Congestion Cost": value(instance.GenCongestionCost[g,t]),
     } for (g, t) in instance.NON_STORAGE_GEN_TPS]
-    congestion_df = pd.DataFrame(congestion_data)
-    congestion_df.set_index(["generation_project", "timestamp"], inplace=True)
-    congestion_df.to_csv(os.path.join(outdir, "congestion_costs_by_gen.csv"))
+    nodal_by_gen_df = pd.DataFrame(congestion_data)
+    nodal_by_gen_df.set_index(["generation_project", "timestamp"], inplace=True)
+    nodal_by_gen_df.to_csv(os.path.join(outdir, "nodal_costs_by_gen.csv"))
+
+    nodal_data = [{
+        "timestamp": instance.tp_timestamp[t],
+        "Dispatched Pnode Revenue": value(instance.DispatchedGenPnodeRevenueInTP[t]),
+        "Excess Pnode Revenue": value(instance.ExcessGenPnodeRevenueInTP[t]),
+        "Dispatched Delivery Cost": value(instance.GenDeliveryCostInTP[t]),
+        "Excess Delivery Cost": value(instance.ExcessGenDeliveryCostInTP[t]),
+        "Congestion Cost": value(instance.CongestionCostInTP[t]),
+        "DLAP Cost": value(instance.DLAPLoadCostInTP[t]),
+        "Overprocured Load Cost": value(instance.OverprocuredLoadCostInTP[t]),
+    } for t in instance.TIMEPOINTS]
+    nodal_df = pd.DataFrame(nodal_data)
+    nodal_df.set_index(["timestamp"], inplace=True)
+    nodal_df.to_csv(os.path.join(outdir, "nodal_costs.csv"))
+
+
 
     
 

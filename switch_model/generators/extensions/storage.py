@@ -228,14 +228,14 @@ def define_components(mod):
         mod.STORAGE_GEN_TPS,
         within=NonNegativeReals)
 
-    mod.DispatchStorage = Var(
+    mod.DischargeStorage = Var(
             mod.STORAGE_GEN_TPS,
             within=NonNegativeReals)
 
     mod.Enforce_Storage_Dispatch_Upper_Limit = Constraint(
         mod.STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
-            m.DispatchStorage[g, t] <= m.DispatchUpperLimit[g, t]))
+            m.DischargeStorage[g, t] <= m.DispatchUpperLimit[g, t]))
 
     mod.Enforce_Storage_Charge_Upper_Limit = Constraint(
         mod.STORAGE_GEN_TPS,
@@ -246,7 +246,7 @@ def define_components(mod):
     mod.ZoneTotalStorageDispatch = Expression(
         mod.ZONE_TIMEPOINTS,
         rule=lambda m, z, t: \
-            sum(m.DispatchStorage[g, t]
+            sum(m.DischargeStorage[g, t]
                 for g in m.STORAGE_GENS_IN_ZONE[z]
                 if (g, t) in m.STORAGE_GEN_TPS),
     )
@@ -305,7 +305,7 @@ def define_components(mod):
     # a combined total of 100MW in any timepoint.
     mod.Hybrid_Dispatch_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.DispatchStorage[g,t] + m.DispatchUpperLimit[m.storage_hybrid_generation_project[g], t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.DispatchUpperLimit[m.storage_hybrid_generation_project[g], t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
 
     #STATE OF CHARGE
     ################
@@ -318,7 +318,7 @@ def define_components(mod):
             m.StateOfCharge[g, m.tp_previous[t]] - \
             (m.StateOfCharge[g, m.tp_previous[t]] * m.storage_leakage_loss[g]) + \
             ((m.ChargeStorage[g, t] * sqrt(m.storage_roundtrip_efficiency[g])) -
-            (m.DispatchStorage[g, t] / sqrt(m.storage_roundtrip_efficiency[g]))) * m.tp_duration_hrs[t]
+            (m.DischargeStorage[g, t] / sqrt(m.storage_roundtrip_efficiency[g]))) * m.tp_duration_hrs[t]
     mod.Track_State_Of_Charge = Constraint(
         mod.STORAGE_GEN_TPS,
         rule=Track_State_Of_Charge_rule)
@@ -334,7 +334,7 @@ def define_components(mod):
     ##############
     mod.Battery_Cycle_Count = Expression(
         mod.STORAGE_GEN_PERIODS,
-        rule=lambda m, g, p: sum(m.DispatchStorage[g, t] / sqrt(m.storage_roundtrip_efficiency[g]) * m.tp_duration_hrs[t] for t in m.TPS_IN_PERIOD[p]))
+        rule=lambda m, g, p: sum(m.DischargeStorage[g, t] / sqrt(m.storage_roundtrip_efficiency[g]) * m.tp_duration_hrs[t] for t in m.TPS_IN_PERIOD[p]))
     
     # batteries can only complete the specified number of cycles per year, averaged over each period
     mod.Battery_Cycle_Limit = Constraint(
@@ -353,34 +353,25 @@ def define_components(mod):
 
     mod.StorageDispatchPnodeCost = Expression(
         mod.STORAGE_GEN_TPS,
-        rule = lambda m, g, t: (m.ChargeStorage[g, t] - m.DispatchStorage[g, t]) * m.nodal_price[m.gen_pricing_node[g], t]
+        rule = lambda m, g, t: (m.ChargeStorage[g, t] - m.DischargeStorage[g, t]) * m.nodal_price[m.gen_pricing_node[g], t]
     )
-    mod.StorageDispatchPnodeCostInTP = Expression(
+    mod.StorageNodalEnergyCostInTP = Expression(
         mod.TIMEPOINTS,
         rule = lambda m, t: sum(m.StorageDispatchPnodeCost[g, t] for g in m.STORAGE_GENS)
     )
-    mod.Cost_Components_Per_TP.append('StorageDispatchPnodeCostInTP')
+    mod.Cost_Components_Per_TP.append('StorageNodalEnergyCostInTP')
 
     # A hybrid generator should not pay the PPA cost of energy generated but stored, since this energy never crosses
     # the bus, so we want to discount ExcessGenCostInTP by the amount charged; however, the storage should pay the PPA
     # cost when dispatching because the energy will cross the generator bus
-    mod.HybridChargePPADiscountInTP = Expression(
-        mod.TIMEPOINTS,
-        rule=lambda m, t: - sum(
-            m.ChargeStorage[g, t] * m.ppa_energy_cost[m.storage_hybrid_generation_project[g]]
-            for g in m.GENS_IN_PERIOD[m.tp_period[t]]
-            if g in m.HYBRID_STORAGE_GENS),
-        doc="Summarize costs for the objective function")
-    mod.Cost_Components_Per_TP.append('HybridChargePPADiscountInTP')
-
-    mod.HybridStoragePPACostInTP = Expression(
+    mod.HybridStoragePPAEnergyCostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
-            m.DispatchStorage[g, t] * m.ppa_energy_cost[m.storage_hybrid_generation_project[g]]
+            (m.DischargeStorage[g, t] - m.ChargeStorage[g, t]) * m.ppa_energy_cost[m.storage_hybrid_generation_project[g]]
             for g in m.GENS_IN_PERIOD[m.tp_period[t]]
             if g in m.HYBRID_STORAGE_GENS),
         doc="Summarize costs for the objective function")
-    mod.Cost_Components_Per_TP.append('HybridStoragePPACostInTP')
+    mod.Cost_Components_Per_TP.append('HybridStoragePPAEnergyCostInTP')
 
 
 def load_inputs(mod, switch_data, inputs_dir):
@@ -446,7 +437,7 @@ def post_solve(instance, outdir):
                   "StateOfCharge", "StorageDispatchPnodeCost",),
         values=lambda m, g, t: (
             g, m.tp_timestamp[t], m.gen_load_zone[g],
-            m.ChargeStorage[g, t], m.DispatchStorage[g, t], 
+            m.ChargeStorage[g, t], m.DischargeStorage[g, t], 
             m.StateOfCharge[g, t], m.StorageDispatchPnodeCost[g, t]
             ))
     reporting.write_table(
