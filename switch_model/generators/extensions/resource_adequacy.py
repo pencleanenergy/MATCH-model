@@ -288,16 +288,19 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_requirement.csv'),
         auto_select=True,
+        index=mod.PERIODS*mod.RA_MONTHS,
         optional_params=['ra_resell_value'],
         param=(mod.ra_requirement, mod.ra_cost, mod.ra_resell_value))
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'flexible_ra_requirement.csv'),
         auto_select=True,
+        index=mod.PERIODS*mod.MONTHS,
         optional_params=['flexible_ra_resell_value'],
         param=(mod.flexible_ra_requirement, mod.flexible_ra_cost, mod.flexible_ra_resell_value))
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_capacity_value.csv'),
         auto_select=True,
+        index=mod.PERIODS*mod.ENERGY_SOURCES*mod.MONTHS,
         param=(mod.gen_capacity_value,))
 
 

@@ -47,6 +47,7 @@ Other Updates
   - Add output for nodal costs in each timepoint, including overprocured load cost
 - Moved all fuel-based dispatch parameters (including CCS) to a new module generators.extensions.gen_fuel_costs
 - Updated summary reports to reflect updated output files
+- Fixed bug where model failed to construct RA parameters due to missing index information
 
 -------------------------------------------------------------------------------
 Switch 2.0.5
