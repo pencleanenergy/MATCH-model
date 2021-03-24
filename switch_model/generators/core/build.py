@@ -50,7 +50,7 @@ def define_components(mod):
 
     gen_is_variable[g]
 
-    gen_is_baseload
+    gen_is_baseload 
 
     gen_is_storage
 
@@ -71,8 +71,8 @@ def define_components(mod):
 
     NON_STORAGE_GENS
 
-    GENS_IN_ZONE[z] and VARIABLE_GENS_IN_ZONE are indexed sets that lists all
-    generation projects or variable generation projects within each load zone.
+    GENS_IN_ZONE[z]  are indexed sets that lists all
+    generation projects within each load zone.
 
     GENS_BY_TECHNOLOGY
 
@@ -91,31 +91,9 @@ def define_components(mod):
 
     gen_unit_size[g]
 
-    CCS_EQUIPPED_GENS
 
-    gen_ccs_capture_efficiency[g]
-
-    gen_ccs_energy_load[g]
-
-    gen_uses_fuel[g]
-
-    NON_FUEL_BASED_GENS
-
-    FUEL_BASED_GENS
-
-    gen_full_load_heat_rate
-
-    MULTIFUEL_GENS
-
-    FUELS_FOR_MULTIFUEL_GEN
-
-    FUELS_FOR_GEN
 
     GENS_BY_ENERGY_SOURCE
-
-    GENS_BY_NON_FUEL_ENERGY_SOURCE
-
-    GENS_BY_FUEL
 
     -- CONSTRUCTION --
 
@@ -258,18 +236,24 @@ def define_components(mod):
         'gen_load_zone', 'gen_is_variable')
 
     # Generation Project subsets
-    mod.VARIABLE_GENS = Set(
-        initialize=mod.GENERATION_PROJECTS,
-        filter=lambda m, g: m.gen_is_variable[g])
-    
-    mod.BASELOAD_GENS = Set(
-        initialize=mod.GENERATION_PROJECTS,
-        filter=lambda m, g: m.gen_is_baseload[g])
-    mod.STORAGE_GENS = Set(initialize=mod.GENERATION_PROJECTS, 
-                           filter=lambda m, g: m.gen_is_storage[g])
+    mod.STORAGE_GENS = Set(
+        initialize=mod.GENERATION_PROJECTS, 
+        filter=lambda m, g: m.gen_is_storage[g])
     mod.NON_STORAGE_GENS = Set(
         initialize=mod.GENERATION_PROJECTS,
         filter=lambda m, g: not m.gen_is_storage[g])
+    mod.VARIABLE_GENS = Set(
+        initialize=mod.GENERATION_PROJECTS,
+        filter=lambda m, g: m.gen_is_variable[g])
+    mod.BASELOAD_GENS = Set(
+        initialize=mod.GENERATION_PROJECTS,
+        filter=lambda m, g: m.gen_is_baseload[g])
+    mod.DISPATCHABLE_GENS = Set(
+        initialize=mod.NON_STORAGE_GENS,
+        filter=lambda m, g: not (m.gen_is_variable[g] or m.gen_is_baseload[g]))
+
+
+
 
     """Construct GENS_* indexed sets efficiently with a
     'construction dictionary' pattern: on the first call, make a single
@@ -288,9 +272,6 @@ def define_components(mod):
         mod.LOAD_ZONES,
         initialize=GENS_IN_ZONE_init
     )
-    mod.VARIABLE_GENS_IN_ZONE = Set(
-        mod.LOAD_ZONES,
-        initialize=lambda m, z: [g for g in m.GENS_IN_ZONE[z] if m.gen_is_variable[g]])
 
     def GENS_BY_TECHNOLOGY_init(m, t):
         if not hasattr(m, 'GENS_BY_TECH_dict'):
@@ -312,62 +293,6 @@ def define_components(mod):
     mod.DISCRETELY_SIZED_GENS = Set(within=mod.GENERATION_PROJECTS)
     mod.gen_unit_size = Param(
         mod.DISCRETELY_SIZED_GENS, within=PositiveReals)
-    mod.CCS_EQUIPPED_GENS = Set(within=mod.GENERATION_PROJECTS)
-    mod.gen_ccs_capture_efficiency = Param(
-        mod.CCS_EQUIPPED_GENS, within=PercentFraction)
-    mod.gen_ccs_energy_load = Param(
-        mod.CCS_EQUIPPED_GENS, within=PercentFraction)
-
-    mod.gen_uses_fuel = Param(
-        mod.GENERATION_PROJECTS,
-        initialize=lambda m, g: (
-            m.gen_energy_source[g] in m.FUELS
-                or m.gen_energy_source[g] == "multiple"))
-    mod.NON_FUEL_BASED_GENS = Set(
-        initialize=mod.GENERATION_PROJECTS,
-        filter=lambda m, g: not m.gen_uses_fuel[g])
-    mod.FUEL_BASED_GENS = Set(
-        initialize=mod.GENERATION_PROJECTS,
-        filter=lambda m, g: m.gen_uses_fuel[g])
-
-    mod.gen_full_load_heat_rate = Param(
-        mod.FUEL_BASED_GENS,
-        within=NonNegativeReals)
-    mod.MULTIFUEL_GENS = Set(
-        initialize=mod.GENERATION_PROJECTS,
-        filter=lambda m, g: m.gen_energy_source[g] == "multiple")
-    mod.FUELS_FOR_MULTIFUEL_GEN = Set(mod.MULTIFUEL_GENS, within=mod.FUELS)
-    mod.FUELS_FOR_GEN = Set(mod.FUEL_BASED_GENS,
-        initialize=lambda m, g: (
-            m.FUELS_FOR_MULTIFUEL_GEN[g]
-            if g in m.MULTIFUEL_GENS
-            else [m.gen_energy_source[g]]))
-
-    def GENS_BY_ENERGY_SOURCE_init(m, e):
-        if not hasattr(m, 'GENS_BY_ENERGY_dict'):
-            m.GENS_BY_ENERGY_dict = {_e: [] for _e in m.ENERGY_SOURCES}
-            for g in m.GENERATION_PROJECTS:
-                if g in m.FUEL_BASED_GENS:
-                    for f in m.FUELS_FOR_GEN[g]:
-                        m.GENS_BY_ENERGY_dict[f].append(g)
-                else:
-                    m.GENS_BY_ENERGY_dict[m.gen_energy_source[g]].append(g)
-        result = m.GENS_BY_ENERGY_dict.pop(e)
-        if not m.GENS_BY_ENERGY_dict:
-            del m.GENS_BY_ENERGY_dict
-        return result
-    mod.GENS_BY_ENERGY_SOURCE = Set(
-        mod.ENERGY_SOURCES,
-        initialize=GENS_BY_ENERGY_SOURCE_init
-    )
-    mod.GENS_BY_NON_FUEL_ENERGY_SOURCE = Set(
-        mod.NON_FUEL_ENERGY_SOURCES,
-        initialize=lambda m, s: m.GENS_BY_ENERGY_SOURCE[s]
-    )
-    mod.GENS_BY_FUEL = Set(
-        mod.FUELS,
-        initialize=lambda m, f: m.GENS_BY_ENERGY_SOURCE[f]
-    )
 
     mod.PREDETERMINED_GEN_BLD_YRS = Set(
         dimen=2)
@@ -602,8 +527,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         gen_full_load_heat_rate, gen_variable_om, gen_connect_cost_per_mw
     Optional columns are:
         gen_scheduled_outage_rate, gen_forced_outage_rate,
-        gen_capacity_limit_mw, gen_unit_size, gen_ccs_energy_load,
-        gen_ccs_capture_efficiency, gen_min_build_capacity, gen_is_cogen
+        gen_capacity_limit_mw, gen_unit_size,  gen_min_build_capacity, gen_is_cogen
 
     The following file lists existing builds of projects, and is
     optional for simulations where there is no existing capacity:
@@ -623,18 +547,15 @@ def load_inputs(mod, switch_data, inputs_dir):
         auto_select=True,
         optional_params=['gen_is_baseload', 'gen_scheduled_outage_rate',
         'gen_forced_outage_rate', 'gen_capacity_limit_mw', 'gen_unit_size',
-        'gen_ccs_energy_load', 'gen_ccs_capture_efficiency',
-        'gen_min_build_capacity', 'gen_is_cogen', 'gen_excess_max', 'gen_variant_group'],
+        'gen_min_build_capacity', 'gen_is_cogen', 'gen_variant_group'],
         index=mod.GENERATION_PROJECTS,
         param=(mod.gen_tech, mod.gen_energy_source,
                mod.gen_load_zone, mod.gen_is_variable, mod.gen_is_storage,
                mod.gen_is_baseload, mod.gen_scheduled_outage_rate,
                mod.gen_forced_outage_rate, mod.gen_capacity_limit_mw,
-               mod.gen_unit_size, mod.gen_ccs_energy_load,
-               mod.gen_ccs_capture_efficiency, mod.gen_full_load_heat_rate,
-               mod.ppa_energy_cost, mod.gen_min_build_capacity,
+               mod.gen_unit_size, mod.ppa_energy_cost, mod.gen_min_build_capacity,
                mod.ppa_capacity_cost, mod.gen_is_cogen,
-               mod.gen_excess_max, mod.gen_variant_group, mod.gen_pricing_node))
+               mod.gen_variant_group, mod.gen_pricing_node))
     # Construct sets of capacity-limited, ccs-capable and unit-size-specified
     # projects. These sets include projects for which these parameters have
     # a value
@@ -644,9 +565,6 @@ def load_inputs(mod, switch_data, inputs_dir):
     if 'gen_unit_size' in switch_data.data():
         switch_data.data()['DISCRETELY_SIZED_GENS'] = {
             None: list(switch_data.data(name='gen_unit_size').keys())}
-    if 'gen_ccs_capture_efficiency' in switch_data.data():
-        switch_data.data()['CCS_EQUIPPED_GENS'] = {
-            None: list(switch_data.data(name='gen_ccs_capture_efficiency').keys())}
     if 'gen_variant_group' in switch_data.data():
         switch_data.data()['GENS_WITH_VARIANTS'] = {
             None: list(switch_data.data(name='gen_variant_group').keys())}
@@ -661,10 +579,6 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'gen_build_years.csv'),
         set=mod.GEN_BLD_YRS)
-    # read FUELS_FOR_MULTIFUEL_GEN from gen_multiple_fuels.dat if available
-    multi_fuels_path = os.path.join(inputs_dir, 'gen_multiple_fuels.dat')
-    if os.path.isfile(multi_fuels_path):
-        switch_data.load(filename=multi_fuels_path)
 
 
 def post_solve(m, outdir):

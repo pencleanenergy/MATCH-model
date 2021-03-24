@@ -46,14 +46,6 @@ def define_components(mod):
 
         DispatchLowerLimit <= DispatchGen <= DispatchUpperLimit
 
-    GenFuelUseRate_Calculate[(g, t) in GEN_TPS]
-    calculates fuel consumption for the variable GenFuelUseRate as
-    DispatchGen * gen_full_load_heat_rate. The units become:
-    MW * (MMBtu / MWh) = MMBTU / h
-
-    DispatchGenByFuel[(g, t, f) in GEN_TP_FUELS]
-    calculates power production by each project from each fuel during
-    each timepoint. 
 
     """
 
@@ -82,7 +74,8 @@ def define_components(mod):
     
     # BASELOAD GENERATOR DISPATCH
     #############################
-    
+    # TODO: update baseload generation to be dispatchable, but always on
+    """
     mod.BASELOAD_GEN_PERIODS = Set(
         dimen=2,
         initialize=lambda m:
@@ -98,33 +91,24 @@ def define_components(mod):
         mod.BASELOAD_GEN_TPS,
         rule=lambda m, g, t:
             m.DispatchGen[g, t] == m.DispatchBaseloadByPeriod[g, m.tp_period[t]])
-
+    """
     # DISPATCH UPPER LIMITS
 
     def DispatchUpperLimit_expr(m, g, t):
-        if g in m.VARIABLE_GENS:
-            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
-                    m.gen_max_capacity_factor[g, t])
-        else:
-            return m.GenCapacityInTP[g, t] * m.gen_availability[g]
+        return m.GenCapacityInTP[g, t] * m.gen_availability[g]
     mod.DispatchUpperLimit = Expression(
-        mod.GEN_TPS,
+        mod.DISPATCHABLE_GEN_TPS,
         rule=DispatchUpperLimit_expr)
 
     mod.Enforce_Dispatch_Upper_Limit = Constraint(
-        mod.NON_STORAGE_GEN_TPS,
+        mod.DISPATCHABLE_GEN_TPS,
         rule=lambda m, g, t: (
             m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t]))
 
-    mod.GenFuelUseRate_Calculate = Constraint(
-        mod.FUEL_BASED_GEN_TPS,
-        rule=lambda m, g, t: (
-            sum(m.GenFuelUseRate[g, t, f] for f in m.FUELS_FOR_GEN[g])
-            == m.DispatchGen[g, t] * m.gen_full_load_heat_rate[g]))
-
     # EXCESS GENERATION
     ###################
-    
+    # TODO: delete commented code
+    """    
     mod.ExcessGen = Expression(
         mod.NON_STORAGE_GEN_TPS, #for each variable generator in each period
         rule=lambda m, g, t: m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] if g in m.VARIABLE_GENS else 0 #calculate a value according to the rule 
@@ -168,3 +152,4 @@ def define_components(mod):
         else
         (m.AnnualExcessGen[g,p] <= (m.gen_excess_max[g] * m.GenCapacity[g, p]))
     )
+    """

@@ -5,7 +5,7 @@
 import os
 import shutil
 
-run_folder = 'MODEL_RUNS/CA_data_center_example'
+run_folder = 'MODEL_RUNS/test'
 
 scenarios = os.listdir(f'../../{run_folder}/outputs')
 

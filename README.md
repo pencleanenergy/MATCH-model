@@ -144,13 +144,15 @@ Typical outputs will look like:
 	┃ ┃ ┣ 📜GenFuelUseRate.csv
 	┃ ┃ ┣ 📜gen_cap.csv
 	┃ ┃ ┣ 📜load_balance.csv
+	┃ ┃ ┣ 📜nodal_costs.csv	
+	┃ ┃ ┣ 📜nodal_costs_by_gen.csv
 	┃ ┃ ┣ 📜results.pickle
 	┃ ┃ ┣ 📜scenario_summary.csv
 	┃ ┃ ┣ 📜StateOfCharge.csv
 	┃ ┃ ┣ 📜storage_builds.csv
 	┃ ┃ ┣ 📜storage_cycle_count.csv
 	┃ ┃ ┣ 📜storage_dispatch.csv
-	┃ ┃ ┣ 📜summary_report_annual_goal.html		} interactive summary report
+	┃ ┃ ┣ 📜summary_report_annual_goal.html		   } interactive summary report
 	┃ ┃ ┣ 📜summary_report_annual_goal_public.html }
 	┃ ┃ ┣ 📜SystemPower.csv
 	┃ ┃ ┣ 📜system_power.csv
@@ -171,7 +173,8 @@ To test the entire codebase, run this command from the root directory:
 - [ ] If solving scenarios in parallel, scenario summary reports should only be run once all scenarios are finished solving
 - [ ] Investigate why miniscule amounts of certain resources are built (rounding issues?)
 - [ ] Figure out how to deal with scenarios where nodal revenues > PPA cost, leading to unbounded problems
-- [ ] Address FileNotFoundError when running NbConvertApp during post-solve (issue with subprocess.py?)
+- [x] Address FileNotFoundError when running NbConvertApp during post-solve (issue with subprocess.py?)
+	- This was an issue with a local environment related to this issue: https://github.com/jupyter/notebook/issues/2301
 
 ## Model Formulation / Calibration
 - [ ] Investigate whether hybrid generators can be modeled as a single resource
@@ -184,13 +187,14 @@ To test the entire codebase, run this command from the root directory:
 	- (assign a cost penalty to over-procurement? Set constraint on maximum over-procurement?)
 
 ## Supply-Demand Balance Constraint
-- [ ] Figure out how to prevent storage from charging and discharging in same timepoint
-- [ ] Only allow grid power consumption if not enough storage/generation (and/or investigate cost incentives)
+- [x] Figure out how to prevent storage from charging and discharging in same timepoint
+- [x] Only allow grid power consumption if not enough storage/generation (and/or investigate cost incentives)
+	- both of these seem to be addressed by the 2021.03.24 update
 
-## Decision Variables
-- [ ] Only make DispatchGen a decision variable for dispatchable generators (not variable renewables)
-- [ ] Configure sets of dispatchable vs non-dispatchable generators
-- [ ] Allow for dispatchable resources
+## Generation dispatch
+- [x] Only make DispatchGen a decision variable for dispatchable generators (not variable renewables)
+- [x] Configure sets of dispatchable vs non-dispatchable generators
+- [x] Remove all components related to variable fuel costs, or move to a separate module to be used in rare cases that you a) have a fuel-based generator and b) are responsible for the variable fuel costs
 
 ## Cost Vector/Objective Function
 - [x] Investigate why annual goal is not leading to just buying the cheapest generator
@@ -212,5 +216,7 @@ To test the entire codebase, run this command from the root directory:
 - [ ] Rename SystemPower as GridPower
 - [ ] Rename from switch?
 - [ ] In report plots, show battery charging AND discharging as green line modifying demand
+- [ ] Update run_tests.py
+
 
 

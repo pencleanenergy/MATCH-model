@@ -1,13 +1,52 @@
 -------------------------------------------------------------------------------
-Release 2021.03.XX
+Commmit 2021.03.24
 -------------------------------------------------------------------------------
 
+This update addresses issues with the costs included in the objective function and how generation is dispatched
+
+In order to reduce the model dimensionality and to align better with actual generator
+operations, we do not want to dispatch variable generation. Instead, generation should
+be a function of built capacity and the variable capacity factor. This means that there
+will no longer be a distinction between DispatchGen and ExcessGen.
+
+However, in the future, if we want to be able to model dispatchable generation, we still want
+to keep DispatchGen as a decision variable for dispatchable generation
+
+This means that we created a new set of generators DISPATCHABLE_GENS, which will continue
+to use the DispatchGen decision variable. Additionally, we will track generation from VARIABLE_GENS
+with a new expression VariableGen, which will also be considered a zone power injection.
+
+We will deleted ExcessGen, which has several impacts:
+  - Previously we constrained that total storage charging had to be less than excess gen. However,
+    now we can still achieve the same outcome through the load balance constraint (although technically
+    storage charging could be met by storage discharging, which we will need to watch).
+  - We also said that the hybrid storage charging would need to be less than the excess generation from the 
+    paired generator. However, as long as the charging isn't greater than the overall variable generation
+    from the paired generation and the load balance constraint still holds, we should be okay
+  - The way that we track the cost of excess generation will also need to change. Going forward, the cost of excess
+    generation will be not be tracable to a specific generator. Instead, re-selling excess generation would have to be
+    a shaped product that represents a mix of different carbon-free sources
+
+We also updated the load balance constraint to allow for generation to exceed load in each time period. 
+Instead of Injections == Withdrawals, the load balance constraint is now Injections >= Withdrawals
+
+With regards to nodal costs, we had previously been including the DLAP load cost and the Pnode revenue from dispatched
+generation (not excess generation) in the objective function. We only included revenue from dispatched generation as
+a disincentive to overbuild generation. Instead of DLAP load cost and Dispatched Pnode Revenue, we now include a term for 
+congestion costs, which is defined as teh difference between the Pnode price and hte DLAP price. Although this term is optimized
+for, it does not appear in the final delivered cost of energy, because in the case of excess generation, the buyer would not actually
+pay the delivery cost for excess generation. For the purposes of calculating the delivered cost of energy, we still included the DLAP 
+load cost (for consumed energy) and the Pnode revenue for all generation. 
+
+Other Updates
 - Rename variable "DispatchStorage" with "DischargeStorage"
 - Remove generators.core.commit modules
 - Update generators.extensions.congestion_pricing.py
   - Remove "DLAPLoadCostInTP" from objective function
   - Add congestion costs to objective function
   - Add output for nodal costs in each timepoint, including overprocured load cost
+- Moved all fuel-based dispatch parameters (including CCS) to a new module generators.extensions.gen_fuel_costs
+- Updated summary reports to reflect updated output files
 
 -------------------------------------------------------------------------------
 Switch 2.0.5

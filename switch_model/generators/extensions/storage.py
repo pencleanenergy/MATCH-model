@@ -235,12 +235,12 @@ def define_components(mod):
     mod.Enforce_Storage_Dispatch_Upper_Limit = Constraint(
         mod.STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
-            m.DischargeStorage[g, t] <= m.DispatchUpperLimit[g, t]))
+            m.DischargeStorage[g, t] <= m.GenCapacityInTP[g, t]))
 
     mod.Enforce_Storage_Charge_Upper_Limit = Constraint(
         mod.STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
-            m.ChargeStorage[g,t] <= m.DispatchUpperLimit[g, t] * m.storage_charge_to_discharge_ratio[g]))
+            m.ChargeStorage[g,t] <= m.GenCapacityInTP[g, t] * m.storage_charge_to_discharge_ratio[g]))
 
     # Summarize storage charging for the energy balance equations
     mod.ZoneTotalStorageDispatch = Expression(
@@ -252,7 +252,7 @@ def define_components(mod):
     )
     mod.Zone_Power_Injections.append('ZoneTotalStorageDispatch')
 
-    """
+
     mod.ZoneTotalStorageCharge = Expression(
         mod.ZONE_TIMEPOINTS,
         rule=lambda m, z, t: \
@@ -260,52 +260,34 @@ def define_components(mod):
                 for g in m.STORAGE_GENS_IN_ZONE[z]
                 if (g, t) in m.STORAGE_GEN_TPS),
     )
-    #mod.Zone_Power_Withdrawals.append('ZoneTotalStorageCharge')
-    """
-
-    # NOTE: This was the old implementation to track chargestorage, but it seems more complicated
-    # than using the implementation below, which is adapted from how DispatchGen is summed
-    def rule(m, z, t):
-        # Construct and cache a set for summation as needed
-        if not hasattr(m, 'Storage_Charge_Summation_dict'):
-            m.Storage_Charge_Summation_dict = collections.defaultdict(set)
-            for g, t2 in m.STORAGE_GEN_TPS:
-                z2 = m.gen_load_zone[g]
-                m.Storage_Charge_Summation_dict[z2, t2].add(g)
-        # Use pop to free memory
-        relevant_projects = m.Storage_Charge_Summation_dict.pop((z, t), {})
-        return sum(m.ChargeStorage[g, t] for g in relevant_projects)
-    mod.ZoneTotalStorageCharge = Expression(mod.ZONE_TIMEPOINTS, rule=rule)
-    
-    # Register net charging with zonal energy balance. Discharging is already
-    # covered by DispatchGen.
-    #mod.Zone_Power_Withdrawals.append('ZoneTotalStorageCharge')
-
+    mod.Zone_Power_Withdrawals.append('ZoneTotalStorageCharge')
 
     # Zonal Charging should be less than ExcessGen. this requires storage to charge from any 
     # generation that is not dispatched to meet load. This also prevents storage from charging
     # from other storage dispatch since excessgen only applies to generators
     # NOTE: This will mean that storage cannot charge from system power
-
+    """
     mod.Zonal_Charge_Storage_Upper_Limit = Constraint(
         mod.ZONE_TIMEPOINTS,
         rule = lambda m, z, t: m.ZoneTotalStorageCharge[z,t] <= m.ZoneTotalExcessGen[z,t] 
     )
+    """
 
     # HYBRID STORAGE CHARGING 
     #########################
-
+    # TODO: This will need to be modified if a dispatchable generator is a hybrid
     mod.Charge_Hybrid_Storage_Upper_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.ChargeStorage[g,t] <= m.ExcessGen[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.ChargeStorage[g,t] <= m.VariableGen[m.storage_hybrid_generation_project[g],t])
 
     # Because the bus of a hybrid generator is likely sized to the nameplate capacity of the generator portion of the project
     # the total combined dispatch from the storage portion and the generator portion should not be allowed to exceed that 
     # nameplate capacity. For example, a 100MW solar + 50MW storage hybrid project should only be allowed to dispatch 
     # a combined total of 100MW in any timepoint.
+    # TODO: This will need to be updated if dispatchable generators can be hybrids
     mod.Hybrid_Dispatch_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.DispatchUpperLimit[m.storage_hybrid_generation_project[g], t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.VariableGen[m.storage_hybrid_generation_project[g], t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
 
     #STATE OF CHARGE
     ################

@@ -92,48 +92,6 @@ def define_components(mod):
     gen_variable_om[g] is the variable Operations and Maintenance
     costs (O&M) per MWh of dispatched capacity for a given project.
 
-    gen_full_load_heat_rate[g] is the full load heat rate in units
-    of MMBTU/MWh that describes the thermal efficiency of a project when
-    running at full load. This optional parameter overrides the generic
-    heat rate of a generation technology. In the future, we may expand
-    this to be indexed by fuel source as well if we need to support a
-    multi-fuel generator whose heat rate depends on fuel source.
-
-    Proj_Var_Costs_Hourly[t in TIMEPOINTS] is the sum of all variable
-    costs associated with project dispatch for each timepoint expressed
-    in $base_year/hour in the future period (rather than Net Present
-    Value).
-
-    FUEL_BASED_GEN_TPS is a subset of GEN_TPS
-    showing all times when fuel-consuming projects could be dispatched
-    (used to identify timepoints when fuel use must match power production).
-
-    GEN_TP_FUELS is a subset of GEN_TPS * FUELS,
-    showing all the valid combinations of project, timepoint and fuel,
-    i.e., all the times when each project could consume a fuel that is
-    limited, costly or produces emissions.
-
-    GenFuelUseRate[(g, t, f) in GEN_TP_FUELS] is a
-    variable that describes fuel consumption rate in MMBTU/h. This
-    should be constrained to the fuel consumed by a project in each
-    timepoint and can be calculated as Dispatch [MW] *
-    effective_heat_rate [MMBTU/MWh] -> [MMBTU/h]. The choice of how to
-    constrain it depends on the treatment of unit commitment. Currently
-    the project.no_commit module implements a simple treatment that
-    ignores unit commitment and assumes a full load heat rate, while the
-    project.unitcommit module implements unit commitment decisions with
-    startup fuel requirements and a marginal heat rate.
-
-    DispatchEmissions[(g, t, f) in GEN_TP_FUELS] is the
-    emissions produced by dispatching a fuel-based project in units of
-    metric tonnes CO2 per hour. This is derived from the fuel
-    consumption GenFuelUseRate, the fuel's direct carbon intensity, the
-    fuel's upstream emissions, as well as Carbon Capture efficiency for
-    generators that implement Carbon Capture and Sequestration. This does
-    not yet support multi-fuel generators.
-
-    AnnualEmissions[p in PERIODS]:The system's annual emissions, in metric
-    tonnes of CO2 per year.
 
     --- Delayed implementation, possibly relegated to other modules. ---
 
@@ -199,11 +157,11 @@ def define_components(mod):
             (g, tp)
                 for g in m.VARIABLE_GENS
                     for tp in m.TPS_FOR_GEN[g]))
-    mod.FUEL_BASED_GEN_TPS = Set(
+    mod.DISPATCHABLE_GEN_TPS = Set(
         dimen=2,
         initialize=lambda m: (
             (g, tp)
-                for g in m.FUEL_BASED_GENS
+                for g in m.DISPATCHABLE_GENS
                     for tp in m.TPS_FOR_GEN[g]))
     mod.NON_STORAGE_GEN_TPS = Set(
         dimen=2,
@@ -211,12 +169,6 @@ def define_components(mod):
             (g, tp)
                 for g in m.NON_STORAGE_GENS
                     for tp in m.TPS_FOR_GEN[g]))
-    mod.GEN_TP_FUELS = Set(
-        dimen=3,
-        initialize=lambda m: (
-            (g, t, f)
-                for (g, t) in m.FUEL_BASED_GEN_TPS
-                    for f in m.FUELS_FOR_GEN[g]))
 
 
     #TODO: Move pricing nodes to a different module
@@ -235,23 +187,6 @@ def define_components(mod):
     mod.GenCapacityInTP = Expression(
         mod.GEN_TPS,
         rule=lambda m, g, t: m.GenCapacity[g, m.tp_period[t]])
-    
-    mod.DispatchGen = Var(
-        mod.NON_STORAGE_GEN_TPS,
-        within=NonNegativeReals)
-    
-    mod.ZoneTotalGeneratorDispatch = Expression(
-        mod.LOAD_ZONES, mod.TIMEPOINTS,
-        rule=lambda m, z, t: \
-            sum(m.DispatchGen[p, t]
-                for p in m.GENS_IN_ZONE[z]
-                if (p, t) in m.NON_STORAGE_GEN_TPS) -
-            sum(m.DispatchGen[p, t] * m.gen_ccs_energy_load[p]
-                for p in m.GENS_IN_ZONE[z]
-                if (p, t) in m.NON_STORAGE_GEN_TPS and p in m.CCS_EQUIPPED_GENS),
-        doc="Net power from grid-tied generation projects.")
-    mod.Zone_Power_Injections.append('ZoneTotalGeneratorDispatch')
-
 
     def init_gen_availability(m, g):
         if m.gen_is_baseload[g]:
@@ -281,40 +216,43 @@ def define_components(mod):
     mod.have_minimal_gen_max_capacity_factors = BuildCheck(
         mod.VARIABLE_GEN_TPS,
         rule=lambda m, g, t: (g,t) in m.VARIABLE_GEN_TPS_RAW)
+    
+    mod.DispatchGen = Var(
+        mod.DISPATCHABLE_GEN_TPS,
+        within=NonNegativeReals)
+    
+    mod.ZoneTotalGeneratorDispatch = Expression(
+        mod.LOAD_ZONES, mod.TIMEPOINTS,
+        rule=lambda m, z, t: \
+            sum(m.DispatchGen[g, t]
+                for g in m.GENS_IN_ZONE[z]
+                if (g, t) in m.DISPATCHABLE_GEN_TPS),
+        doc="Generation from dispatchable generation projects.")
+    mod.Zone_Power_Injections.append('ZoneTotalGeneratorDispatch')
 
-    mod.GenFuelUseRate = Var(
-        mod.GEN_TP_FUELS,
-        within=NonNegativeReals,
-        doc=("Other modules constraint this variable based on DispatchGen and "
-             "module-specific formulations of unit commitment and heat rates."))
+    mod.VariableGen = Expression(
+        mod.VARIABLE_GEN_TPS,
+        rule=lambda m, g, t: m.GenCapacityInTP[g,t] * m.gen_availability[g] * m.gen_max_capacity_factor[g,t])
 
-    def DispatchEmissions_rule(m, g, t, f):
-        if g not in m.CCS_EQUIPPED_GENS:
-            return (
-                m.GenFuelUseRate[g, t, f] *
-                (m.f_co2_intensity[f] + m.f_upstream_co2_intensity[f]))
-        else:
-            ccs_emission_frac = 1 - m.gen_ccs_capture_efficiency[g]
-            return (
-                m.GenFuelUseRate[g, t, f] *
-                (m.f_co2_intensity[f] * ccs_emission_frac +
-                 m.f_upstream_co2_intensity[f]))
-    mod.DispatchEmissions = Expression(
-        mod.GEN_TP_FUELS,
-        rule=DispatchEmissions_rule)
-    mod.AnnualEmissions = Expression(mod.PERIODS,
-        rule=lambda m, period: sum(
-            m.DispatchEmissions[g, t, f] * m.tp_weight_in_year[t]
-            for (g, t, f) in m.GEN_TP_FUELS
-            if m.tp_period[t] == period),
-        doc="The system's annual emissions, in metric tonnes of CO2 per year.")
+    mod.ZoneTotalVariableGeneration = Expression(
+        mod.LOAD_ZONES, mod.TIMEPOINTS,
+        rule=lambda m, z, t: \
+            sum(m.VariableGen[g, t]
+                for g in m.GENS_IN_ZONE[z]
+                if (g, t) in m.VARIABLE_GEN_TPS),
+        doc="Generation from variable generation projects.")
+    mod.Zone_Power_Injections.append('ZoneTotalVariableGeneration')
+
 
     mod.GenPPACostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
             m.DispatchGen[g, t] * m.ppa_energy_cost[g]
             for g in m.GENS_IN_PERIOD[m.tp_period[t]]
-            if g in m.NON_STORAGE_GENS),
+            if g in m.DISPATCHABLE_GENS) +
+            sum(m.VariableGen[g, t] * m.ppa_energy_cost[g]
+            for g in m.GENS_IN_PERIOD[m.tp_period[t]]
+            if g in m.VARIABLE_GENS),
         doc="Summarize costs for the objective function")
     mod.Cost_Components_Per_TP.append('GenPPACostInTP')
 
@@ -343,7 +281,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'pricing_nodes.csv'),
         set=mod.PRICING_NODES)
     
-    #load trading hub data
+    #load wholesale market node data
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'nodal_prices.csv'),
         select=('pricing_node','timepoint','nodal_price'),
@@ -372,19 +310,9 @@ def post_solve(instance, outdir):
     dispatch_annual_summary.pdf - A figure of annual summary data. Only written
     if the ggplot python library is installed.
     """
-    write_table(
-        instance, instance.TIMEPOINTS,
-        output_file=os.path.join(outdir, "dispatch-wide.csv"),
-        headings=("timestamp",)+tuple(sorted(instance.GENERATION_PROJECTS)),
-        values=lambda m, t: (m.tp_timestamp[t],) + tuple(
-            m.DispatchGen[p, t] if (p, t) in m.NON_STORAGE_GEN_TPS
-            else 0.0
-            for p in sorted(m.NON_STORAGE_GENS)
-        )
-    )
 
-
-    dispatch_normalized_dat = [{
+    # TODO: update this for variable generation
+    dispatchable_gen_data = [{
         "generation_project": g,
         "gen_tech": instance.gen_tech[g],
         "gen_load_zone": instance.gen_load_zone[g],
@@ -395,36 +323,34 @@ def post_solve(instance, outdir):
         "DispatchGen_MW": value(instance.DispatchGen[g, t]),
         "Energy_GWh_typical_yr": value(
             instance.DispatchGen[g, t] * instance.tp_weight_in_year[t] / 1000),
-        "Excess_Gen_MW": value(instance.ExcessGen[g,t]),
-        "Excess_Energy_GWh_per_yr": value(instance.ExcessGen[g,t] * instance.tp_weight_in_year[t] / 1000),
-        "Total_Gen_MW": value(instance.DispatchGen[g,t] + instance.ExcessGen[g,t]),
         "Annual_PPA_Energy_Cost": value(
             instance.DispatchGen[g, t] * instance.ppa_energy_cost[g] *
             instance.tp_weight_in_year[t]),
-        "Annual_Excess_Energy_Cost":value(
-            instance.ExcessGen[g,t] * instance.ppa_energy_cost[g] *
+    } for g, t in instance.DISPATCHABLE_GEN_TPS]
+    variable_gen_data = [{
+        "generation_project": g,
+        "gen_tech": instance.gen_tech[g],
+        "gen_load_zone": instance.gen_load_zone[g],
+        "gen_energy_source": instance.gen_energy_source[g],
+        "timestamp": instance.tp_timestamp[t],
+        "tp_weight_in_year_hrs": instance.tp_weight_in_year[t],
+        "period": instance.tp_period[t],
+        "DispatchGen_MW": value(instance.VariableGen[g, t]),
+        "Energy_GWh_typical_yr": value(
+            instance.VariableGen[g, t] * instance.tp_weight_in_year[t] / 1000),
+        "Annual_PPA_Energy_Cost": value(
+            instance.VariableGen[g, t] * instance.ppa_energy_cost[g] *
             instance.tp_weight_in_year[t]),
-        "DispatchEmissions_tCO2_per_typical_yr": value(sum(
-            instance.DispatchEmissions[g, t, f] * instance.tp_weight_in_year[t]
-              for f in instance.FUELS_FOR_GEN[g]
-        )) if instance.gen_uses_fuel[g] else 0
-    } for g, t in instance.NON_STORAGE_GEN_TPS]
-    dispatch_full_df = pd.DataFrame(dispatch_normalized_dat)
+    } for g, t in instance.VARIABLE_GEN_TPS]
+    gen_data = dispatchable_gen_data + variable_gen_data
+    dispatch_full_df = pd.DataFrame(gen_data)
     dispatch_full_df.set_index(["generation_project", "timestamp"], inplace=True)
     dispatch_full_df.to_csv(os.path.join(outdir, "dispatch.csv"))
-
-
-    excess_energy_summary = dispatch_full_df.groupby(['generation_project','period']).sum()
-    excess_energy_summary.to_csv(
-        os.path.join(outdir, "generation.csv"),
-        columns=["Energy_GWh_typical_yr", "Excess_Energy_GWh_per_yr","Annual_PPA_Energy_Cost","Annual_Excess_Energy_Cost"]
-    )
     
     annual_summary = dispatch_full_df.groupby(['gen_tech', "gen_energy_source", "period"]).sum()
     annual_summary.to_csv(
         os.path.join(outdir, "dispatch_annual_summary.csv"),
-        columns=["Energy_GWh_typical_yr", "Excess_Energy_GWh_per_yr","Annual_PPA_Energy_Cost",
-                 "DispatchEmissions_tCO2_per_typical_yr"])
+        columns=["Energy_GWh_typical_yr", "Annual_PPA_Energy_Cost"])
 
 
     zonal_annual_summary = dispatch_full_df.groupby(
@@ -432,15 +358,5 @@ def post_solve(instance, outdir):
     ).sum()
     zonal_annual_summary.to_csv(
         os.path.join(outdir, "dispatch_zonal_annual_summary.csv"),
-        columns=["Energy_GWh_typical_yr", "Excess_Energy_GWh_per_yr","Annual_PPA_Energy_Cost",
-                 "DispatchEmissions_tCO2_per_typical_yr"]
+        columns=["Energy_GWh_typical_yr","Annual_PPA_Energy_Cost"]
     )
-
-    if can_plot:
-        annual_summary_plot = ggplot(
-                annual_summary.reset_index(),
-                aes(x='period', weight="Energy_GWh_typical_yr", fill="factor(gen_tech)")
-            ) + \
-            geom_bar(position="stack") + \
-            scale_y_continuous(name='Energy (GWh/yr)') + theme_bw()
-        annual_summary_plot.save(filename=os.path.join(outdir, "dispatch_annual_summary.pdf"))
