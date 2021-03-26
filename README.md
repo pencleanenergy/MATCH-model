@@ -176,15 +176,25 @@ To test the entire codebase, run this command from the root directory:
 - [x] Address FileNotFoundError when running NbConvertApp during post-solve (issue with subprocess.py?)
 	- This was an issue with a local environment related to this issue: https://github.com/jupyter/notebook/issues/2301
 
-## Model Formulation / Calibration
-- [ ] Investigate whether hybrid generators can be modeled as a single resource
-- [ ] Investigate implementing opportunitistic/greedy storage charging
-- [ ] Allow for load shift to have costs
+## Renewable Goal definitions
 - [ ] Allow for optimizing for month-hour averages
 - [ ] Configure target that maximizes time-coincidence with 100% volumetric matching, or which matches shape 
 	- (maximize correlation coefficient?)
 	- (minimize abolute error between load and generation?)
 	- (assign a cost penalty to over-procurement? Set constraint on maximum over-procurement?)
+
+## Storage 
+- [ ] Investigate whether hybrid generators can be modeled as a single resource
+- [ ] Investigate implementing opportunitistic/greedy storage charging
+- [ ] Determine how to deal with perfect foresight problem
+- [ ] Investigate implementing storagedispatch as single decision variable
+- [ ] In report plots, show battery charging AND discharging as green line modifying demand?
+
+## Demand-side resources
+- [ ] Allow for load shift to have costs
+- [ ] Allow for multiple demand-side projects, each with capital costs
+- [ ] Allow for different types of DSR, like efficiency, curtailment, and load shifting
+- [ ] Improve visualization/reporting of load shift in summary report
 
 ## Supply-Demand Balance Constraint
 - [x] Figure out how to prevent storage from charging and discharging in same timepoint
@@ -210,12 +220,12 @@ To test the entire codebase, run this command from the root directory:
 ## Cleanup
 - [ ] Combine no_commit.py with dispatch.py
 - [ ] Remove unused modules (especially in reporting directory)
+	- removed commit
 - [ ] Eliminate option to select required modules in the input spreadsheet
 - [ ] Update code for newer versions of Pyomo / Python
 - [ ] Create inputs directory where cbc executable can be saved
 - [ ] Rename SystemPower as GridPower
 - [ ] Rename from switch?
-- [ ] In report plots, show battery charging AND discharging as green line modifying demand
 - [ ] Update run_tests.py
 
 
