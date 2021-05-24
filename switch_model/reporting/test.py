@@ -5,6 +5,7 @@
 import os
 import shutil
 
+# modify the file path
 run_folder = 'MODEL_RUNS/test'
 
 scenarios = os.listdir(f'../../{run_folder}/outputs')
@@ -16,8 +17,8 @@ for s in scenarios:
     outdir = f'../../{run_folder}/outputs/{s}'
     print(s)
 
-    #shutil.copy('summary_report.ipynb', inputs_dir)
-    #shutil.copy('summary_report_public.ipynb', inputs_dir)
+    shutil.copy('summary_report.ipynb', inputs_dir)
+    shutil.copy('summary_report_public.ipynb', inputs_dir)
 
     os.system(f'jupyter nbconvert --ExecutePreprocessor.kernel_name="python3" --to notebook --execute --inplace {inputs_dir}/summary_report.ipynb')
     os.system(f'jupyter nbconvert --to html --no-input --no-prompt {inputs_dir}/summary_report.ipynb --output-dir {outdir} --output summary_report_{s}')

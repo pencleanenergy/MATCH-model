@@ -1,4 +1,10 @@
 -------------------------------------------------------------------------------
+Commmit 2021.03.26
+-------------------------------------------------------------------------------
+Addressed errors in summary_report.ipynb and summary_report_public.ipynb that were
+preventing report completion. 
+
+-------------------------------------------------------------------------------
 Commmit 2021.03.24
 -------------------------------------------------------------------------------
 
@@ -47,6 +53,7 @@ Other Updates
   - Add output for nodal costs in each timepoint, including overprocured load cost
 - Moved all fuel-based dispatch parameters (including CCS) to a new module generators.extensions.gen_fuel_costs
 - Updated summary reports to reflect updated output files
+- Fixed bug where model failed to construct RA parameters due to missing index information
 
 -------------------------------------------------------------------------------
 Switch 2.0.5
