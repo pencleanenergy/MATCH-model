@@ -1,6 +1,23 @@
 -------------------------------------------------------------------------------
 Commmit 2021.03.26
 -------------------------------------------------------------------------------
+Fixed an issue where the summary_report.ipynb was not generating the cost summary table.
+
+summary_report.ipynb will now export a csv file into each output folder called total_cost_of_energy.csv
+This file summarizes the cost components and total cost of energy for the scenario.
+
+Fixed the scenario_summary.csv output so that all outputs are correct.
+
+Added `manually_run_reports.py` to switch_model/reporting. If you have already run a scenario and need 
+to manually re-run all of the reporting, run this python file from your IDE, replacing the filepath with
+the filepath of the scenario for which you want to re-run the reports. This will re-copy summary_report.ipynb
+from the reporting directory to the input folder, which is useful in cases when the summary report template has 
+been updated from GitHub. 
+
+
+-------------------------------------------------------------------------------
+Commmit 2021.03.26
+-------------------------------------------------------------------------------
 Addressed errors in summary_report.ipynb and summary_report_public.ipynb that were
 preventing report completion. 
 

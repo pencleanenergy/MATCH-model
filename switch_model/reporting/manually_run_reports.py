@@ -4,8 +4,9 @@
 
 import os
 import shutil
+import pandas as pd
 
-# modify the file path
+# modify the file path to the name of the scenario for which you want to re-run the reporting
 run_folder = 'MODEL_RUNS/test'
 
 scenarios = os.listdir(f'../../{run_folder}/outputs')
@@ -18,21 +19,24 @@ for s in scenarios:
     print(s)
 
     shutil.copy('summary_report.ipynb', inputs_dir)
-    shutil.copy('summary_report_public.ipynb', inputs_dir)
+    #shutil.copy('summary_report_public.ipynb', inputs_dir)
 
     os.system(f'jupyter nbconvert --ExecutePreprocessor.kernel_name="python3" --to notebook --execute --inplace {inputs_dir}/summary_report.ipynb')
     os.system(f'jupyter nbconvert --to html --no-input --no-prompt {inputs_dir}/summary_report.ipynb --output-dir {outdir} --output summary_report_{s}')
     os.system(f'jupyter nbconvert --clear-output --inplace {inputs_dir}/summary_report.ipynb')
 
+    # NOTE: 5/24/21: Manually disabled public report until all issues with main report are addressed
+    """
     os.system(f'jupyter nbconvert --ExecutePreprocessor.kernel_name="python3" --to notebook --execute --inplace {inputs_dir}/summary_report_public.ipynb')
     os.system(f'jupyter nbconvert --to html --no-input --no-prompt {inputs_dir}/summary_report_public.ipynb --output-dir {outdir} --output summary_report_{s}_public')
     os.system(f'jupyter nbconvert --clear-output --inplace {inputs_dir}/summary_report_public.ipynb')
+    """
 
 
 #%%
 # TODO: Add this code to the end of the solve-scenarios script
 #merge all of the scenario reports together
-import pandas as pd
+
 
 scenarios = os.listdir(f'../../{run_folder}/outputs')
 
