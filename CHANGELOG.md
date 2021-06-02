@@ -1,5 +1,12 @@
 -------------------------------------------------------------------------------
-Commmit 2021.03.26
+Commmit 2021.06.02
+-------------------------------------------------------------------------------
+Fixed indentation error in summary_report.ipynb that was preventing the report from running.
+
+Added `Model_Formation.pdf` which describes the mathematical formulation of the model for reference.
+
+-------------------------------------------------------------------------------
+Commmit 2021.05.24
 -------------------------------------------------------------------------------
 Fixed an issue where the summary_report.ipynb was not generating the cost summary table.
 
