@@ -1,4 +1,40 @@
 -------------------------------------------------------------------------------
+Commmit 2021.06.10
+-------------------------------------------------------------------------------
+Updated how excess generation and the annual renewable energy percentage are 
+calculated in `summary_report.ipynb`
+
+Previously, excess generation was calculated as:
+
+  Total Generation (excluding storage dispatch) - (Total Load + Total Storage Charging)
+
+However, in certain cases, this would result in no excess generation, even if 
+generation exceeded load both in a time-coincident manner and an annual volumetric manner.
+
+Now, there are two excess generation metrics implemented:
+
+  Excess Time-coincident generation = Total Generation and storage discharge - Total time-coincident generation and storage discharge
+
+  and
+
+  Excess Volumetric Generation = Total Generation and storage discharge - Total Load and storage charging
+
+This also lead to a realization about how the annual volumetric % renewable was being calculated.
+Previously, it had been:
+
+ Annual % Renewable = Total Renewable Generation / Total Load (excluding storage charging and discharging)
+
+However, if storage is part of the energy mix, it should be counted somewhere. I realized, however, that there
+are multiple ways to treat storage in this calculation, which could lead to different results. For now, I have settled
+on treating storage as a supply-side resource that affects net generation where:
+
+  Net Generation = Renewable Generation - Storage Charging + Storage Discharging
+
+  and thus
+
+  Annual % renewable = Net Renewable Generation / Total Load
+
+-------------------------------------------------------------------------------
 Commmit 2021.06.02
 -------------------------------------------------------------------------------
 Fixed indentation error in summary_report.ipynb that was preventing the report from running.
