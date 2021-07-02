@@ -1,4 +1,10 @@
 -------------------------------------------------------------------------------
+Commmit 2021.07.02
+-------------------------------------------------------------------------------
+Added a generic example scenario to the MODEL_RUNS directory for testing model functionality.
+Update development TODO.
+
+-------------------------------------------------------------------------------
 Commmit 2021.06.22
 -------------------------------------------------------------------------------
 Updated how excess renewable energy (RECs) are calculated. 

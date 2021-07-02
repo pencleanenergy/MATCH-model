@@ -169,7 +169,12 @@ To test the entire codebase, run this command from the root directory:
 
 # Development TODO
 
-## Bug Fixes
+## Bug Fixes / Model performance
+- [ ] Model is not always finding the optimal solution. For example, it will identify an optimal portfolio, but then if you constrain one of the selected resources and re-run the model, the new solution will be a lower cost than the original. There could be a few potential sources of this issue:
+	- The costs being optimized in the model are not the same that are being reported in the summary report (look at the raw model outputs to see if the constrained results are still better)
+	- Could be related to how congestion costs are being optimized in the model - perhaps we should only optimize for ppa costs
+	- Model may be finding a local minimum rather than the global minimum. Will need to consult with others to determine how one might fix.
+- [ ] Validate model results by modeling historical year and comparing to actual data
 - [ ] If solving scenarios in parallel, scenario summary reports should only be run once all scenarios are finished solving
 - [ ] Investigate why miniscule amounts of certain resources are built (rounding issues?)
 - [ ] Figure out how to deal with scenarios where nodal revenues > PPA cost, leading to unbounded problems
@@ -177,24 +182,35 @@ To test the entire codebase, run this command from the root directory:
 	- This was an issue with a local environment related to this issue: https://github.com/jupyter/notebook/issues/2301
 
 ## Renewable Goal definitions
-- [ ] Allow for optimizing for month-hour averages
 - [ ] Configure target that maximizes time-coincidence with 100% volumetric matching, or which matches shape 
 	- (maximize correlation coefficient?)
 	- (minimize abolute error between load and generation?)
 	- (assign a cost penalty to over-procurement? Set constraint on maximum over-procurement?)
+- [ ] Allow grid power to help meet renewable goal
+	- [ ] Input for hourly grid carbon intensities
+- [ ] Allow model to run with monthly TOD average values (probably need month-day of week-hour average - 12x7x24)
+
+## Resource Adequacy
+- [ ] Update calculation of Qualifying Capacity for Hydro and Geothermal
+- [ ] Update calculation of Qualifying capacity for Hybrid resources
 
 ## Storage 
 - [ ] Investigate whether hybrid generators can be modeled as a single resource
 - [ ] Investigate implementing opportunitistic/greedy storage charging
-- [ ] Determine how to deal with perfect foresight problem
+- [ ] Determine how to deal with perfect foresight problem - can we implement day-ahead or week-ahead foresight?
 - [ ] Investigate implementing storagedispatch as single decision variable
 - [ ] In report plots, show battery charging AND discharging as green line modifying demand?
+
+## Generic Resources
+- [ ] Check for updated/newer wind resource data from wind toolkit
+- [ ] Check for integration of tidal/wave energy
 
 ## Demand-side resources
 - [ ] Allow for load shift to have costs
 - [ ] Allow for multiple demand-side projects, each with capital costs
 - [ ] Allow for different types of DSR, like efficiency, curtailment, and load shifting
 - [ ] Improve visualization/reporting of load shift in summary report
+- [ ] Investigate whether we can access model shadow prices for each hour as a metric to value demand response
 
 ## Supply-Demand Balance Constraint
 - [x] Figure out how to prevent storage from charging and discharging in same timepoint
@@ -205,12 +221,21 @@ To test the entire codebase, run this command from the root directory:
 - [x] Only make DispatchGen a decision variable for dispatchable generators (not variable renewables)
 - [x] Configure sets of dispatchable vs non-dispatchable generators
 - [x] Remove all components related to variable fuel costs, or move to a separate module to be used in rare cases that you a) have a fuel-based generator and b) are responsible for the variable fuel costs
+- [ ] Allow baseload generation
 
 ## Cost Vector/Objective Function
 - [x] Investigate why annual goal is not leading to just buying the cheapest generator
 	- issue was cost incentives
 - [x] Re-write cost components for objective function
 - [ ] Determine whether we need to account for congestion costs with storage resources
+- [ ] Allow resale value of excess RECs/generation to be considered in objective function
+- [ ] Test contract-only cost optimization, rather than optimizing for congestion as well
+- [ ] Implement pre-model check to determine if Pnode revenues exceed contract cost to catch overbuild situations
+
+## Reporting
+- [ ] Report which capacity limits are binding
+- [ ] Update counting/valuation of RECs
+- [ ] Separate reporting of committed costs (existing contracts) and future costs - provide some level of understanding of uncertainty
 
 ## Future edits for non-PCE scenarios
 - [ ] Investigate hydro dispatch implementation

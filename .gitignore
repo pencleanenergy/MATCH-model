@@ -1,7 +1,13 @@
 archives/
 switch_model.egg-info/
-MODEL_RUNS/
 RESEARCH/
+#exclude the model run folder except for the example directory
+!MODEL_RUNS/
+MODEL_RUNS/*
+!MODEL_RUNS/model_inputs.xlsx
+!MODEL_RUNS/generic_office_example/
+MODEL_RUNS/generic_office_example/*
+!MODEL_RUNS/generic_office_example/model_inputs.xlsx
 
 *pyc
 **parse_table_datacmds.py
