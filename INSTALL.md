@@ -36,6 +36,7 @@ https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environme
 # Install git software manager.
 After installing Anaconda or Miniconda, open an Anaconda Command Prompt
 (Windows) or Terminal.app (Mac) and type the following command:
+
     conda install git
 
 # Download the codebase to a local repository

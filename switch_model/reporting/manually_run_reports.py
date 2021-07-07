@@ -7,15 +7,16 @@ import shutil
 import pandas as pd
 
 # modify the file path to the name of the scenario for which you want to re-run the reporting
-run_folder = 'MODEL_RUNS/test'
+run_folder = '../../MODEL_RUNS/test'
+#run_folder = '../../../../Box/Supply/24x7 Time-Coincident Work/MODEL_RUNS/test'
 
-scenarios = os.listdir(f'../../{run_folder}/outputs')
+scenarios = os.listdir(f'{run_folder}/outputs')
 
 #scenarios = ['base_100']
 
 for s in scenarios:
-    inputs_dir = f'../../{run_folder}/inputs/{s}'
-    outdir = f'../../{run_folder}/outputs/{s}'
+    inputs_dir = f'{run_folder}/inputs/{s}'
+    outdir = f'{run_folder}/outputs/{s}'
     print(s)
 
     shutil.copy('summary_report.ipynb', inputs_dir)

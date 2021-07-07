@@ -1,4 +1,10 @@
 -------------------------------------------------------------------------------
+Commmit 2021.07.07
+-------------------------------------------------------------------------------
+Updated README to include collaboration instructions.
+Added functionality and documentation to be able store the MODEL_RUNS directory outside of the repository (in Box for example)
+
+-------------------------------------------------------------------------------
 Commmit 2021.07.02
 -------------------------------------------------------------------------------
 Added a generic example scenario to the MODEL_RUNS directory for testing model functionality.
