@@ -20,7 +20,7 @@ will need to do additional work to install glpk or coincbc, and possibly git.
 Download and install Miniconda from
 https://docs.conda.io/en/latest/miniconda.html or Anaconda from
 https://www.anaconda.com/distribution . We recommend using the 64-bit version
-with Python 3.7. Anaconda and Miniconda install a similar environment, but
+with Python >3.7. Anaconda and Miniconda install a similar environment, but
 Anaconda installs more packages by default and Miniconda installs them as
 needed.
 
