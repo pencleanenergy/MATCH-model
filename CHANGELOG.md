@@ -1,4 +1,11 @@
 -------------------------------------------------------------------------------
+Commmit 2021.07.08
+-------------------------------------------------------------------------------
+Fixes #2
+Character decode error when installing switch was due to right double quotation mark character copied and pasted from internet
+in README.md file. Replaced with a normal " character. 
+
+-------------------------------------------------------------------------------
 Commmit 2021.07.07
 -------------------------------------------------------------------------------
 Updated README to include collaboration instructions.
