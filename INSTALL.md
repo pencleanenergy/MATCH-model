@@ -28,26 +28,26 @@ Note that you do not need administrator privileges to install the Windows Conda
 environment or add packages to it if you select the option to install "just for
 me".
 
-If you want, this is a good point to create an Conda environment specifically
-for using or testing Switch. See here for more details:
-https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html
 
-
-# Install git software manager.
+# Install and setup git software manager
 After installing Anaconda or Miniconda, open an Anaconda Command Prompt
 (Windows) or Terminal.app (Mac) and type the following command:
 
     conda install git
+    
+Or you can install Git Bash from https://git-scm.com/downloads
+
+Then you will need to open Git Bash and set up git following these instructions: https://docs.github.com/en/get-started/quickstart/set-up-git
 
 # Download the codebase to a local repository
 Then, in a terminal window or Anaconda command prompt Anaconda command prompt,
-use the `cd` and `mkdir` commands to create and/or enter the directory where you
+use the `cd` and `mkdir` commands to create and/or enter the directory (e.g. "Users/myusername/GitHub") where you
 would like to store the Switch model code and examples.
 
     git clone https://github.com/grgmiller/SWITCH247.git
 
 # Setup the conda environment
-This will install all of the package dependencies needed to run Switch 24x7. Use `cd` to navigate to the directory where your local files are stored
+This will install all of the package dependencies needed to run Switch 24x7. Use `cd` to navigate to the directory where your local files are stored (e.g. "GitHub/SWITCH247")
 
     conda env create -f environment.yml
 
