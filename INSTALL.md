@@ -28,6 +28,24 @@ Note that you do not need administrator privileges to install the Windows Conda
 environment or add packages to it if you select the option to install "just for
 me".
 
+# Install a code editor
+
+A code editor, also known as an integrated development environment (IDE) will 
+be required to open and run the Jupyter Notebooks used in this model.
+
+We use Visual Studio Code (download: https://code.visualstudio.com/), because it
+allows you to open Jupyter notebooks, and it is free, but most IDEs will work. 
+
+NOTE: If you only plan on running models and never modifying the source code, you
+can just use jupyter notebook instead of installing an IDE. If you installed the full
+Anaconda installation, Jupyter Notebook should come installed. If you are using miniconda,
+you will need to manually install jupyter notebook by opening Anaconda prompt and typing:
+
+    conda install -c conda-forge notebook
+    
+To launch the jupyter notebook app in your browser, you would just open anaconda and type
+
+    conda install -c conda-forge notebook
 
 # Install and setup git software manager
 After installing Anaconda or Miniconda, open an Anaconda Command Prompt
