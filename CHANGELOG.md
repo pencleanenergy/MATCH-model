@@ -1,5 +1,5 @@
 -------------------------------------------------------------------------------
-Commmit 2021.XX.XX (Version 0.1.0)
+Commmit 2021.08.09 (Version 0.1.0)
 -------------------------------------------------------------------------------
 Fixes #5
 Implements a new semantic versioning scheme that replaces the versioning used by the original Switch model. 
