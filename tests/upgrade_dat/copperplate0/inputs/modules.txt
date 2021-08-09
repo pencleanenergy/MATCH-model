@@ -1,2 +1,0 @@
-project.no_commit
-fuel_cost

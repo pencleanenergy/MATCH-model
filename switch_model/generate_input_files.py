@@ -4,7 +4,7 @@
 """
 This takes data from an input excel file and formats into individual csv files for inputs
 """
-
+#%%
 import ast
 import pandas as pd 
 import numpy as np
@@ -21,9 +21,19 @@ import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
 
-def generate_inputs(model_workspace, timezone):
+def generate_inputs(model_workspace):
 
-    tz_offset = np.round(datetime(year=2020,month=1,day=1,tzinfo=pytz.timezone(timezone)).utcoffset().total_seconds()/3600)
+    # Get the version number. Strategy #3 from https://packaging.python.org/single_source_version/
+    version_path = os.path.join(os.path.dirname(__file__), 'version.py')
+    version = {}
+    with open(version_path) as f:
+        exec(f.read(), version)
+    version = version['__version__']
+
+    #inputs_version.txt
+    inputs_version = open(model_workspace / 'inputs_version.txt', 'w+')
+    inputs_version.write(version)
+    inputs_version.close()
 
     model_inputs = model_workspace / 'model_inputs.xlsx'
 
@@ -73,6 +83,8 @@ def generate_inputs(model_workspace, timezone):
     timezone = xl_general.loc[xl_general['Parameter'] == 'Timezone', 'Input'].item()
     nrel_api_key = xl_general.loc[xl_general['Parameter'] == 'NREL API key', 'Input'].item()
     nrel_api_email = xl_general.loc[xl_general['Parameter'] == 'NREL API email', 'Input'].item()
+
+    tz_offset = np.round(datetime(year=2020,month=1,day=1,tzinfo=pytz.timezone(timezone)).utcoffset().total_seconds()/3600)
 
     # periods.csv
     df_periods = pd.DataFrame(columns=['INVESTMENT_PERIOD','period_start','period_end'], data=[[year,year,year]])
@@ -257,11 +269,6 @@ def generate_inputs(model_workspace, timezone):
                 modules.write(module)
                 modules.write('\n')
             modules.close()
-
-            #switch_inputs_version.txt
-            inputs_version = open(input_dir / 'switch_inputs_version.txt', 'w+')
-            inputs_version.write('2.0.5')
-            inputs_version.close()
 
             # renewable_target.csv
             renewable_target_value = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'renewable_target'), scenario].item()

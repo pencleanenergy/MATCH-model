@@ -1,4 +1,17 @@
 -------------------------------------------------------------------------------
+Commmit 2021.XX.XX (Version 0.1.0)
+-------------------------------------------------------------------------------
+Fixes #5
+Implements a new semantic versioning scheme that replaces the versioning used by the original Switch model. 
+
+Updates:
+ - Sets the new version number at 0.1.0
+ - updates `generate_inputs_file.py` to read the version number from `version.py` and use to generate the `switch_inputs_version.txt` file
+ - removes all of the modules in `switch_model.upgrade` and any references to these modules in other scripts
+ - updates `run_scenarios.ipynb` to validate that the version number used to generate the input files matches the version number used to run the model. Also removes the requirement to specify the timezone (instead read from the model_inputs.xlsx file)
+
+
+-------------------------------------------------------------------------------
 Commmit 2021.07.08
 -------------------------------------------------------------------------------
 Fixes #2
