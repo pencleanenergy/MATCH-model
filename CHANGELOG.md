@@ -1,4 +1,16 @@
 -------------------------------------------------------------------------------
+Commmit 2021.08.XX
+-------------------------------------------------------------------------------
+Fixes #4, #6, #7, #12
+
+^^ Fix commit DATE
+
+Updates to how costs are calculated in the model.
+ - Updates the `uniform_series_to_present_value` function in `financials.py` to use the formula for the present value of an annuity due (#12)
+ - In `generators.extensions.storage`, removes the PPA cost discount for hybrid energy storage dispatch (#6)
+ - Update the `summary_report.ipynb` to show a plot of nodal costs, and display hybrid storage charging/discharging as part of storage, rather than the paired resource
+
+-------------------------------------------------------------------------------
 Commmit 2021.08.10
 -------------------------------------------------------------------------------
 Closes #13 and #16

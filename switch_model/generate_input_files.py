@@ -446,8 +446,9 @@ def generate_inputs(model_workspace):
             nodal_prices['timepoint'] = nodal_prices.index + 1
             nodal_prices = nodal_prices.melt(id_vars=['timepoint'], var_name='pricing_node', value_name='nodal_price')
             nodal_prices = nodal_prices[['pricing_node','timepoint','nodal_price']]
-            #add system power / demand node prices to df
-            nodal_prices = pd.concat([nodal_prices, system_power_cost.rename(columns={'load_zone':'pricing_node','system_power_cost':'nodal_price'})], axis=0, ignore_index=True)
+            # add system power / demand node prices to df
+            # NOTE: removed because this was adding duplicate values if one of the generators is located at the load node
+            #nodal_prices = pd.concat([nodal_prices, system_power_cost.rename(columns={'load_zone':'pricing_node','system_power_cost':'nodal_price'})], axis=0, ignore_index=True)
             nodal_prices.to_csv(input_dir / 'nodal_prices.csv', index=False)
 
             # dr_data.csv

@@ -29,7 +29,8 @@ def define_components(mod):
     # Calculate the cost we pay for load at the DLAP
     mod.DLAPLoadCostInTP = Expression(
         mod.TIMEPOINTS,
-        rule=lambda m, t: sum(m.zone_demand_mw[z,t] * m.nodal_price[z,t] for z in m.LOAD_ZONES))
+        rule=lambda m, t: sum(m.zone_demand_mw[z,t] * m.system_power_cost[z,t] for z in m.LOAD_ZONES))
+    mod.Cost_Components_Per_TP.append('DLAPLoadCostInTP')
 
     # Pnode Revenue is earned from injecting power into the grid 
     mod.GenPnodeRevenue = Expression(
@@ -40,6 +41,8 @@ def define_components(mod):
     mod.GenPnodeRevenueInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m,t: sum(m.GenPnodeRevenue[g,t]  for g in m.NON_STORAGE_GENS))
+    # add Pnode revenue to objective function
+    mod.Cost_Components_Per_TP.append('GenPnodeRevenueInTP')
 
     """
     mod.ExcessGenPnodeRevenue = Expression(
@@ -48,7 +51,7 @@ def define_components(mod):
     mod.ExcessGenPnodeRevenueInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m,t: sum(m.ExcessGenPnodeRevenue[g,t] for g in m.NON_STORAGE_GENS))
-    """
+
 
     # The delivery cost is the cost of offtaking the generated energy at the demand node
     mod.GenDeliveryCost = Expression(
@@ -59,14 +62,14 @@ def define_components(mod):
         mod.TIMEPOINTS,
         rule=lambda m,t: sum(m.GenDeliveryCost[g,t] for g in m.NON_STORAGE_GENS))
 
-    """
+
     mod.ExcessGenDeliveryCost = Expression(
         mod.NON_STORAGE_GEN_TPS,
         rule=lambda m, g, t: (m.ExcessGen[g,t] * m.nodal_price[m.gen_load_zone[g],t]))
     mod.ExcessGenDeliveryCostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m,t: sum(m.ExcessGenDeliveryCost[g,t] for g in m.NON_STORAGE_GENS))
-    """
+
 
     mod.GenCongestionCost = Expression(
         mod.NON_STORAGE_GEN_TPS,
@@ -74,9 +77,7 @@ def define_components(mod):
     mod.CongestionCostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m,t: sum(m.GenCongestionCost[g,t] for g in m.NON_STORAGE_GENS))
-    # Add congestion cost to the objective function
-    mod.Cost_Components_Per_TP.append('CongestionCostInTP')
-
+    """
 
 def post_solve(instance, outdir):
     dispatchable_congestion = [{
@@ -86,8 +87,8 @@ def post_solve(instance, outdir):
         "Contract Cost": value(instance.DispatchGen[g,t] * instance.ppa_energy_cost[g] *
             instance.tp_weight_in_year[t]),
         "Generator Pnode Revenue": value(instance.GenPnodeRevenue[g,t]),
-        "Generator Delivery Cost": value(instance.GenDeliveryCost[g,t]),
-        "Congestion Cost": value(instance.GenCongestionCost[g,t]),
+        #"Generator Delivery Cost": value(instance.GenDeliveryCost[g,t]),
+        #"Congestion Cost": value(instance.GenCongestionCost[g,t]),
     } for (g, t) in instance.DISPATCHABLE_GEN_TPS]
     variable_congestion = [{
         "generation_project": g,
@@ -96,8 +97,8 @@ def post_solve(instance, outdir):
         "Contract Cost": value(instance.VariableGen[g,t] * instance.ppa_energy_cost[g] *
             instance.tp_weight_in_year[t]),
         "Generator Pnode Revenue": value(instance.GenPnodeRevenue[g,t]),
-        "Generator Delivery Cost": value(instance.GenDeliveryCost[g,t]),
-        "Congestion Cost": value(instance.GenCongestionCost[g,t]),
+        #"Generator Delivery Cost": value(instance.GenDeliveryCost[g,t]),
+        #"Congestion Cost": value(instance.GenCongestionCost[g,t]),
     } for (g, t) in instance.VARIABLE_GEN_TPS]
     congestion_data = dispatchable_congestion + variable_congestion
     nodal_by_gen_df = pd.DataFrame(congestion_data)
@@ -107,8 +108,8 @@ def post_solve(instance, outdir):
     nodal_data = [{
         "timestamp": instance.tp_timestamp[t],
         "Generator Pnode Revenue": value(instance.GenPnodeRevenueInTP[t]),
-        "Generator Delivery Cost": value(instance.GenDeliveryCostInTP[t]),
-        "Congestion Cost": value(instance.CongestionCostInTP[t]),
+        #"Generator Delivery Cost": value(instance.GenDeliveryCostInTP[t]),
+        #"Congestion Cost": value(instance.CongestionCostInTP[t]),
         "DLAP Cost": value(instance.DLAPLoadCostInTP[t]),
     } for t in instance.TIMEPOINTS]
     nodal_df = pd.DataFrame(nodal_data)
