@@ -24,7 +24,6 @@ import switch_model
 from switch_model.utilities import (
     create_model, _ArgumentParser, StepTimer, make_iterable, LogOutput, warn
 )
-from switch_model.upgrade import do_inputs_need_upgrade, upgrade_inputs
 
 
 def main(args=None, return_model=False, return_instance=False):
@@ -59,25 +58,6 @@ def main(args=None, return_model=False, return_instance=False):
 
     with LogOutput(logs_dir):
 
-        # Look out for outdated inputs. This has to happen before modules.txt is
-        # parsed to avoid errors from incompatible files.
-        parser = _ArgumentParser(allow_abbrev=False, add_help=False)
-        add_module_args(parser)
-        module_options = parser.parse_known_args(args=args)[0]
-        if(os.path.exists(module_options.inputs_dir) and
-           do_inputs_need_upgrade(module_options.inputs_dir)):
-            do_upgrade = query_yes_no(
-                "Warning! Your inputs directory needs to be upgraded. "
-                "Do you want to auto-upgrade now? We'll keep a backup of "
-                "this current version."
-            )
-            if do_upgrade:
-                upgrade_inputs(module_options.inputs_dir)
-            else:
-                print("Inputs need upgrade. Consider `switch upgrade --help`. Exiting.")
-                stop_logging_output()
-                return -1
-
         # build a module list based on configuration options, and add
         # the current module (to register define_arguments callback)
         modules = get_module_list(args)
@@ -107,7 +87,7 @@ def main(args=None, return_model=False, return_instance=False):
 
         if model.options.verbose:
             print("\n=======================================================================")
-            print("Switch {}, http://switch-model.org".format(switch_model.__version__))
+            print("Switch 24x7 {}".format(switch_model.__version__))
             print("=======================================================================")
             print("Arguments:")
             print(", ".join(k+"="+repr(v) for k, v in model.options.__dict__.items() if v))
@@ -834,7 +814,7 @@ def _options_string_to_dict(istr):
     tokens = pyutilib.misc.quote_split('[ ]+',istr)
     for token in tokens:
         index = token.find('=')
-        if index is -1:
+        if index == -1:
             raise ValueError(
                 "Solver options must have the form option=value: '{}'".format(istr))
         try:

@@ -97,7 +97,7 @@ This will generate:
 	┃ ┃ ┣ 📜renewable_target.csv
 	┃ ┃ ┣ 📜summary_report.ipynb
 	┃ ┃ ┣ 📜summary_report_public.ipynb
-	┃ ┃ ┣ 📜switch_inputs_version.txt
+	┃ ┃ ┣ 📜inputs_version.txt
 	┃ ┃ ┣ 📜system_power_cost.csv
 	┃ ┃ ┣ 📜timepoints.csv
 	┃ ┃ ┣ 📜timeseries.csv
