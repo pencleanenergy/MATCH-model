@@ -4,6 +4,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - cloudpickle
   - glpk
   - ipykernel
   - ipython
