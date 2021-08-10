@@ -1,4 +1,19 @@
 -------------------------------------------------------------------------------
+Commmit 2021.08.10
+-------------------------------------------------------------------------------
+Closes #13 and #16
+
+This update sets us up to be able to validate the model by exploring the model instance.
+It also allows us to access the dual, slack, and reduced cost values so that these can be integrated into the summary reports in the future.
+Allows the model instance to be exported as a `.pickle` file so that it can be explored for validation purposes
+Adds a jupyter notebook `explore_model_instance.ipynb` to explore these files
+Sets the default suffixes to ['dual','rc'] so that the dual values and reduced costs are included by default
+
+Other updates:
+- changes the default solver from glpk to cbc
+
+
+-------------------------------------------------------------------------------
 Commmit 2021.08.09 (Version 0.1.0)
 -------------------------------------------------------------------------------
 Fixes #5

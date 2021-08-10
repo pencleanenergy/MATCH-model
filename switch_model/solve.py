@@ -14,6 +14,8 @@ try:
 except ImportError:
     import pickle
 
+import cloudpickle
+
 try:
     # Python 2
     input = raw_input
@@ -154,6 +156,11 @@ def main(args=None, return_model=False, return_instance=False):
                     save_results(instance, instance.options.outputs_dir)
                     if instance.options.verbose:
                         print('Saved results in {:.2f} s.'.format(timer.step_time()))
+
+                if instance.options.save_instance:
+                    save_instance(instance, instance.options.outputs_dir)
+                    if instance.options.verbose:
+                        print('Saved instance in {:.2f} s.'.format(timer.step_time()))
 
         # report results
         # (repeated if model is reloaded, to automatically run any new export code)
@@ -428,13 +435,13 @@ def define_arguments(argparser):
     # note: pyomo has a --solver-suffix option but it is not clear
     # whether that does the same thing as --suffix defined here,
     # so we don't reuse the same name.
-    argparser.add_argument("--suffixes", "--suffix", nargs="+", action='extend', default=[],
+    argparser.add_argument("--suffixes", "--suffix", nargs="+", action='extend', default=['dual','rc'],
         help="Extra suffixes to add to the model and exchange with the solver (e.g., iis, rc, dual, or slack)")
 
     # Define solver-related arguments
     # These are a subset of the arguments offered by "pyomo solve --solver=cplex --help"
-    argparser.add_argument("--solver", default="glpk",
-        help='Name of Pyomo solver to use for the model (default is "glpk")')
+    argparser.add_argument("--solver", default="cbc",
+        help='Name of Pyomo solver to use for the model (default is "cbc")')
     argparser.add_argument("--solver-manager", default="serial",
         help='Name of Pyomo solver manager to use for the model ("neos" to use remote NEOS server)')
     argparser.add_argument("--solver-io", default=None, help="Method for Pyomo to use to communicate with solver")
@@ -497,6 +504,9 @@ def define_arguments(argparser):
     argparser.add_argument(
         '--no-save-solution', default=False, action='store_true',
         help="Don't save solution after model is solved.")
+    argparser.add_argument(
+        '--save-instance', default=False, action='store_true',
+        help="Save the model instance after model is solved.")
     argparser.add_argument(
         '--interact', default=False, action='store_true',
         help='Enter interactive shell after solving the instance to enable inspection of the solved model.')
@@ -840,6 +850,13 @@ def save_results(instance, outdir):
     # remove the solution from the results object, to minimize long-term memory use
     instance.last_results.solution.clear()
 
+def save_instance(instance, outdir):
+    """
+    Save the model instance. 
+    See https://stackoverflow.com/questions/50834258/how-to-save-pickle-a-model-instance-in-pyomo 
+    """
+    with open(os.path.join(outdir, 'instance.pickle'), 'wb') as fh:
+        cloudpickle.dump(instance, fh)
 
 
 def query_yes_no(question, default="yes"):
