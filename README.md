@@ -97,7 +97,7 @@ This will generate:
 	┃ ┃ ┣ 📜renewable_target.csv
 	┃ ┃ ┣ 📜summary_report.ipynb
 	┃ ┃ ┣ 📜summary_report_public.ipynb
-	┃ ┃ ┣ 📜switch_inputs_version.txt
+	┃ ┃ ┣ 📜inputs_version.txt
 	┃ ┃ ┣ 📜system_power_cost.csv
 	┃ ┃ ┣ 📜timepoints.csv
 	┃ ┃ ┣ 📜timeseries.csv
@@ -197,11 +197,11 @@ If you plan on contributing edits to the codebase that will be merged into the m
 
 	`git push`
 
-5. Now open the GitHub repo web page. You should see the branch you pushed up in a yellow bar at the top of the page with a button to “Compare & pull request”. 
-	- Click “Compare & pull request”. This will take you to the “Open a pull request” page. 
+5. Now open the GitHub repo web page. You should see the branch you pushed up in a yellow bar at the top of the page with a button to "Compare & pull request". 
+	- Click "Compare & pull request". This will take you to the "Open a pull request" page. 
 	- From here, you should write a brief description of what you actually changed (you can copy and paste this from the changelog). 
-	- Click the “Reviewers” tab and select Greg as a reviewer. 
-	- Click “Create pull request"
+	- Click the "Reviewers" tab and select Greg as a reviewer. 
+	- Click "Create pull request"
 	- Greg will then review the edit and merge it into the master branch, which will then delete the feature branch.
 
 # TESTING
@@ -213,7 +213,7 @@ To test the entire codebase, run this command from the root directory:
 # Development TODO
 
 ## Bug Fixes / Model performance
-- [ ] Model is not always finding the optimal solution. For example, it will identify an optimal portfolio, but then if you constrain one of the selected resources and re-run the model, the new solution will be a lower cost than the original. There could be a few potential sources of this issue:
+- [ ] Model is not always finding the optimal solution. For example, it will identify an optimal portfolio but if you constrain one of the selected resources and re-run the model, the new solution will be a lower cost than the original. There could be a few potential sources of this issue:
 	- The costs being optimized in the model are not the same that are being reported in the summary report (look at the raw model outputs to see if the constrained results are still better)
 	- Could be related to how congestion costs are being optimized in the model - perhaps we should only optimize for ppa costs
 	- Model may be finding a local minimum rather than the global minimum. Will need to consult with others to determine how one might fix.
@@ -281,6 +281,7 @@ To test the entire codebase, run this command from the root directory:
 - [ ] Report which capacity limits are binding
 - [ ] Update counting/valuation of RECs
 - [ ] Separate reporting of committed costs (existing contracts) and future costs - provide some level of understanding of uncertainty
+- [ ] Report cost of lost storage energy?
 
 ## Future edits for non-PCE scenarios
 - [ ] Investigate hydro dispatch implementation
