@@ -343,17 +343,6 @@ def define_components(mod):
     )
     mod.Cost_Components_Per_TP.append('StorageNodalEnergyCostInTP')
 
-    # A hybrid generator should not pay the PPA cost of energy generated but stored, since this energy never crosses
-    # the bus, so we want to discount ExcessGenCostInTP by the amount charged; however, the storage should pay the PPA
-    # cost when dispatching because the energy will cross the generator bus
-    mod.HybridStoragePPAEnergyCostInTP = Expression(
-        mod.TIMEPOINTS,
-        rule=lambda m, t: sum(
-            (m.DischargeStorage[g, t] - m.ChargeStorage[g, t]) * m.ppa_energy_cost[m.storage_hybrid_generation_project[g]]
-            for g in m.GENS_IN_PERIOD[m.tp_period[t]]
-            if g in m.HYBRID_STORAGE_GENS),
-        doc="Summarize costs for the objective function")
-    mod.Cost_Components_Per_TP.append('HybridStoragePPAEnergyCostInTP')
 
 
 def load_inputs(mod, switch_data, inputs_dir):
