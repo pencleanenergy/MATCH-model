@@ -1,14 +1,13 @@
 -------------------------------------------------------------------------------
-Commmit 2021.08.XX
+Commmit 2021.08.11
 -------------------------------------------------------------------------------
 Fixes #4, #6, #7, #12
-
-^^ Fix commit DATE
 
 Updates to how costs are calculated in the model.
  - Updates the `uniform_series_to_present_value` function in `financials.py` to use the formula for the present value of an annuity due (#12)
  - In `generators.extensions.storage`, removes the PPA cost discount for hybrid energy storage dispatch (#6)
- - Update the `summary_report.ipynb` to show a plot of nodal costs, and display hybrid storage charging/discharging as part of storage, rather than the paired resource
+ - Updates the `summary_report.ipynb` to show a plot of nodal costs, and display hybrid storage charging/discharging as part of storage, rather than the paired resource
+ - In summary_report, fixes the generator cost per MWh table. For hybrid resources, the congestion cost of the ES component nets out the congestion cost of the RE component, so there is no energy arbitrage cost associated with hybrids anymore. Energy arbitrage could be shown if the calculation is reconfigured, but it seems that this is not important.
 
 -------------------------------------------------------------------------------
 Commmit 2021.08.10
