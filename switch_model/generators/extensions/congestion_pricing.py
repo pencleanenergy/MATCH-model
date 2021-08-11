@@ -29,7 +29,7 @@ def define_components(mod):
     # Calculate the cost we pay for load at the DLAP
     mod.DLAPLoadCostInTP = Expression(
         mod.TIMEPOINTS,
-        rule=lambda m, t: sum(m.zone_demand_mw[z,t] * m.system_power_cost[z,t] for z in m.LOAD_ZONES))
+        rule=lambda m, t: sum(m.zone_demand_mw[z,t] * m.nodal_price[z,t] for z in m.LOAD_ZONES))
     mod.Cost_Components_Per_TP.append('DLAPLoadCostInTP')
 
     # Pnode Revenue is earned from injecting power into the grid 

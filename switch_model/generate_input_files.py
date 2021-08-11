@@ -436,7 +436,9 @@ def generate_inputs(model_workspace):
 
             # pricing_nodes.csv
             node_list = list(set_gens.gen_pricing_node.unique())
+            node_list = node_list + load_list
             node_list = [i for i in node_list if i not in ['.',np.nan]]
+            node_list = list(set(node_list)) # only keep unique values
             pricing_nodes = pd.DataFrame(data={'PRICING_NODE':node_list})
             pricing_nodes.to_csv(input_dir / 'pricing_nodes.csv', index=False)  
 
