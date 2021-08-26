@@ -28,12 +28,12 @@ def read(*rnames):
 setup(
     name='switch_model',
     version=__version__,
-    maintainer='Switch Authors',
-    maintainer_email='authors@switch-model.org',
+    maintainer='Gregory Miller',
+    maintainer_email='grmiller@ucdavis.edu',
     url='http://switch-model.org',
     license='Apache License 2.0',
     platforms=["any"],
-    description='Switch Power System Planning Model',
+    description='Switch 24x7 Planning Model',
     long_description=read('README.md'),
     long_description_content_type="text/markdown",
     classifiers=[
@@ -62,11 +62,11 @@ setup(
     ],
     python_requires='>=2.7.12',
     install_requires=[
-        'Pyomo>=4.4.1, <=5.6.8', # We need a version that works with glpk 4.60+
+        'Pyomo', # We need a version that works with glpk 4.60+
         'pint',         # needed by Pyomo when we run our tests, but not included
         'testfixtures', # used for standard tests
         'pandas',       # used for input upgrades and testing that functionality
-        'pyutilib <=5.7.3', 
+        'pyutilib', 
     ],
     extras_require={
         # packages used for advanced demand response, progressive hedging

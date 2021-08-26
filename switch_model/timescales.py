@@ -227,12 +227,12 @@ def define_components(mod):
 
     """
 
-    mod.PERIODS = Set(ordered=True)
+    mod.PERIODS = Set(ordered=True, dimen=1)
     mod.period_start = Param(mod.PERIODS, within=NonNegativeReals)
     mod.period_end = Param(mod.PERIODS, within=NonNegativeReals)
     mod.min_data_check('PERIODS', 'period_start', 'period_end')
 
-    mod.TIMESERIES = Set(ordered=True)
+    mod.TIMESERIES = Set(ordered=True, dimen=1)
     mod.ts_period = Param(mod.TIMESERIES, within=mod.PERIODS)
     mod.ts_duration_of_tp = Param(mod.TIMESERIES, within=PositiveReals)
     mod.ts_num_tps = Param(mod.TIMESERIES, within=PositiveIntegers)
@@ -241,10 +241,10 @@ def define_components(mod):
         'TIMESERIES', 'ts_period', 'ts_duration_of_tp', 'ts_num_tps',
         'ts_scale_to_period')
 
-    mod.TIMEPOINTS = Set(ordered=True)
+    mod.TIMEPOINTS = Set(ordered=True, dimen=1)
     mod.tp_ts = Param(mod.TIMEPOINTS, within=mod.TIMESERIES)
     mod.min_data_check('TIMEPOINTS', 'tp_ts')
-    mod.tp_timestamp = Param(mod.TIMEPOINTS, default=lambda m, t: t)
+    mod.tp_timestamp = Param(mod.TIMEPOINTS, default=lambda m, t: t, within=Any)
 
     # Derived sets and parameters
     # note: the first five are calculated early so they
@@ -402,16 +402,15 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'periods.csv'),
         select=('INVESTMENT_PERIOD', 'period_start', 'period_end'),
         index=mod.PERIODS,
-        param=(mod.period_start, mod.period_end))
+        param=[mod.period_start, mod.period_end])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'timeseries.csv'),
-        select=('TIMESERIES', 'ts_period', 'ts_duration_of_tp',
-                'ts_num_tps', 'ts_scale_to_period'),
+        autoselect=True,
         index=mod.TIMESERIES,
-        param=(mod.ts_period, mod.ts_duration_of_tp,
-               mod.ts_num_tps, mod.ts_scale_to_period))
+        param=[mod.ts_period, mod.ts_duration_of_tp,
+               mod.ts_num_tps, mod.ts_scale_to_period])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'timepoints.csv'),
         select=('timepoint_id', 'timestamp', 'timeseries'),
         index=mod.TIMEPOINTS,
-        param=(mod.tp_timestamp, mod.tp_ts))
+        param=[mod.tp_timestamp, mod.tp_ts])

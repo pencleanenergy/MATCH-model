@@ -1,4 +1,23 @@
 -------------------------------------------------------------------------------
+Commmit 2021.08.26 (Version 0.2.0)
+-------------------------------------------------------------------------------
+Fixes #25
+Updates the code to work with Pyomo 6.1, from Pyomo 5.6.8, so that the code is compatible with CPLEX as a solver.
+The environment.yml file has been updated to require use of Pyomo>=6.0.0 and pyutilib>=6.0.0, so continued use will require updating your environment. 
+
+Specific updates include:
+ - pyomo elements with "Simple" in their name were renamed to "Scalar"
+ - For any params with string elements, needed to manually specify `within=Any` when defining the param in order to silence a deprecation warning
+ - Needed to manually specify `dimen=1` for Sets that are used to index parameters when loading data
+ - When loading data, you can no longer specify the index as a cross product of multiple sets (e.g. `index=mod.PERIODS*mod.MONTHS`). Instead, they must be specified as a list of Sets (e.g. `index=[mod.PERIODS, mod.MONTHS]`)
+
+Other cleanup included:
+ - when loading data, replaced specifying multiple parameters as tuples with specifying them as lists, to speed the data loading process
+ - Removed `PERIODS_FOR_GEN_BLD_YR`, and `TPS_FOR_GEN_IN_PERIOD` because they are not used in the model
+ - changed the `gen_capacity_value` to `elcc` for Effective Load Carrying Capacity
+
+
+-------------------------------------------------------------------------------
 Commmit 2021.08.11
 -------------------------------------------------------------------------------
 Fixes #4, #6, #7, #12

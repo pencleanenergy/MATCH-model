@@ -197,7 +197,7 @@ def save_inputs_as_dat(model, instance, save_path="inputs/complete_inputs.dat",
             component = getattr(model, component_name)
             comp_class = type(component).__name__
             component_data = instance.DataPortal.data(name=component_name)
-            if comp_class == 'SimpleSet' or comp_class == 'OrderedSimpleSet':
+            if comp_class == 'ScalarSet' or comp_class == 'OrderedScalarSet':
                 f.write(
                     "set {} := {};\n"
                     .format(component_name, join_space(component_data))
@@ -212,7 +212,7 @@ def save_inputs_as_dat(model, instance, save_path="inputs/complete_inputs.dat",
                     ):
                         f.write(" {} {}\n".format(join_space(key), quote_str(value)))
                     f.write(";\n")
-            elif comp_class == 'SimpleParam':
+            elif comp_class == 'ScalarParam':
                 f.write("param {} := {};\n".format(component_name, component_data))
             elif comp_class == 'IndexedSet':
                 for key, vals in iteritems(component_data):
@@ -339,7 +339,7 @@ def check_mandatory_components(model, *mandatory_model_components):
     for component_name in mandatory_model_components:
         obj = getattr(model, component_name)
         o_class = type(obj).__name__
-        if o_class == 'SimpleSet' or o_class == 'OrderedSimpleSet':
+        if o_class == 'ScalarSet' or o_class == 'OrderedScalarSet':
             if len(obj) == 0:
                 raise ValueError(
                     "No data is defined for the mandatory set '{}'.".
@@ -358,7 +358,7 @@ def check_mandatory_components(model, *mandatory_model_components):
                 raise ValueError(
                     ("Sets are not defined for every index of " +
                      "the mandatory indexed set '{}'").format(component_name))
-        elif o_class == 'SimpleParam':
+        elif o_class == 'ScalarParam':
             if obj.value is None:
                 raise ValueError(
                     "Value not provided for mandatory parameter '{}'".
@@ -460,9 +460,14 @@ def load_aug(switch_data, optional=False, auto_select=False,
     # Grab the dimensionality of the index param if it was provided.
     if 'index' in kwds:
         # if no dimensions are defined, default to 1
-        if isinstance(kwds['index'].dimen, int):
-            num_indexes = kwds['index'].dimen
+        if  isinstance(kwds['index'], list):
+            num_indexes = 0
+            for i in kwds['index']:
+                num_indexes = num_indexes + i.dimen
+        elif isinstance((kwds['index']).dimen, int):
+            num_indexes = (kwds['index']).dimen
         else:
+            print(f'WARNING: Please manually set the number of dimensions for Set {kwds["index"]}')
             num_indexes = 1
     # Next try the first parameter's index.
     elif len(params) > 0:

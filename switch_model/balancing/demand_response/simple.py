@@ -102,10 +102,10 @@ def load_inputs(mod, switch_data, inputs_dir):
         optional=True,
         filename=os.path.join(inputs_dir, 'dr_data.csv'),
         autoselect=True,
-        param=(mod.dr_shift_down_limit, mod.dr_shift_up_limit))
+        param=[mod.dr_shift_down_limit, mod.dr_shift_up_limit])
 
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'days.csv'),
         select=('timepoint_id','tp_day'),
         index=mod.TIMEPOINTS,
-        param=(mod.tp_day))
+        param=[mod.tp_day])
