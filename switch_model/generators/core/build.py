@@ -214,14 +214,15 @@ def define_components(mod):
     This aggregation is performed for the benefit of the objective function.
 
     """
-    mod.GENERATION_PROJECTS = Set()
+    mod.GENERATION_PROJECTS = Set(dimen=1)
 
-    mod.gen_tech = Param(mod.GENERATION_PROJECTS)
+    mod.gen_tech = Param(mod.GENERATION_PROJECTS, within=Any)
     mod.GENERATION_TECHNOLOGIES = Set(initialize=lambda m:
-        {m.gen_tech[g] for g in m.GENERATION_PROJECTS}
+        {m.gen_tech[g] for g in m.GENERATION_PROJECTS},
+        ordered=False
     )
     mod.gen_energy_source = Param(mod.GENERATION_PROJECTS,
-        validate=lambda m,val,g: val in m.ENERGY_SOURCES or val == "multiple")
+        validate=lambda m,val,g: val in m.ENERGY_SOURCES or val == "multiple", within=Any)
     mod.gen_load_zone = Param(mod.GENERATION_PROJECTS, within=mod.LOAD_ZONES)
     mod.gen_max_age = Param(mod.GENERATION_PROJECTS, within=PositiveIntegers, default=25)
     mod.gen_is_variable = Param(mod.GENERATION_PROJECTS, within=Boolean)
@@ -322,14 +323,6 @@ def define_components(mod):
         # mid_period = m.period_start[period] + 0.5 * m.period_length_years[period]
         # return online <= m.period_start[period] and mid_period <= retirement
 
-    # The set of periods when a project built in a certain year will be online
-    mod.PERIODS_FOR_GEN_BLD_YR = Set(
-        mod.GEN_BLD_YRS,
-        within=mod.PERIODS,
-        ordered=True,
-        initialize=lambda m, g, bld_yr: set(
-            period for period in m.PERIODS
-            if gen_build_can_operate_in_period(m, g, bld_yr, period)))
     # The set of build years that could be online in the given period
     # for the given project.
     mod.BLD_YRS_FOR_GEN_PERIOD = Set(
@@ -337,7 +330,8 @@ def define_components(mod):
         initialize=lambda m, g, period: set(
             bld_yr for (gen, bld_yr) in m.GEN_BLD_YRS
             if gen == g and
-               gen_build_can_operate_in_period(m, g, bld_yr, period)))
+               gen_build_can_operate_in_period(m, g, bld_yr, period)),
+        ordered=False)
     # The set of periods when a generator is available to run
     mod.PERIODS_FOR_GEN = Set(
         mod.GENERATION_PROJECTS,
@@ -549,13 +543,13 @@ def load_inputs(mod, switch_data, inputs_dir):
         'gen_forced_outage_rate', 'gen_capacity_limit_mw', 'gen_unit_size',
         'gen_min_build_capacity', 'gen_is_cogen', 'gen_variant_group'],
         index=mod.GENERATION_PROJECTS,
-        param=(mod.gen_tech, mod.gen_energy_source,
+        param=[mod.gen_tech, mod.gen_energy_source,
                mod.gen_load_zone, mod.gen_is_variable, mod.gen_is_storage,
                mod.gen_is_baseload, mod.gen_scheduled_outage_rate,
                mod.gen_forced_outage_rate, mod.gen_capacity_limit_mw,
                mod.gen_unit_size, mod.ppa_energy_cost, mod.gen_min_build_capacity,
                mod.ppa_capacity_cost, mod.gen_is_cogen,
-               mod.gen_variant_group, mod.gen_pricing_node))
+               mod.gen_variant_group, mod.gen_pricing_node])
     # Construct sets of capacity-limited, ccs-capable and unit-size-specified
     # projects. These sets include projects for which these parameters have
     # a value
@@ -575,7 +569,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'gen_build_predetermined.csv'),
         auto_select=True,
         index=mod.PREDETERMINED_GEN_BLD_YRS,
-        param=(mod.gen_predetermined_cap))
+        param=[mod.gen_predetermined_cap])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'gen_build_years.csv'),
         set=mod.GEN_BLD_YRS)

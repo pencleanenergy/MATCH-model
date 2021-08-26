@@ -144,10 +144,13 @@ def save_generic_results(instance, outdir, sorted_output):
             writer = csv.writer(fh, dialect='switch-csv')
             if var.is_indexed():
                 index_name = var.index_set().name
-                # Write column headings
-                writer.writerow(['%s_%d' % (index_name, i + 1)
-                                 for i in range(var.index_set().dimen)] +
-                                [var.name])
+                # Write column headings  
+                if isinstance(var.index_set().dimen, int):
+                    writer.writerow(['%s_%d' % (index_name, i + 1)
+                                    for i in range(var.index_set().dimen)] +
+                                    [var.name])
+                else: # the Var was not used
+                    pass
                 # Results are saved in a random order by default for
                 # increased speed. Sorting is available if wanted.
                 items = sorted(var.items()) if sorted_output else list(var.items())

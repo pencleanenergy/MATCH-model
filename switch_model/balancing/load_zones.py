@@ -150,7 +150,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'loads.csv'),
         auto_select=True,
         index=mod.ZONE_TIMEPOINTS,
-        param=(mod.zone_demand_mw))
+        param=[mod.zone_demand_mw])
 
 
 def post_solve(instance, outdir):
