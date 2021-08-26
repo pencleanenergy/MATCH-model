@@ -156,8 +156,7 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'renewable_target.csv'),
         autoselect=True,
-        index=mod.PERIODS,
-        param=(mod.renewable_target,))
+        param=[mod.renewable_target])
 
     #load inputs which include costs for each timepoint in each zone
     switch_data.load_aug(
@@ -171,7 +170,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'days.csv'),
         select=('timepoint_id','tp_in_subset'),
         index=mod.TIMEPOINTS,
-        param=(mod.tp_in_subset))
+        param=[mod.tp_in_subset])
 
 def post_solve(instance, outdir):
     """

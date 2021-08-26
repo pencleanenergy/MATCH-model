@@ -56,7 +56,7 @@ def define_components(mod):
     #############
     
     #set of months
-    mod.MONTHS = Set(ordered=True, initialize=[1,2,3,4,5,6,7,8,9,10,11,12])
+    mod.MONTHS = Set(ordered=True, initialize=[1,2,3,4,5,6,7,8,9,10,11,12], dimen=1)
 
     #set of RA resource (RAR) types
     mod.RA_REQUIREMENT_CATEGORIES = Set(
@@ -131,7 +131,7 @@ def define_components(mod):
         within=NonNegativeReals,
         default=0)
 
-    mod.gen_capacity_value = Param(
+    mod.elcc = Param(
         mod.PERIODS, mod.ENERGY_SOURCES, mod.MONTHS,
         within=NonNegativeReals)
 
@@ -142,7 +142,7 @@ def define_components(mod):
     mod.RAValueByArea = Expression (
         mod.PERIODS, mod.LOCAL_RELIABILITY_AREAS, mod.MONTHS,
         rule=lambda m, p, a, mo: sum(
-            m.GenCapacity[g,p] * m.gen_capacity_value[p, m.gen_energy_source[g], mo]
+            m.GenCapacity[g,p] * m.elcc[p, m.gen_energy_source[g], mo]
             for g in m.GENS_IN_AREA[a]))
 
     def areas_for_rar(m,r):
@@ -257,7 +257,7 @@ def define_components(mod):
 def load_inputs(mod, switch_data, inputs_dir):
     """
     reserve_capacity_value.csv
-        GEN, TIMEPOINT, gen_capacity_value
+        GEN, TIMEPOINT, elcc
 
     planning_reserve_requirement_zones.csv
         PLANNING_RESERVE_REQUIREMENTS, prr_cap_reserve_margin, prr_enforcement_timescale
@@ -275,7 +275,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'generation_projects_info.csv'),
         auto_select=True,
         index=mod.GENERATION_PROJECTS,
-        param=(mod.gen_reliability_area))
+        param=[mod.gen_reliability_area])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_requirement_categories.csv'),
         set=mod.RA_REQUIREMENT_CATEGORIES)
@@ -287,21 +287,21 @@ def load_inputs(mod, switch_data, inputs_dir):
         set=mod.RAR_AREAS)
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_requirement.csv'),
-        auto_select=True,
-        index=mod.PERIODS*mod.RA_MONTHS,
+        select=('period','RA_RESOURCE','tp_month', 'ra_requirement', 'ra_cost', 'ra_resell_value'),
+        index=[mod.PERIODS, mod.RA_MONTHS],
         optional_params=['ra_resell_value'],
-        param=(mod.ra_requirement, mod.ra_cost, mod.ra_resell_value))
+        param=[mod.ra_requirement, mod.ra_cost, mod.ra_resell_value])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'flexible_ra_requirement.csv'),
-        auto_select=True,
-        index=mod.PERIODS*mod.MONTHS,
+        select=('period','tp_month', 'flexible_ra_requirement','flexible_ra_cost','flexible_ra_resell_value'),
+        index=[mod.PERIODS, mod.MONTHS],
         optional_params=['flexible_ra_resell_value'],
-        param=(mod.flexible_ra_requirement, mod.flexible_ra_cost, mod.flexible_ra_resell_value))
+        param=[mod.flexible_ra_requirement, mod.flexible_ra_cost, mod.flexible_ra_resell_value])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_capacity_value.csv'),
-        auto_select=True,
-        index=mod.PERIODS*mod.ENERGY_SOURCES*mod.MONTHS,
-        param=(mod.gen_capacity_value,))
+        select=('period','gen_energy_source', 'tp_month','elcc'),
+        index=[mod.PERIODS, mod.ENERGY_SOURCES, mod.MONTHS],
+        param=[mod.elcc])
 
 
 
@@ -361,7 +361,7 @@ def post_solve(instance, outdir):
         "Generation_Project": g,
         "Local_Reliability_Area": value(instance.gen_reliability_area[g]),
         "RA_Requirement": r,
-        "RA_Value": value(instance.GenCapacity[g,p] * instance.gen_capacity_value[p, instance.gen_energy_source[g], mo])
+        "RA_Value": value(instance.GenCapacity[g,p] * instance.elcc[p, instance.gen_energy_source[g], mo])
             if instance.gen_reliability_area[g] in areas_for_rar(instance,r) else 0
     } for g in instance.GENERATION_PROJECTS for (r,mo) in instance.RA_MONTHS for p in instance.PERIODS]
     gen_df = pd.DataFrame(gen_dat)

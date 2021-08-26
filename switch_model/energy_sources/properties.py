@@ -91,7 +91,7 @@ def define_components(mod):
     """
 
     mod.NON_FUEL_ENERGY_SOURCES = Set()
-    mod.FUELS = Set()
+    mod.FUELS = Set(dimen=1)
     mod.f_co2_intensity = Param(mod.FUELS, within=NonNegativeReals)
     mod.f_upstream_co2_intensity = Param(
         mod.FUELS, within=Reals, default=0)
@@ -103,7 +103,7 @@ def define_components(mod):
     # ENERGY_SOURCES is the union of fuel and non-fuels sets. Pipe | is
     # the union operator for Pyomo sets.
     mod.ENERGY_SOURCES = Set(
-        initialize=mod.NON_FUEL_ENERGY_SOURCES | mod.FUELS)
+        initialize=mod.NON_FUEL_ENERGY_SOURCES | mod.FUELS, dimen=1)
     mod.min_data_check('ENERGY_SOURCES')
 
 
@@ -145,4 +145,4 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'fuels.csv'),
         select=('fuel', 'co2_intensity', 'upstream_co2_intensity'),
         index=mod.FUELS,
-        param=(mod.f_co2_intensity, mod.f_upstream_co2_intensity))
+        param=[mod.f_co2_intensity, mod.f_upstream_co2_intensity])

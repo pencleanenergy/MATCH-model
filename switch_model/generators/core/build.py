@@ -214,7 +214,7 @@ def define_components(mod):
     This aggregation is performed for the benefit of the objective function.
 
     """
-    mod.GENERATION_PROJECTS = Set()
+    mod.GENERATION_PROJECTS = Set(dimen=1)
 
     mod.gen_tech = Param(mod.GENERATION_PROJECTS, within=Any)
     mod.GENERATION_TECHNOLOGIES = Set(initialize=lambda m:
@@ -543,13 +543,13 @@ def load_inputs(mod, switch_data, inputs_dir):
         'gen_forced_outage_rate', 'gen_capacity_limit_mw', 'gen_unit_size',
         'gen_min_build_capacity', 'gen_is_cogen', 'gen_variant_group'],
         index=mod.GENERATION_PROJECTS,
-        param=(mod.gen_tech, mod.gen_energy_source,
+        param=[mod.gen_tech, mod.gen_energy_source,
                mod.gen_load_zone, mod.gen_is_variable, mod.gen_is_storage,
                mod.gen_is_baseload, mod.gen_scheduled_outage_rate,
                mod.gen_forced_outage_rate, mod.gen_capacity_limit_mw,
                mod.gen_unit_size, mod.ppa_energy_cost, mod.gen_min_build_capacity,
                mod.ppa_capacity_cost, mod.gen_is_cogen,
-               mod.gen_variant_group, mod.gen_pricing_node))
+               mod.gen_variant_group, mod.gen_pricing_node])
     # Construct sets of capacity-limited, ccs-capable and unit-size-specified
     # projects. These sets include projects for which these parameters have
     # a value
@@ -569,7 +569,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'gen_build_predetermined.csv'),
         auto_select=True,
         index=mod.PREDETERMINED_GEN_BLD_YRS,
-        param=(mod.gen_predetermined_cap))
+        param=[mod.gen_predetermined_cap])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'gen_build_years.csv'),
         set=mod.GEN_BLD_YRS)

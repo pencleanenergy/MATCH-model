@@ -460,9 +460,14 @@ def load_aug(switch_data, optional=False, auto_select=False,
     # Grab the dimensionality of the index param if it was provided.
     if 'index' in kwds:
         # if no dimensions are defined, default to 1
-        if isinstance(kwds['index'].dimen, int):
-            num_indexes = kwds['index'].dimen
+        if  isinstance(kwds['index'], list):
+            num_indexes = 0
+            for i in kwds['index']:
+                num_indexes = num_indexes + i.dimen
+        elif isinstance((kwds['index']).dimen, int):
+            num_indexes = (kwds['index']).dimen
         else:
+            print(f'WARNING: Please manually set the number of dimensions for Set {kwds["index"]}')
             num_indexes = 1
     # Next try the first parameter's index.
     elif len(params) > 0:

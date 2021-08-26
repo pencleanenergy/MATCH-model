@@ -20,6 +20,6 @@ dependencies:
   - pyomo>=6.0.0
   - python>=2.7.12
   - pytz
-  - pyutilib
+  - pyutilib>=6.0.0
   - requests
   - xlrd

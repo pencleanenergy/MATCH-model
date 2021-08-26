@@ -130,7 +130,7 @@ def generate_inputs(model_workspace):
     # ra_capacity_value.csv
     ra_capacity_value = pd.read_excel(io=model_inputs, sheet_name='RA_capacity_value').dropna(axis=1, how='all')
     ra_capacity_value['period'] = year
-    ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','gen_capacity_value']]
+    ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','elcc']]
 
     # ra_requirement_areas.csv
     ra_requirement_areas = pd.read_excel(io=model_inputs, sheet_name='RA_areas')
