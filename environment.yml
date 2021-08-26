@@ -1,4 +1,4 @@
-name: switch_pyomo_update
+name: switch_247
 channels:
   - nrel
   - conda-forge

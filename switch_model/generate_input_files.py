@@ -116,12 +116,12 @@ def generate_inputs(model_workspace):
 
     # ra_requirement.csv
     xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements').dropna(axis=1, how='all')
-    ra_requirement = xl_ra_req[xl_ra_req['RA_RESOURCE'] != 'flexible_RA']
+    ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] != 'flexible_RA']
     ra_requirement['period'] = year
     ra_requirement = ra_requirement[['period','RA_RESOURCE','tp_month','ra_requirement','ra_cost','ra_resell_value']]
 
     # flexible_ra_requirement.csv
-    flexible_ra_requirement = xl_ra_req[xl_ra_req['RA_RESOURCE'] == 'flexible_RA']
+    flexible_ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] == 'flexible_RA']
     flexible_ra_requirement['period'] = year
     flexible_ra_requirement = flexible_ra_requirement.drop(columns=['RA_RESOURCE'])
     flexible_ra_requirement = flexible_ra_requirement.rename(columns={'ra_requirement':'flexible_ra_requirement','ra_cost':'flexible_ra_cost', 'ra_resell_value':'flexible_ra_resell_value'})
