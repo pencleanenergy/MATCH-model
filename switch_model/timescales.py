@@ -244,7 +244,7 @@ def define_components(mod):
     mod.TIMEPOINTS = Set(ordered=True)
     mod.tp_ts = Param(mod.TIMEPOINTS, within=mod.TIMESERIES)
     mod.min_data_check('TIMEPOINTS', 'tp_ts')
-    mod.tp_timestamp = Param(mod.TIMEPOINTS, default=lambda m, t: t)
+    mod.tp_timestamp = Param(mod.TIMEPOINTS, default=lambda m, t: t, within=Any)
 
     # Derived sets and parameters
     # note: the first five are calculated early so they

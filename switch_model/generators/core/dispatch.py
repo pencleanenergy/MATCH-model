@@ -118,7 +118,7 @@ def define_components(mod):
         if len(m.period_active_gen_dict) == 0:
             delattr(m, 'period_active_gen_dict')
         return result
-    mod.GENS_IN_PERIOD = Set(mod.PERIODS, initialize=period_active_gen_rule,
+    mod.GENS_IN_PERIOD = Set(mod.PERIODS, initialize=period_active_gen_rule, ordered=False,
         doc="The set of projects active in a given period.")
 
     mod.TPS_FOR_GEN = Set(
@@ -129,21 +129,6 @@ def define_components(mod):
         )
     )
 
-    def init(m, gen, period):
-        try:
-            d = m._TPS_FOR_GEN_IN_PERIOD_dict
-        except AttributeError:
-            d = m._TPS_FOR_GEN_IN_PERIOD_dict = dict()
-            for _gen in m.GENERATION_PROJECTS:
-                for t in m.TPS_FOR_GEN[_gen]:
-                    d.setdefault((_gen, m.tp_period[t]), set()).add(t)
-        result = d.pop((gen, period), set())
-        if not d:  # all gone, delete the attribute
-            del m._TPS_FOR_GEN_IN_PERIOD_dict
-        return result
-    mod.TPS_FOR_GEN_IN_PERIOD = Set(
-        mod.GENERATION_PROJECTS, mod.PERIODS,
-        within=mod.TIMEPOINTS, initialize=init)
 
     mod.GEN_TPS = Set(
         dimen=2,
@@ -179,7 +164,8 @@ def define_components(mod):
 
     mod.gen_pricing_node = Param(
         mod.GENERATION_PROJECTS, 
-        validate=lambda m,val,g: val in m.PRICING_NODES)
+        validate=lambda m,val,g: val in m.PRICING_NODES,
+        within=Any)
     mod.nodal_price = Param(
         mod.NODE_TIMEPOINTS,
         within=Reals)

@@ -216,12 +216,13 @@ def define_components(mod):
     """
     mod.GENERATION_PROJECTS = Set()
 
-    mod.gen_tech = Param(mod.GENERATION_PROJECTS)
+    mod.gen_tech = Param(mod.GENERATION_PROJECTS, within=Any)
     mod.GENERATION_TECHNOLOGIES = Set(initialize=lambda m:
-        {m.gen_tech[g] for g in m.GENERATION_PROJECTS}
+        {m.gen_tech[g] for g in m.GENERATION_PROJECTS},
+        ordered=False
     )
     mod.gen_energy_source = Param(mod.GENERATION_PROJECTS,
-        validate=lambda m,val,g: val in m.ENERGY_SOURCES or val == "multiple")
+        validate=lambda m,val,g: val in m.ENERGY_SOURCES or val == "multiple", within=Any)
     mod.gen_load_zone = Param(mod.GENERATION_PROJECTS, within=mod.LOAD_ZONES)
     mod.gen_max_age = Param(mod.GENERATION_PROJECTS, within=PositiveIntegers, default=25)
     mod.gen_is_variable = Param(mod.GENERATION_PROJECTS, within=Boolean)
@@ -322,14 +323,6 @@ def define_components(mod):
         # mid_period = m.period_start[period] + 0.5 * m.period_length_years[period]
         # return online <= m.period_start[period] and mid_period <= retirement
 
-    # The set of periods when a project built in a certain year will be online
-    mod.PERIODS_FOR_GEN_BLD_YR = Set(
-        mod.GEN_BLD_YRS,
-        within=mod.PERIODS,
-        ordered=True,
-        initialize=lambda m, g, bld_yr: set(
-            period for period in m.PERIODS
-            if gen_build_can_operate_in_period(m, g, bld_yr, period)))
     # The set of build years that could be online in the given period
     # for the given project.
     mod.BLD_YRS_FOR_GEN_PERIOD = Set(
@@ -337,7 +330,8 @@ def define_components(mod):
         initialize=lambda m, g, period: set(
             bld_yr for (gen, bld_yr) in m.GEN_BLD_YRS
             if gen == g and
-               gen_build_can_operate_in_period(m, g, bld_yr, period)))
+               gen_build_can_operate_in_period(m, g, bld_yr, period)),
+        ordered=False)
     # The set of periods when a generator is available to run
     mod.PERIODS_FOR_GEN = Set(
         mod.GENERATION_PROJECTS,

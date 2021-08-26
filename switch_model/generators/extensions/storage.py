@@ -151,7 +151,7 @@ def define_components(mod):
         if len(m.period_active_gen_dict) == 0:
             delattr(m, 'period_active_gen_dict')
         return result
-    mod.STORAGE_GENS_IN_PERIOD = Set(mod.PERIODS, initialize=period_active_gen_rule,
+    mod.STORAGE_GENS_IN_PERIOD = Set(mod.PERIODS, initialize=period_active_gen_rule, ordered=False,
         doc="The set of projects active in a given period.")
 
     # DEFINE PARAMETERS
@@ -175,7 +175,8 @@ def define_components(mod):
         default=float('inf'))
     mod.storage_hybrid_generation_project = Param(
         mod.HYBRID_STORAGE_GENS,
-        validate= lambda m,val,g: val in m.GENERATION_PROJECTS and val not in m.STORAGE_GENS) #validate the paired generator is in the generator list and isnt another storage project
+        validate= lambda m,val,g: val in m.GENERATION_PROJECTS and val not in m.STORAGE_GENS, #validate the paired generator is in the generator list and isnt another storage project
+        within=Any) 
     mod.storage_hybrid_capacity_ratio = Param(
         mod.STORAGE_GENS,
         within=NonNegativeReals,
