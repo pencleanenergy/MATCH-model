@@ -35,8 +35,7 @@ def define_components(mod):
     # Pnode Revenue is earned from injecting power into the grid 
     mod.GenPnodeRevenue = Expression(
         mod.NON_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: (m.DispatchGen[g,t] * m.nodal_price[m.gen_pricing_node[g],t] if g in m.DISPATCHABLE_GENS else 0) +\
-            (m.VariableGen[g,t] * m.nodal_price[m.gen_pricing_node[g],t] if g in m.VARIABLE_GENS else 0))
+        rule=lambda m, g, t: (m.DispatchGen[g,t] * m.nodal_price[m.gen_pricing_node[g],t] if g in m.NON_STORAGE_GENS else 0))
         
     mod.GenPnodeRevenueInTP = Expression(
         mod.TIMEPOINTS,
@@ -44,15 +43,16 @@ def define_components(mod):
     # add Pnode revenue to objective function
     mod.Cost_Components_Per_TP.append('GenPnodeRevenueInTP')
 
-    """
+    # TODO: Add if statement to remove this in case of full curtailment
     mod.ExcessGenPnodeRevenue = Expression(
-        mod.NON_STORAGE_GEN_TPS,
+        mod.VARIABLE_GEN_TPS,
         rule=lambda m, g, t: ((m.ExcessGen[g, t]) * m.nodal_price[m.gen_pricing_node[g],t]))
     mod.ExcessGenPnodeRevenueInTP = Expression(
         mod.TIMEPOINTS,
-        rule=lambda m,t: sum(m.ExcessGenPnodeRevenue[g,t] for g in m.NON_STORAGE_GENS))
+        rule=lambda m,t: sum(m.ExcessGenPnodeRevenue[g,t] for g in m.VARIABLE_GENS))
 
-
+    # TODO: Delete commented code
+    """
     # The delivery cost is the cost of offtaking the generated energy at the demand node
     mod.GenDeliveryCost = Expression(
         mod.NON_STORAGE_GEN_TPS,
@@ -80,7 +80,7 @@ def define_components(mod):
     """
 
 def post_solve(instance, outdir):
-    dispatchable_congestion = [{
+    congestion_data = [{
         "generation_project": g,
         "timestamp": instance.tp_timestamp[t],
         "DispatchGen_MW": value(instance.DispatchGen[g, t]),
@@ -89,18 +89,7 @@ def post_solve(instance, outdir):
         "Generator Pnode Revenue": value(instance.GenPnodeRevenue[g,t]),
         #"Generator Delivery Cost": value(instance.GenDeliveryCost[g,t]),
         #"Congestion Cost": value(instance.GenCongestionCost[g,t]),
-    } for (g, t) in instance.DISPATCHABLE_GEN_TPS]
-    variable_congestion = [{
-        "generation_project": g,
-        "timestamp": instance.tp_timestamp[t],
-        "DispatchGen_MW": value(instance.VariableGen[g, t]),
-        "Contract Cost": value(instance.VariableGen[g,t] * instance.ppa_energy_cost[g] *
-            instance.tp_weight_in_year[t]),
-        "Generator Pnode Revenue": value(instance.GenPnodeRevenue[g,t]),
-        #"Generator Delivery Cost": value(instance.GenDeliveryCost[g,t]),
-        #"Congestion Cost": value(instance.GenCongestionCost[g,t]),
-    } for (g, t) in instance.VARIABLE_GEN_TPS]
-    congestion_data = dispatchable_congestion + variable_congestion
+    } for (g, t) in instance.NON_STORAGE_GEN_TPS]
     nodal_by_gen_df = pd.DataFrame(congestion_data)
     nodal_by_gen_df.set_index(["generation_project", "timestamp"], inplace=True)
     nodal_by_gen_df.to_csv(os.path.join(outdir, "nodal_costs_by_gen.csv"))

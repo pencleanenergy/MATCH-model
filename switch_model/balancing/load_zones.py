@@ -116,7 +116,7 @@ def define_dynamic_components(mod):
             sum(
                 getattr(m, component)[z, t]
                 for component in m.Zone_Power_Injections
-            ) >= sum(
+            ) == sum(
                 getattr(m, component)[z, t]
                 for component in m.Zone_Power_Withdrawals)))
 

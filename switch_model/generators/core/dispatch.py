@@ -142,12 +142,6 @@ def define_components(mod):
             (g, tp)
                 for g in m.VARIABLE_GENS
                     for tp in m.TPS_FOR_GEN[g]))
-    mod.DISPATCHABLE_GEN_TPS = Set(
-        dimen=2,
-        initialize=lambda m: (
-            (g, tp)
-                for g in m.DISPATCHABLE_GENS
-                    for tp in m.TPS_FOR_GEN[g]))
     mod.NON_STORAGE_GEN_TPS = Set(
         dimen=2,
         initialize=lambda m: (
@@ -204,7 +198,7 @@ def define_components(mod):
         rule=lambda m, g, t: (g,t) in m.VARIABLE_GEN_TPS_RAW)
     
     mod.DispatchGen = Var(
-        mod.DISPATCHABLE_GEN_TPS,
+        mod.NON_STORAGE_GEN_TPS,
         within=NonNegativeReals)
     
     mod.ZoneTotalGeneratorDispatch = Expression(
@@ -212,33 +206,16 @@ def define_components(mod):
         rule=lambda m, z, t: \
             sum(m.DispatchGen[g, t]
                 for g in m.GENS_IN_ZONE[z]
-                if (g, t) in m.DISPATCHABLE_GEN_TPS),
-        doc="Generation from dispatchable generation projects.")
+                if (g, t) in m.NON_STORAGE_GEN_TPS),
+        doc="Generation from generation projects.")
     mod.Zone_Power_Injections.append('ZoneTotalGeneratorDispatch')
-
-    mod.VariableGen = Expression(
-        mod.VARIABLE_GEN_TPS,
-        rule=lambda m, g, t: m.GenCapacityInTP[g,t] * m.gen_availability[g] * m.gen_max_capacity_factor[g,t])
-
-    mod.ZoneTotalVariableGeneration = Expression(
-        mod.LOAD_ZONES, mod.TIMEPOINTS,
-        rule=lambda m, z, t: \
-            sum(m.VariableGen[g, t]
-                for g in m.GENS_IN_ZONE[z]
-                if (g, t) in m.VARIABLE_GEN_TPS),
-        doc="Generation from variable generation projects.")
-    mod.Zone_Power_Injections.append('ZoneTotalVariableGeneration')
-
 
     mod.GenPPACostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
             m.DispatchGen[g, t] * m.ppa_energy_cost[g]
             for g in m.GENS_IN_PERIOD[m.tp_period[t]]
-            if g in m.DISPATCHABLE_GENS) +
-            sum(m.VariableGen[g, t] * m.ppa_energy_cost[g]
-            for g in m.GENS_IN_PERIOD[m.tp_period[t]]
-            if g in m.VARIABLE_GENS),
+            if g in m.NON_STORAGE_GENS),
         doc="Summarize costs for the objective function")
     mod.Cost_Components_Per_TP.append('GenPPACostInTP')
 
@@ -298,7 +275,7 @@ def post_solve(instance, outdir):
     """
 
     # TODO: update this for variable generation
-    dispatchable_gen_data = [{
+    gen_data = [{
         "generation_project": g,
         "gen_tech": instance.gen_tech[g],
         "gen_load_zone": instance.gen_load_zone[g],
@@ -312,23 +289,7 @@ def post_solve(instance, outdir):
         "Annual_PPA_Energy_Cost": value(
             instance.DispatchGen[g, t] * instance.ppa_energy_cost[g] *
             instance.tp_weight_in_year[t]),
-    } for g, t in instance.DISPATCHABLE_GEN_TPS]
-    variable_gen_data = [{
-        "generation_project": g,
-        "gen_tech": instance.gen_tech[g],
-        "gen_load_zone": instance.gen_load_zone[g],
-        "gen_energy_source": instance.gen_energy_source[g],
-        "timestamp": instance.tp_timestamp[t],
-        "tp_weight_in_year_hrs": instance.tp_weight_in_year[t],
-        "period": instance.tp_period[t],
-        "DispatchGen_MW": value(instance.VariableGen[g, t]),
-        "Energy_GWh_typical_yr": value(
-            instance.VariableGen[g, t] * instance.tp_weight_in_year[t] / 1000),
-        "Annual_PPA_Energy_Cost": value(
-            instance.VariableGen[g, t] * instance.ppa_energy_cost[g] *
-            instance.tp_weight_in_year[t]),
-    } for g, t in instance.VARIABLE_GEN_TPS]
-    gen_data = dispatchable_gen_data + variable_gen_data
+    } for g, t in instance.NON_STORAGE_GEN_TPS]
     dispatch_full_df = pd.DataFrame(gen_data)
     dispatch_full_df.set_index(["generation_project", "timestamp"], inplace=True)
     dispatch_full_df.to_csv(os.path.join(outdir, "dispatch.csv"))

@@ -130,7 +130,7 @@ def define_components(mod):
         # Calculate the total generation in the period
         mod.total_generation_in_period = Expression(
             mod.PERIODS,
-            rule=lambda m, p: sum(m.ZoneTotalGeneratorDispatch[z,t] + m.ZoneTotalVariableGeneration[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
+            rule=lambda m, p: sum(m.ZoneTotalGeneratorDispatch[z,t] + m.ZoneTotalExcessGen[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
         )
 
         mod.Enforce_Annual_Renewable_Target = Constraint(

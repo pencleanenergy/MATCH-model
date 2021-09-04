@@ -249,9 +249,6 @@ def define_components(mod):
     mod.BASELOAD_GENS = Set(
         initialize=mod.GENERATION_PROJECTS,
         filter=lambda m, g: m.gen_is_baseload[g])
-    mod.DISPATCHABLE_GENS = Set(
-        initialize=mod.NON_STORAGE_GENS,
-        filter=lambda m, g: not (m.gen_is_variable[g] or m.gen_is_baseload[g]))
 
 
 

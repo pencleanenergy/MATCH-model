@@ -95,22 +95,24 @@ def define_components(mod):
     # DISPATCH UPPER LIMITS
 
     def DispatchUpperLimit_expr(m, g, t):
-        return m.GenCapacityInTP[g, t] * m.gen_availability[g]
+        if g in m.VARIABLE_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.gen_max_capacity_factor[g, t])
+        else:
+            return m.GenCapacityInTP[g, t] * m.gen_availability[g]
     mod.DispatchUpperLimit = Expression(
-        mod.DISPATCHABLE_GEN_TPS,
+        mod.NON_STORAGE_GEN_TPS,
         rule=DispatchUpperLimit_expr)
 
     mod.Enforce_Dispatch_Upper_Limit = Constraint(
-        mod.DISPATCHABLE_GEN_TPS,
+        mod.NON_STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
             m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t]))
 
     # EXCESS GENERATION
     ###################
-    # TODO: delete commented code
-    """    
     mod.ExcessGen = Expression(
-        mod.NON_STORAGE_GEN_TPS, #for each variable generator in each period
+        mod.VARIABLE_GEN_TPS, #for each variable generator in each period
         rule=lambda m, g, t: m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] if g in m.VARIABLE_GENS else 0 #calculate a value according to the rule 
     )
 
@@ -119,7 +121,7 @@ def define_components(mod):
         rule=lambda m, z, t: \
             sum(m.ExcessGen[g, t]
                 for g in m.GENS_IN_ZONE[z]
-                if (g, t) in m.NON_STORAGE_GEN_TPS),
+                if (g, t) in m.VARIABLE_GEN_TPS),
     )
     
     #calculate the total excess energy for each variable generator in each period
@@ -130,7 +132,7 @@ def define_components(mod):
         )
         return excess
     mod.AnnualExcessGen = Expression(
-        mod.NON_STORAGE_GENS, mod.PERIODS, #for each variable generator in each period
+        mod.VARIABLE_GENS, mod.PERIODS, #for each variable generator in each period
         rule=Calculate_Annual_Excess_Energy_By_Gen #calculate a value according to the rule 
     )
 
@@ -138,10 +140,12 @@ def define_components(mod):
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
             m.ExcessGen[g, t] * m.ppa_energy_cost[g]
-            for g in m.GENS_IN_PERIOD[m.tp_period[t]] if g in m.NON_STORAGE_GENS),
+            for g in m.GENS_IN_PERIOD[m.tp_period[t]] if g in m.VARIABLE_GENS),
         doc="Summarize costs for the objective function")
-    mod.Cost_Components_Per_TP.append('ExcessGenCostInTP')
+    mod.Cost_Components_Per_TP.append('ExcessGenPPACostInTP')
 
+    # NOTE: This may be useful when implementing curtailment
+    """
     #define the input parameter for the annual number of hours of curtialment/excess gen allowed
     mod.gen_excess_max = Param(mod.GENERATION_PROJECTS, within=NonNegativeReals, default=float("inf"))
 

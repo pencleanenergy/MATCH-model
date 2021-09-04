@@ -267,6 +267,8 @@ def define_components(mod):
     # generation that is not dispatched to meet load. This also prevents storage from charging
     # from other storage dispatch since excessgen only applies to generators
     # NOTE: This will mean that storage cannot charge from system power
+    # NOTE: (9/3/2021) This implementation is actually flawed because ExcessGen is decreased when storage charges,
+    # which means that storage could only ever use up to half of excess gen
     """
     mod.Zonal_Charge_Storage_Upper_Limit = Constraint(
         mod.ZONE_TIMEPOINTS,
@@ -279,7 +281,7 @@ def define_components(mod):
     # TODO: This will need to be modified if a dispatchable generator is a hybrid
     mod.Charge_Hybrid_Storage_Upper_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.ChargeStorage[g,t] <= m.VariableGen[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.ChargeStorage[g,t] <= m.DispatchGen[m.storage_hybrid_generation_project[g],t])
 
     # Because the bus of a hybrid generator is likely sized to the nameplate capacity of the generator portion of the project
     # the total combined dispatch from the storage portion and the generator portion should not be allowed to exceed that 
@@ -288,7 +290,7 @@ def define_components(mod):
     # TODO: This will need to be updated if dispatchable generators can be hybrids
     mod.Hybrid_Dispatch_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.VariableGen[m.storage_hybrid_generation_project[g], t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.DispatchGen[m.storage_hybrid_generation_project[g], t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
 
     #STATE OF CHARGE
     ################
