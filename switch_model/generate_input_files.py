@@ -140,6 +140,8 @@ def generate_inputs(model_workspace):
 
     xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
 
+    xl_system_power_cost = pd.read_excel(io=model_inputs, sheet_name='system_power_cost', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
+
     xl_shift = pd.read_excel(io=model_inputs, sheet_name='load_shift', header=[0,1], index_col=0).dropna(axis=1, how='all')
 
 
@@ -197,7 +199,7 @@ def generate_inputs(model_workspace):
             #For each template, get the list of generators and simulate
             for template in template_list:
                 #get the list of generators that use the current template
-                gen_inputs = vcf_inputs[vcf_inputs['SAM_template'] == template]
+                gen_inputs = vcf_inputs.copy()[vcf_inputs['SAM_template'] == template]
 
                 #get lat/long coordinates of all resources using this template
                 gen_inputs['long/lat'] = gen_inputs.apply(lambda row: f"({row['longitude']},{row['latitude']})", axis=1)
@@ -321,7 +323,7 @@ def generate_inputs(model_workspace):
             df_financials.to_csv(input_dir / 'financials.csv', index=False)
 
             # gen_build_years.csv
-            gen_build_years = set_gens[['GENERATION_PROJECT']]
+            gen_build_years = set_gens.copy()[['GENERATION_PROJECT']]
             gen_build_years['build_year'] = year
             gen_build_years.to_csv(input_dir / 'gen_build_years.csv', index=False)
 
@@ -347,7 +349,8 @@ def generate_inputs(model_workspace):
                         'gen_capacity_limit_mw',	
                         'gen_full_load_heat_rate',	
                         'gen_scheduled_outage_rate',	
-                        'gen_forced_outage_rate',	
+                        'gen_forced_outage_rate',
+                        'gen_curtailment_limit',	
                         'storage_roundtrip_efficiency',	
                         'storage_charge_to_discharge_ratio',	
                         'storage_energy_to_power_ratio',	
@@ -427,8 +430,7 @@ def generate_inputs(model_workspace):
                 ra_requirement_categories.to_csv(input_dir / 'ra_requirement_categories.csv', index=False)
             
             # system_power_cost.csv
-            system_power_cost = xl_nodal_prices.reset_index(drop=True)
-            system_power_cost = system_power_cost[load_list]
+            system_power_cost = xl_system_power_cost.reset_index(drop=True)
             system_power_cost['timepoint'] = system_power_cost.index + 1
             system_power_cost = system_power_cost.melt(id_vars=['timepoint'], var_name='load_zone', value_name='system_power_cost')
             system_power_cost = system_power_cost[['load_zone','timepoint','system_power_cost']]

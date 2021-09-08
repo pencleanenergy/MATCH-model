@@ -50,6 +50,7 @@ def define_components(mod):
     mod.ExcessGenPnodeRevenueInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m,t: sum(m.ExcessGenPnodeRevenue[g,t] for g in m.VARIABLE_GENS))
+    mod.Cost_Components_Per_TP.append('ExcessGenPnodeRevenueInTP')
 
     # TODO: Delete commented code
     """

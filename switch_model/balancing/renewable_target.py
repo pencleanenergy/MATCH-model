@@ -64,9 +64,12 @@ def define_components(mod):
         default=1,
         within=PercentFraction)
 
+    # if no system power cost is specified, set the cost to a very small amount
+    # This discourages use of system power in 
     mod.system_power_cost = Param(
         mod.ZONE_TIMEPOINTS,
-        within=Reals)
+        within=Reals,
+        default=0.000000001)
 
     mod.tp_in_subset = Param(mod.TIMEPOINTS, within=Boolean, default=False)
     
@@ -83,6 +86,7 @@ def define_components(mod):
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(m.SystemPower[z, t] * m.system_power_cost[z, t] for z in m.LOAD_ZONES) 
     )
+    mod.Cost_Components_Per_TP.append('SystemPowerCost')
     
     # add system power cost to objective function so that its cost can be balanced against generator cost
     # NOTE: (3/9/21) if system power cost is negative, it encourages use of system power when not needed. 

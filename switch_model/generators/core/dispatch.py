@@ -284,10 +284,12 @@ def post_solve(instance, outdir):
         "tp_weight_in_year_hrs": instance.tp_weight_in_year[t],
         "period": instance.tp_period[t],
         "DispatchGen_MW": value(instance.DispatchGen[g, t]),
-        "Energy_GWh_typical_yr": value(
-            instance.DispatchGen[g, t] * instance.tp_weight_in_year[t] / 1000),
+        "ExcessGen_MW":value(instance.ExcessGen[g, t]),
+        "CurtailGen_MW":value(instance.CurtailGen[g, t]),
+        "Energy_MWh": value(
+            (instance.DispatchGen[g, t] + instance.ExcessGen[g, t]) * instance.tp_weight_in_year[t]),
         "Annual_PPA_Energy_Cost": value(
-            instance.DispatchGen[g, t] * instance.ppa_energy_cost[g] *
+            (instance.DispatchGen[g, t] + instance.ExcessGen[g, t]) * instance.ppa_energy_cost[g] *
             instance.tp_weight_in_year[t]),
     } for g, t in instance.NON_STORAGE_GEN_TPS]
     dispatch_full_df = pd.DataFrame(gen_data)

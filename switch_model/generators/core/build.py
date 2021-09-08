@@ -483,6 +483,9 @@ def define_components(mod):
     mod.ppa_capacity_cost = Param (mod.GENERATION_PROJECTS, within=NonNegativeReals) 
     mod.min_data_check('ppa_energy_cost','ppa_capacity_cost')
 
+    # Curtialment Limits
+    #define the input parameter for the annual number of hours of curtialment/excess gen allowed
+    mod.gen_curtailment_limit = Param(mod.VARIABLE_GENS, within=NonNegativeReals, default=0)
 
     # Derived annual costs
     mod.GenCapacityCost = Expression(
@@ -543,7 +546,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         param=[mod.gen_tech, mod.gen_energy_source,
                mod.gen_load_zone, mod.gen_is_variable, mod.gen_is_storage,
                mod.gen_is_baseload, mod.gen_scheduled_outage_rate,
-               mod.gen_forced_outage_rate, mod.gen_capacity_limit_mw,
+               mod.gen_forced_outage_rate, mod.gen_curtailment_limit, mod.gen_capacity_limit_mw,
                mod.gen_unit_size, mod.ppa_energy_cost, mod.gen_min_build_capacity,
                mod.ppa_capacity_cost, mod.gen_is_cogen,
                mod.gen_variant_group, mod.gen_pricing_node])
