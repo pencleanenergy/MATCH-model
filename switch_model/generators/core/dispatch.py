@@ -299,7 +299,7 @@ def post_solve(instance, outdir):
     annual_summary = dispatch_full_df.groupby(['gen_tech', "gen_energy_source", "period"]).sum()
     annual_summary.to_csv(
         os.path.join(outdir, "dispatch_annual_summary.csv"),
-        columns=["Energy_GWh_typical_yr", "Annual_PPA_Energy_Cost"])
+        columns=["Energy_MWh", "Annual_PPA_Energy_Cost"])
 
 
     zonal_annual_summary = dispatch_full_df.groupby(
@@ -307,5 +307,5 @@ def post_solve(instance, outdir):
     ).sum()
     zonal_annual_summary.to_csv(
         os.path.join(outdir, "dispatch_zonal_annual_summary.csv"),
-        columns=["Energy_GWh_typical_yr","Annual_PPA_Energy_Cost"]
+        columns=["Energy_MWh","Annual_PPA_Energy_Cost"]
     )

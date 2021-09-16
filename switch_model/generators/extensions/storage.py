@@ -233,6 +233,34 @@ def define_components(mod):
             mod.STORAGE_GEN_TPS,
             within=NonNegativeReals)
 
+    # Variables and constraints to prevent simultaneous charging and discharging
+
+    mod.ChargeBinary = Var(
+        mod.STORAGE_GEN_TPS,
+        within=Binary)
+
+    mod.One_When_Charging = Constraint(
+        mod.STORAGE_GEN_TPS,
+        rule=lambda m,g,t: m.ChargeStorage[g,t] <= m.ChargeBinary[g,t] * 10000)
+
+    mod.Prevent_Simultaneous_Charge_Discharge = Constraint(
+        mod.STORAGE_GEN_TPS,
+        rule=lambda m,g,t: m.DischargeStorage[g,t] <= (1 - m.ChargeBinary[g,t]) * 10000)
+
+    """
+    mod.DischargeBinary = Var(
+        mod.STORAGE_GEN_TPS,
+        within=Binary)
+
+    mod.One_When_Discharging = Constraint(
+        mod.STORAGE_GEN_TPS,
+        rule=lambda m,g,t: m.DischargeStorage[g,t] <= m.DischargeBinary[g,t] * 10000)
+
+    mod.Prevent_Simultaneous_Charge_Discharge = Constraint(
+        mod.STORAGE_GEN_TPS,
+        rule=lambda m,g,t: m.ChargeBinary[g,t] + m.DischargeBinary[g,t] <= 1)
+    """
+
     mod.Enforce_Storage_Dispatch_Upper_Limit = Constraint(
         mod.STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
@@ -259,29 +287,23 @@ def define_components(mod):
         rule=lambda m, z, t: \
             sum(m.ChargeStorage[g, t]
                 for g in m.STORAGE_GENS_IN_ZONE[z]
-                if (g, t) in m.STORAGE_GEN_TPS),
-    )
+                if (g, t) in m.STORAGE_GEN_TPS))
     mod.Zone_Power_Withdrawals.append('ZoneTotalStorageCharge')
 
-    # Zonal Charging should be less than ExcessGen. this requires storage to charge from any 
-    # generation that is not dispatched to meet load. This also prevents storage from charging
-    # from other storage dispatch since excessgen only applies to generators
-    # NOTE: This will mean that storage cannot charge from system power
-    # NOTE: (9/3/2021) This implementation is actually flawed because ExcessGen is decreased when storage charges,
-    # which means that storage could only ever use up to half of excess gen
-    """
+    # Zonal Charging should be less than total DispatchGen. This requires storage to charge
+    # from renewable sources only, not system power.
     mod.Zonal_Charge_Storage_Upper_Limit = Constraint(
         mod.ZONE_TIMEPOINTS,
-        rule = lambda m, z, t: m.ZoneTotalStorageCharge[z,t] <= m.ZoneTotalExcessGen[z,t] 
+        rule = lambda m, z, t: m.ZoneTotalStorageCharge[z,t] <= m.ZoneTotalGeneratorDispatch[z,t] 
     )
-    """
+
 
     # HYBRID STORAGE CHARGING 
     #########################
     # TODO: This will need to be modified if a dispatchable generator is a hybrid
     mod.Charge_Hybrid_Storage_Upper_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.ChargeStorage[g,t] <= m.DispatchGen[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.ChargeStorage[g,t] <= m.ExcessGen[m.storage_hybrid_generation_project[g],t])
 
     # Because the bus of a hybrid generator is likely sized to the nameplate capacity of the generator portion of the project
     # the total combined dispatch from the storage portion and the generator portion should not be allowed to exceed that 
@@ -290,7 +312,7 @@ def define_components(mod):
     # TODO: This will need to be updated if dispatchable generators can be hybrids
     mod.Hybrid_Dispatch_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.DispatchGen[m.storage_hybrid_generation_project[g], t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.DispatchGen[m.storage_hybrid_generation_project[g], t] + m.ExcessGen[m.storage_hybrid_generation_project[g], t] - m.ChargeStorage[g,t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
 
     #STATE OF CHARGE
     ################
@@ -410,11 +432,11 @@ def post_solve(instance, outdir):
         instance, instance.STORAGE_GEN_TPS,
         output_file=os.path.join(outdir, "storage_dispatch.csv"),
         headings=("generation_project", "timestamp", "load_zone",
-                  "ChargeMW", 'DispatchMW', 
+                  "ChargeMW","ChargeBinary", 'DispatchMW', 
                   "StateOfCharge", "StorageDispatchPnodeCost",),
         values=lambda m, g, t: (
             g, m.tp_timestamp[t], m.gen_load_zone[g],
-            m.ChargeStorage[g, t], m.DischargeStorage[g, t], 
+            m.ChargeStorage[g, t], m.ChargeBinary[g,t], m.DischargeStorage[g, t], 
             m.StateOfCharge[g, t], m.StorageDispatchPnodeCost[g, t]
             ))
     reporting.write_table(

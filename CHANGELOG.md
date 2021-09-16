@@ -1,4 +1,39 @@
 -------------------------------------------------------------------------------
+Commmit 2021.09.16 (Version 0.3.0)
+-------------------------------------------------------------------------------
+
+^^^^ Need to fix date
+
+Closes #9
+Adds a decision variable for renewable curtailment, limited by the cap on curtailment. This should lead to economic curtailment during times when wholesale prices are low or negative. 
+
+Closes #17
+We wanted to ensure that storage was only charging from renewable generation, rather than grid power.
+To do this, we implemented a new constraint that requires total storage charging to be less than total generator dispatch. 
+This may mean that at some times, grid power is being consumed when batteries are charging. To get around this, we will simply
+adjust our accounting such that grid power is only ever assigned to load, and the charging reduces the net renewable generation
+available to meet load.
+
+Closes #19
+Previously, we had allowed power injections to be >= withdrawals, because we had specified that the full renewable capacity would be dispatched.
+We have changed the accounting so that generator dispatch is split into DispatchGen (the amount of dispatch needed to meet load and storage charging) 
+and ExcessGen (the amount of generation available that is not used in that hour). This means that the load balance constraint is now an equality constraint, where
+Power injections == power withdrawals in all hours. 
+
+Closes #35
+Adds hedge contract premiums to the objective function
+- Replaced `system_power_cost` with `hedge_cost`
+- Set a default value of $0.000001 to disincentivize using grid power even if hedge cost is not specified
+
+Other fixes:
+- Fixed issue where Generator Pnode revenue was being optimized as a positive cost, rather than a revenue (negative cost)
+
+Over-building issue
+- In some cases, the weighted average Pnode revenue is greater than the weighted average PPA cost for a generator, meaning that the model would try to build as much as possible, leading to an unbounded problem if the generator capacity was not constrained. 
+- To identify these issues, we added a validation calculation to `generate_input_files.py` to warn us when the Pnode revenue would exceed PPA cost.
+- To fix this, we needed to add a disincentive for increasing ExcessGen, so we removed the `ExcessGenPnodeRevenue` term from the objective function. In order to calculate the total cost, we will need to add this term back in to the summary_report
+
+-------------------------------------------------------------------------------
 Commmit 2021.08.26 (Version 0.2.0)
 -------------------------------------------------------------------------------
 Fixes #25

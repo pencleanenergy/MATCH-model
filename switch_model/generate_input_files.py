@@ -20,6 +20,28 @@ import PySAM.Pvwattsv7 as pv
 import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
+def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
+    # for each generator
+    for gen in list(xl_gen['GENERATION_PROJECT'].unique()):
+        if 'STORAGE' not in gen:
+            ppa_price = xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].values[0]
+            node = xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
+            nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
+            profile = df_vcf.copy()[[gen]].reset_index(drop=True)
+
+
+            # calculate PPA cost
+            mean_ppa_cost = (profile[gen] * ppa_price).mean()
+
+            # caclulate nodal revenue
+            mean_nodal_revenue = (profile[gen] * nodal_price[node]).mean()
+
+
+            if mean_nodal_revenue >= mean_ppa_cost:
+                print(f'WARNING: {gen} nodal revenue greater than PPA cost')
+                print('This may lead to over-procurement of this resource')
+                print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MW capacity')
+                print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MW capacity')
 
 def generate_inputs(model_workspace):
 
@@ -140,7 +162,7 @@ def generate_inputs(model_workspace):
 
     xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
 
-    xl_system_power_cost = pd.read_excel(io=model_inputs, sheet_name='system_power_cost', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
+    xl_hedge_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_cost', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
 
     xl_shift = pd.read_excel(io=model_inputs, sheet_name='load_shift', header=[0,1], index_col=0).dropna(axis=1, how='all')
 
@@ -255,6 +277,9 @@ def generate_inputs(model_workspace):
         df_vcf[df_vcf < 0] = 0
 
         df_vcf = df_vcf.reset_index()
+
+        # validate cost inputs
+        validate_cost_inputs(xl_gen, df_vcf, xl_nodal_prices)
                     
         #iterate for each scenario and save outputs to csv files
         for scenario in set_scenario_list:
@@ -429,12 +454,12 @@ def generate_inputs(model_workspace):
                 ra_requirement_areas_scenario.to_csv(input_dir / 'ra_requirement_areas.csv', index=False)
                 ra_requirement_categories.to_csv(input_dir / 'ra_requirement_categories.csv', index=False)
             
-            # system_power_cost.csv
-            system_power_cost = xl_system_power_cost.reset_index(drop=True)
-            system_power_cost['timepoint'] = system_power_cost.index + 1
-            system_power_cost = system_power_cost.melt(id_vars=['timepoint'], var_name='load_zone', value_name='system_power_cost')
-            system_power_cost = system_power_cost[['load_zone','timepoint','system_power_cost']]
-            system_power_cost.to_csv(input_dir / 'system_power_cost.csv', index=False)
+            # hedge_cost.csv
+            hedge_cost = xl_hedge_cost.reset_index(drop=True)
+            hedge_cost['timepoint'] = hedge_cost.index + 1
+            hedge_cost = hedge_cost.melt(id_vars=['timepoint'], var_name='load_zone', value_name='hedge_cost')
+            hedge_cost = hedge_cost[['load_zone','timepoint','hedge_cost']]
+            hedge_cost.to_csv(input_dir / 'hedge_cost.csv', index=False)
 
             # pricing_nodes.csv
             node_list = list(set_gens.gen_pricing_node.unique())
@@ -452,7 +477,7 @@ def generate_inputs(model_workspace):
             nodal_prices = nodal_prices[['pricing_node','timepoint','nodal_price']]
             # add system power / demand node prices to df
             # NOTE: removed because this was adding duplicate values if one of the generators is located at the load node
-            #nodal_prices = pd.concat([nodal_prices, system_power_cost.rename(columns={'load_zone':'pricing_node','system_power_cost':'nodal_price'})], axis=0, ignore_index=True)
+            #nodal_prices = pd.concat([nodal_prices, hedge_cost.rename(columns={'load_zone':'pricing_node','hedge_cost':'nodal_price'})], axis=0, ignore_index=True)
             nodal_prices.to_csv(input_dir / 'nodal_prices.csv', index=False)
 
             # dr_data.csv
