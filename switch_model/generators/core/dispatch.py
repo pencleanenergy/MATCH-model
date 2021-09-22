@@ -142,6 +142,12 @@ def define_components(mod):
             (g, tp)
                 for g in m.VARIABLE_GENS
                     for tp in m.TPS_FOR_GEN[g]))
+    mod.BASELOAD_GEN_TPS = Set(
+        dimen=2,
+        initialize=lambda m: (
+            (g, tp)
+                for g in m.BASELOAD_GENS
+                    for tp in m.TPS_FOR_GEN[g]))
     mod.NON_STORAGE_GEN_TPS = Set(
         dimen=2,
         initialize=lambda m: (
@@ -213,7 +219,7 @@ def define_components(mod):
     mod.GenPPACostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
-            m.DispatchGen[g, t] * m.ppa_energy_cost[g]
+            m.DispatchGen[g, t] * (m.ppa_energy_cost[g]) 
             for g in m.GENS_IN_PERIOD[m.tp_period[t]]
             if g in m.NON_STORAGE_GENS),
         doc="Summarize costs for the objective function")
@@ -274,38 +280,13 @@ def post_solve(instance, outdir):
     if the ggplot python library is installed.
     """
 
-    # TODO: update this for variable generation
     gen_data = [{
         "generation_project": g,
-        "gen_tech": instance.gen_tech[g],
-        "gen_load_zone": instance.gen_load_zone[g],
-        "gen_energy_source": instance.gen_energy_source[g],
         "timestamp": instance.tp_timestamp[t],
-        "tp_weight_in_year_hrs": instance.tp_weight_in_year[t],
-        "period": instance.tp_period[t],
         "DispatchGen_MW": value(instance.DispatchGen[g, t]),
         "ExcessGen_MW":value(instance.ExcessGen[g, t]),
         "CurtailGen_MW":value(instance.CurtailGen[g, t]),
-        "Energy_MWh": value(
-            (instance.DispatchGen[g, t] + instance.ExcessGen[g, t]) * instance.tp_weight_in_year[t]),
-        "Annual_PPA_Energy_Cost": value(
-            (instance.DispatchGen[g, t] + instance.ExcessGen[g, t]) * instance.ppa_energy_cost[g] *
-            instance.tp_weight_in_year[t]),
     } for g, t in instance.NON_STORAGE_GEN_TPS]
     dispatch_full_df = pd.DataFrame(gen_data)
     dispatch_full_df.set_index(["generation_project", "timestamp"], inplace=True)
     dispatch_full_df.to_csv(os.path.join(outdir, "dispatch.csv"))
-    
-    annual_summary = dispatch_full_df.groupby(['gen_tech', "gen_energy_source", "period"]).sum()
-    annual_summary.to_csv(
-        os.path.join(outdir, "dispatch_annual_summary.csv"),
-        columns=["Energy_MWh", "Annual_PPA_Energy_Cost"])
-
-
-    zonal_annual_summary = dispatch_full_df.groupby(
-        ['gen_tech', "gen_load_zone", "gen_energy_source", "period"]
-    ).sum()
-    zonal_annual_summary.to_csv(
-        os.path.join(outdir, "dispatch_zonal_annual_summary.csv"),
-        columns=["Energy_MWh","Annual_PPA_Energy_Cost"]
-    )

@@ -84,12 +84,8 @@ def post_solve(instance, outdir):
     congestion_data = [{
         "generation_project": g,
         "timestamp": instance.tp_timestamp[t],
-        "DispatchGen_MW": value(instance.DispatchGen[g, t]),
-        "Contract Cost": value(instance.DispatchGen[g,t] * instance.ppa_energy_cost[g] *
-            instance.tp_weight_in_year[t]),
-        "Generator Pnode Revenue": value(instance.GenPnodeRevenue[g,t]),
-        #"Generator Delivery Cost": value(instance.GenDeliveryCost[g,t]),
-        #"Congestion Cost": value(instance.GenCongestionCost[g,t]),
+        "Generation_MW": value(instance.DispatchGen[g, t] + instance.ExcessGen[g,t]),
+        "Generator Pnode Revenue": value(instance.GenPnodeRevenue[g,t] + instance.ExcessGenPnodeRevenue[g,t]),
     } for (g, t) in instance.NON_STORAGE_GEN_TPS]
     nodal_by_gen_df = pd.DataFrame(congestion_data)
     nodal_by_gen_df.set_index(["generation_project", "timestamp"], inplace=True)
@@ -98,8 +94,6 @@ def post_solve(instance, outdir):
     nodal_data = [{
         "timestamp": instance.tp_timestamp[t],
         "Generator Pnode Revenue": value(instance.GenPnodeRevenueInTP[t]),
-        #"Generator Delivery Cost": value(instance.GenDeliveryCostInTP[t]),
-        #"Congestion Cost": value(instance.CongestionCostInTP[t]),
         "DLAP Cost": value(instance.DLAPLoadCostInTP[t]),
     } for t in instance.TIMEPOINTS]
     nodal_df = pd.DataFrame(nodal_data)

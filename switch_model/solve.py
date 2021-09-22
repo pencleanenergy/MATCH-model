@@ -152,7 +152,7 @@ def main(args=None, return_model=False, return_instance=False):
                 if instance.options.verbose:
                     timer.step_time() # restart counter for next step
 
-                if not instance.options.no_save_solution:
+                if instance.options.save_solution:
                     save_results(instance, instance.options.outputs_dir)
                     if instance.options.verbose:
                         print('Saved results in {:.2f} s.'.format(timer.step_time()))
@@ -502,8 +502,8 @@ def define_arguments(argparser):
         '--reload-prior-solution', default=False, action='store_true',
         help='Load a previously saved solution; useful for re-running post-solve code or interactively exploring the model (via --interact).')
     argparser.add_argument(
-        '--no-save-solution', default=False, action='store_true',
-        help="Don't save solution after model is solved.")
+        '--save-solution', default=False, action='store_true',
+        help="Save solution after model is solved.")
     argparser.add_argument(
         '--save-instance', default=False, action='store_true',
         help="Save the model instance after model is solved.")

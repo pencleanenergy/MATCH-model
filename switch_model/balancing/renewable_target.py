@@ -22,6 +22,10 @@ def define_arguments(argparser):
         "Generation must be located in the same LOAD_ZONE as load to be counted toward an hourly goal"
     )
 
+    argparser.add_argument('--excess_generation_limit_type', choices=['annual', 'hourly', None], default=None,
+        help="If specified, whether the limit on excess generation is applied to each hour, or to the entire year"
+    )
+
 def define_components(mod):
     """
     renewable_target[p] is a parameter that describes how much of load (as a percentage) must be served by GENERATION_PROJECTS.
@@ -62,6 +66,10 @@ def define_components(mod):
     mod.renewable_target = Param(
         mod.PERIODS,
         default=1,
+        within=PercentFraction)
+
+    mod.excess_generation_limit = Param(
+        mod.PERIODS,
         within=PercentFraction)
 
     # if no system power cost is specified, set the cost to a very small amount
@@ -140,6 +148,19 @@ def define_components(mod):
         mod.Enforce_Annual_Renewable_Target = Constraint(
             mod.PERIODS, # for each zone in each period
             rule=lambda m, p: (m.total_generation_in_period[p] >= m.renewable_target[p] * m.total_demand_in_period[p]))
+
+    #Enforce limit on excess generation
+    if mod.options.excess_generation_limit_type == "annual":
+        mod.Enforce_Annual_Excess_Generation_Limit = Constraint(
+            mod.LOAD_ZONES, mod.PERIODS,
+            rule = lambda m, z, p: sum(m.ZoneTotalExcessGen[z,t] for t in m.TPS_IN_PERIOD[p]) <= sum(m.ZoneTotalGeneratorDispatch[z,t] for t in m.TPS_IN_PERIOD[p]) * m.excess_generation_limit[p]
+        )
+    elif mod.options.excess_generation_limit_type == "hourly":
+        mod.Enforce_Hourly_Excess_Generation_Limit = Constraint(
+            mod.LOAD_ZONES, mod.TIMEPOINTS,
+            rule = lambda m, z, t: m.ZoneTotalExcessGen[z,t] <= m.ZoneTotalGeneratorDispatch[z,t] * m.excess_generation_limit[m.tp_period[t]]
+        )
+
         
 
 def load_inputs(mod, switch_data, inputs_dir):
@@ -160,7 +181,7 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'renewable_target.csv'),
         autoselect=True,
-        param=[mod.renewable_target])
+        param=[mod.renewable_target, mod.excess_generation_limit])
 
     #load inputs which include costs for each timepoint in each zone
     switch_data.load_aug(

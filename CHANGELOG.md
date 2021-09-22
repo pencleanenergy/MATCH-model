@@ -1,11 +1,26 @@
 -------------------------------------------------------------------------------
-Commmit 2021.09.16 (Version 0.3.0)
+Commmit 2021.09.22 (Version 0.3.0)
 -------------------------------------------------------------------------------
 
 ^^^^ Need to fix date
+^^^^^ Need to update version
+
+Closes #4
+Wholesale costs
+- changes the name of `congestion_pricing.py` to `wholesale_pricing.py`
+- We remove `CongestionCostInTP` from the objective function, and instead only optimize for `GenPnodeRevenue` and `DLAPLoadCostInTP`
+
+Over-building issue
+- In some cases, the weighted average Pnode revenue is greater than the weighted average PPA cost for a generator, meaning that the model would try to build as much as possible, leading to an unbounded problem if the generator capacity was not constrained. 
+- To identify these issues, we added a validation calculation to `generate_input_files.py` to warn us when the Pnode revenue would exceed PPA cost.
+- To fix this, we needed to add a disincentive for increasing ExcessGen, so we removed the `ExcessGenPnodeRevenue` term from the objective function. In order to calculate the total cost, we will need to add this term back in to the summary_report
+- This essentially puts an economic penalty on excess_generation, equivalent to the financial reprecussions of curtailing all excess generation (must pay PPA cost, but don't earn Pnode revenue)
 
 Closes #9
 Adds a decision variable for renewable curtailment, limited by the cap on curtailment. This should lead to economic curtailment during times when wholesale prices are low or negative. 
+
+Closes #10
+Adds option to limit excess generation through a hard constraint. This can be implemented as an annual limit on excess generation, or a limit on the amount of excess generation in each hour. The limit is expressed as percentage of DispatchGen, so a limit of 0.10 would mean that ExcessGen could be no more than 10% of DispatchGen, either on an annual or hourly basis
 
 Closes #17
 We wanted to ensure that storage was only charging from renewable generation, rather than grid power.
@@ -23,15 +38,17 @@ Power injections == power withdrawals in all hours.
 Closes #35
 Adds hedge contract premiums to the objective function
 - Replaced `system_power_cost` with `hedge_cost`
-- Set a default value of $0.000001 to disincentivize using grid power even if hedge cost is not specified
+- Set a default value of $0.0000001 to disincentivize using grid power even if hedge cost is not specified
 
 Other fixes:
 - Fixed issue where Generator Pnode revenue was being optimized as a positive cost, rather than a revenue (negative cost)
+- Adds a "solver_options" tab to the model inputs spreadsheet, which allows the user to specify solver options
 
-Over-building issue
-- In some cases, the weighted average Pnode revenue is greater than the weighted average PPA cost for a generator, meaning that the model would try to build as much as possible, leading to an unbounded problem if the generator capacity was not constrained. 
-- To identify these issues, we added a validation calculation to `generate_input_files.py` to warn us when the Pnode revenue would exceed PPA cost.
-- To fix this, we needed to add a disincentive for increasing ExcessGen, so we removed the `ExcessGenPnodeRevenue` term from the objective function. In order to calculate the total cost, we will need to add this term back in to the summary_report
+Simultaneous Storage Charging and Discharging
+- In some instances (especially when wholesale prices are negative), there is an incentive for storage to simultaneously charge and discharge, which is not physically realistic.
+- To prevent this, we introduced a constraint that uses a binary indicator variable that indicates when each storage asset is charging, and prevents simultaneous discharging (and vise versa)
+- Adding this binary variable makes the problem into a mixed-integer linear program (MILP), which increases solve time
+- An alternative approach which seems to limit the amount of simultaneous charging and discharging that occurs is to add a $1 penalty to every MWh discharged. This approach can be accessed by using the `storage_nonbinary.py` module.
 
 -------------------------------------------------------------------------------
 Commmit 2021.08.26 (Version 0.2.0)

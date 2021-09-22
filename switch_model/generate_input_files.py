@@ -21,6 +21,9 @@ import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
 def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
+    # add a column for ppa penalty
+    xl_gen['ppa_penalty'] = 0
+    
     # for each generator
     for gen in list(xl_gen['GENERATION_PROJECT'].unique()):
         if 'STORAGE' not in gen:
@@ -29,19 +32,28 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
             nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
             profile = df_vcf.copy()[[gen]].reset_index(drop=True)
 
-
             # calculate PPA cost
-            mean_ppa_cost = (profile[gen] * ppa_price).mean()
+            mean_ppa_cost = (profile[gen] * ppa_price).sum() / profile[gen].sum()
 
             # caclulate nodal revenue
-            mean_nodal_revenue = (profile[gen] * nodal_price[node]).mean()
+            mean_nodal_revenue = (profile[gen] * nodal_price[node]).sum() / profile[gen].sum()
 
-
+            # if the mean nodal revenue is greater than the mean PPA cost
             if mean_nodal_revenue >= mean_ppa_cost:
+                # calculate a penalty value that makes the mean PPA value higher than nodal revenue by $0.01 per MWh
+                ppa_penalty = round(mean_nodal_revenue - mean_ppa_cost + 0.01, 3)
                 print(f'WARNING: {gen} nodal revenue greater than PPA cost')
                 print('This may lead to over-procurement of this resource')
-                print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MW capacity')
-                print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MW capacity')
+                print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MWh')
+                print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MWh')
+                print(f'Adding ${ppa_penalty} penalty to PPA cost')
+                xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'ppa_penalty'] = ppa_penalty
+            else:
+                ppa_penalty = 0
+    
+    return xl_gen
+
+        
 
 def generate_inputs(model_workspace):
 
@@ -59,24 +71,39 @@ def generate_inputs(model_workspace):
 
     model_inputs = model_workspace / 'model_inputs.xlsx'
 
-    print('Copying CBC solver to model run directory...')
-    #copy the cbc solver to the model workspace
-    shutil.copy('cbc.exe', model_workspace)
-    shutil.copy('coin-license.txt', model_workspace)
-    
-    
-    print('Writing options.txt...')
-    # Scenarios
-    xl_scenarios = pd.read_excel(io=model_inputs, sheet_name='scenarios').dropna(axis=1, how='all')
+    print('Loading data from excel spreadsheet...')
+    # Load all of the data from the excel file
 
-    scenario_list = list(xl_scenarios.iloc[:, 3:].columns)
+    xl_general = pd.read_excel(io=model_inputs, sheet_name='general').dropna(axis=1, how='all')
+
+    year = int(xl_general.loc[xl_general['Parameter'] == 'Model Year', 'Input'].item())
+    timezone = xl_general.loc[xl_general['Parameter'] == 'Timezone', 'Input'].item()
+    nrel_api_key = xl_general.loc[xl_general['Parameter'] == 'NREL API key', 'Input'].item()
+    nrel_api_email = xl_general.loc[xl_general['Parameter'] == 'NREL API email', 'Input'].item()
+    
+
+    tz_offset = np.round(datetime(year=2020,month=1,day=1,tzinfo=pytz.timezone(timezone)).utcoffset().total_seconds()/3600)
+
+    print('Writing options.txt...')
+    xl_options = pd.read_excel(io=model_inputs, sheet_name='solver_options').dropna(axis=1, how='all')
 
     #write options.txt
     options_txt = open(model_workspace / 'options.txt', 'w+')
-    options_txt.write('--verbose\n')
-    options_txt.write('--sorted-output\n')
-    options_txt.write('--solver cbc\n')
+    for index, row in xl_options.iterrows():
+        if row['Value'] == 'None' or row['Value'] == False or row['Value'] == None:
+            pass
+        elif row['Value'] == True: 
+            options_txt.write(f'--{row["Option"]}\n')
+        else: 
+            options_txt.write(f'--{row["Option"]} {row["Value"]}\n')
     options_txt.close()
+
+    solver = xl_options.loc[xl_options['Option'] == 'solver', 'Value'].item().lower()
+    if solver == 'cbc':
+        print('Copying CBC solver to model run directory...')
+        #copy the cbc solver to the model workspace
+        shutil.copy('cbc.exe', model_workspace)
+        shutil.copy('coin-license.txt', model_workspace)
 
     print('Creating input and output folders for each scenario...')
     # create the scenario folders in the input and output directories
@@ -85,6 +112,11 @@ def generate_inputs(model_workspace):
         os.mkdir(model_workspace / 'outputs')
     except FileExistsError:
         pass
+
+    # Scenarios
+    xl_scenarios = pd.read_excel(io=model_inputs, sheet_name='scenarios').dropna(axis=1, how='all')
+
+    scenario_list = list(xl_scenarios.iloc[:, 3:].columns)
 
     for scenario in scenario_list:
         try:
@@ -95,18 +127,6 @@ def generate_inputs(model_workspace):
             os.mkdir(model_workspace / f'outputs/{scenario}')
         except FileExistsError:
             pass
-
-    print('Loading data from excel spreadsheet...')
-    # Load all of the data from the excel file
-
-    xl_general = pd.read_excel(io=model_inputs, sheet_name='general').dropna(axis=1, how='all')
-
-    year = int(xl_general.loc[xl_general['Parameter'] == 'Model Year', 'Input'].item())
-    timezone = xl_general.loc[xl_general['Parameter'] == 'Timezone', 'Input'].item()
-    nrel_api_key = xl_general.loc[xl_general['Parameter'] == 'NREL API key', 'Input'].item()
-    nrel_api_email = xl_general.loc[xl_general['Parameter'] == 'NREL API email', 'Input'].item()
-
-    tz_offset = np.round(datetime(year=2020,month=1,day=1,tzinfo=pytz.timezone(timezone)).utcoffset().total_seconds()/3600)
 
     # periods.csv
     df_periods = pd.DataFrame(columns=['INVESTMENT_PERIOD','period_start','period_end'], data=[[year,year,year]])
@@ -279,7 +299,7 @@ def generate_inputs(model_workspace):
         df_vcf = df_vcf.reset_index()
 
         # validate cost inputs
-        validate_cost_inputs(xl_gen, df_vcf, xl_nodal_prices)
+        set_gens = validate_cost_inputs(set_gens, df_vcf, xl_nodal_prices)
                     
         #iterate for each scenario and save outputs to csv files
         for scenario in set_scenario_list:
@@ -300,7 +320,11 @@ def generate_inputs(model_workspace):
             # renewable_target.csv
             renewable_target_value = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'renewable_target'), scenario].item()
             renewable_target_type = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'goal_type'), scenario].item()
-            renewable_target = pd.DataFrame(data={'period':[year], 'renewable_target':[renewable_target_value]})
+            excess_generation_limit = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excess_generation_limit'), scenario].item()
+            excess_generation_limit_type = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excess_generation_limit_type'), scenario].item()
+            renewable_target = pd.DataFrame(data={'period':[year], 
+                                                  'renewable_target':[renewable_target_value],
+                                                  'excess_generation_limit':[excess_generation_limit]})
             renewable_target.to_csv(input_dir / 'renewable_target.csv', index=False)
 
             # summary_report.ipynb
@@ -323,7 +347,11 @@ def generate_inputs(model_workspace):
                 target_option = ' --goal_type annual'
             else:
                 target_option = ''
-            scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}')
+            if excess_generation_limit_type != 'None':
+                excess_option = f' --excess_generation_limit_type {excess_generation_limit_type}'
+            else:
+                excess_option = ''
+            scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}')
             scenarios.write('\n')
             scenarios.close()
 
@@ -384,25 +412,25 @@ def generate_inputs(model_workspace):
                         'storage_hybrid_generation_project',	
                         'storage_hybrid_capacity_ratio',
                         'gen_pricing_node',
-                        'ppa_energy_cost',	
-                        'ppa_capacity_cost',	
-                        'gen_excess_max']
+                        'ppa_energy_cost',
+                        'ppa_penalty',	
+                        'ppa_capacity_cost']
 
             generation_projects_info = set_gens[gpi_columns]
 
             if 'is_price_agnostic' in option_list:
                 generation_projects_info['ppa_energy_cost'] = 10
             
-            if 'includes_cap_on_excess_generation' not in option_list:
-                generation_projects_info = generation_projects_info.drop(columns=['gen_excess_max'])
-
             if 'ignores_capacity_limit' in option_list:
                 generation_projects_info['gen_capacity_limit_mw'] = '.'
 
             if 'select_variants' not in option_list:
                 generation_projects_info = generation_projects_info.drop(columns=['gen_variant_group'])
 
-            
+            # save the information about the PPA penalty and overbuild risk as an output file
+            overbuild_risk = generation_projects_info.copy()[['GENERATION_PROJECT',	'gen_pricing_node','ppa_energy_cost','ppa_penalty']]
+            overbuild_risk.to_csv(output_dir / 'overbuild_projects.csv', index=False)
+            generation_projects_info = generation_projects_info.drop(columns=['ppa_penalty'])
 
             generation_projects_info.to_csv(input_dir / 'generation_projects_info.csv', index=False)
 

@@ -234,7 +234,7 @@ def define_components(mod):
             within=NonNegativeReals)
 
     # Variables and constraints to prevent simultaneous charging and discharging
-
+    """
     mod.ChargeBinary = Var(
         mod.STORAGE_GEN_TPS,
         within=Binary)
@@ -247,7 +247,7 @@ def define_components(mod):
     mod.Prevent_Simultaneous_Charge_Discharge = Constraint(
         mod.STORAGE_GEN_TPS,
         rule=lambda m,g,t: m.DischargeStorage[g,t] <= (1 - m.ChargeBinary[g,t]) * 1000)
-
+    """
 
     mod.Enforce_Storage_Dispatch_Upper_Limit = Constraint(
         mod.STORAGE_GEN_TPS,
@@ -349,7 +349,7 @@ def define_components(mod):
     mod.StorageDispatchPnodeCost = Expression(
         mod.STORAGE_GEN_TPS,
         rule = lambda m, g, t: (m.ChargeStorage[g, t] - m.DischargeStorage[g, t]) * m.nodal_price[m.gen_pricing_node[g], t]
-        #+ m.DischargeStorage[g, t] # discharge penalty of $1
+        + m.DischargeStorage[g, t] # discharge penalty of $1
     )
     mod.StorageNodalEnergyCostInTP = Expression(
         mod.TIMEPOINTS,
@@ -433,4 +433,5 @@ def post_solve(instance, outdir):
         output_file=os.path.join(outdir, "storage_cycle_count.csv"),
         headings=("generation_project", "period", "storage_max_annual_cycles", "Battery_Cycle_Count"),
         values=lambda m, g, p: (
-            g, p, m.storage_max_annual_cycles[g], m.Battery_Cycle_Count[g, p]))
+            g, p, m.storage_max_annual_cycles[g], m.Battery_Cycle_Count[g, p]
+            ))
