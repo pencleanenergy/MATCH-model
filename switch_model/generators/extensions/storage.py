@@ -177,7 +177,11 @@ def define_components(mod):
         mod.HYBRID_STORAGE_GENS,
         validate= lambda m,val,g: val in m.GENERATION_PROJECTS and val not in m.STORAGE_GENS, #validate the paired generator is in the generator list and isnt another storage project
         within=Any) 
-    mod.storage_hybrid_capacity_ratio = Param(
+    mod.storage_hybrid_min_capacity_ratio = Param(
+        mod.STORAGE_GENS,
+        within=NonNegativeReals,
+        default=float("inf"))
+    mod.storage_hybrid_max_capacity_ratio = Param(
         mod.STORAGE_GENS,
         within=NonNegativeReals,
         default=float("inf"))
@@ -196,12 +200,30 @@ def define_components(mod):
     # TODO: add a condition that hybrid storage and paired generator must be built together
     #if generator is built, storage must be built
 
+    """
     mod.Enforce_Hybrid_Build = Constraint(
         mod.STORAGE_GEN_BLD_YRS,
         rule=lambda m, g, y: 
         Constraint.Skip if m.storage_hybrid_capacity_ratio[g] == float("inf") # no value specified
         else
         (m.BuildGen[g, y] == m.storage_hybrid_capacity_ratio[g] * m.BuildGen[m.storage_hybrid_generation_project[g], y])
+    )
+    """
+
+    mod.Enforce_Minimum_Hybrid_Build = Constraint(
+        mod.STORAGE_GEN_BLD_YRS,
+        rule=lambda m, g, y: 
+        Constraint.Skip if m.storage_hybrid_min_capacity_ratio[g] == float("inf") # no value specified
+        else
+        (m.BuildGen[g, y] >= m.storage_hybrid_min_capacity_ratio[g] * m.BuildGen[m.storage_hybrid_generation_project[g], y])
+    )
+
+    mod.Enforce_Maximum_Hybrid_Build = Constraint(
+        mod.STORAGE_GEN_BLD_YRS,
+        rule=lambda m, g, y: 
+        Constraint.Skip if m.storage_hybrid_max_capacity_ratio[g] == float("inf") # no value specified
+        else
+        (m.BuildGen[g, y] <= m.storage_hybrid_max_capacity_ratio[g] * m.BuildGen[m.storage_hybrid_generation_project[g], y])
     )
 
     mod.StorageEnergyCapacity = Expression(
@@ -233,6 +255,22 @@ def define_components(mod):
             mod.STORAGE_GEN_TPS,
             within=NonNegativeReals)
 
+    # Variables and constraints to prevent simultaneous charging and discharging
+
+    mod.ChargeBinary = Var(
+        mod.STORAGE_GEN_TPS,
+        within=Binary)
+
+    # forces ChargeBinary to be 1 when ChargeStorage > 0, using a "Big M" of 1000
+    mod.One_When_Charging = Constraint(
+        mod.STORAGE_GEN_TPS,
+        rule=lambda m,g,t: m.ChargeStorage[g,t] <= m.ChargeBinary[g,t] * 1000)
+
+    mod.Prevent_Simultaneous_Charge_Discharge = Constraint(
+        mod.STORAGE_GEN_TPS,
+        rule=lambda m,g,t: m.DischargeStorage[g,t] <= (1 - m.ChargeBinary[g,t]) * 1000)
+
+
     mod.Enforce_Storage_Dispatch_Upper_Limit = Constraint(
         mod.STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
@@ -259,27 +297,23 @@ def define_components(mod):
         rule=lambda m, z, t: \
             sum(m.ChargeStorage[g, t]
                 for g in m.STORAGE_GENS_IN_ZONE[z]
-                if (g, t) in m.STORAGE_GEN_TPS),
-    )
+                if (g, t) in m.STORAGE_GEN_TPS))
     mod.Zone_Power_Withdrawals.append('ZoneTotalStorageCharge')
 
-    # Zonal Charging should be less than ExcessGen. this requires storage to charge from any 
-    # generation that is not dispatched to meet load. This also prevents storage from charging
-    # from other storage dispatch since excessgen only applies to generators
-    # NOTE: This will mean that storage cannot charge from system power
-    """
+    # Zonal Charging should be less than total DispatchGen. This requires storage to charge
+    # from renewable sources only, not system power.
     mod.Zonal_Charge_Storage_Upper_Limit = Constraint(
         mod.ZONE_TIMEPOINTS,
-        rule = lambda m, z, t: m.ZoneTotalStorageCharge[z,t] <= m.ZoneTotalExcessGen[z,t] 
+        rule = lambda m, z, t: m.ZoneTotalStorageCharge[z,t] <= m.ZoneTotalGeneratorDispatch[z,t] 
     )
-    """
+
 
     # HYBRID STORAGE CHARGING 
     #########################
     # TODO: This will need to be modified if a dispatchable generator is a hybrid
     mod.Charge_Hybrid_Storage_Upper_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.ChargeStorage[g,t] <= m.VariableGen[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.ChargeStorage[g,t] <= m.DispatchGen[m.storage_hybrid_generation_project[g],t])
 
     # Because the bus of a hybrid generator is likely sized to the nameplate capacity of the generator portion of the project
     # the total combined dispatch from the storage portion and the generator portion should not be allowed to exceed that 
@@ -288,7 +322,7 @@ def define_components(mod):
     # TODO: This will need to be updated if dispatchable generators can be hybrids
     mod.Hybrid_Dispatch_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.VariableGen[m.storage_hybrid_generation_project[g], t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.DispatchGen[m.storage_hybrid_generation_project[g], t] + m.ExcessGen[m.storage_hybrid_generation_project[g], t] - m.ChargeStorage[g,t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
 
     #STATE OF CHARGE
     ################
@@ -337,6 +371,7 @@ def define_components(mod):
     mod.StorageDispatchPnodeCost = Expression(
         mod.STORAGE_GEN_TPS,
         rule = lambda m, g, t: (m.ChargeStorage[g, t] - m.DischargeStorage[g, t]) * m.nodal_price[m.gen_pricing_node[g], t]
+        #+ m.DischargeStorage[g, t] # discharge penalty of $1
     )
     mod.StorageNodalEnergyCostInTP = Expression(
         mod.TIMEPOINTS,
@@ -375,8 +410,8 @@ def load_inputs(mod, switch_data, inputs_dir):
         optional_params=['storage_charge_to_discharge_ratio', 'storage_energy_to_power_ratio', 'storage_max_annual_cycles'],
         param=[mod.storage_roundtrip_efficiency, mod.storage_charge_to_discharge_ratio, 
                mod.storage_energy_to_power_ratio, mod.storage_max_annual_cycles, 
-               mod.storage_hybrid_generation_project, mod.storage_hybrid_capacity_ratio, 
-               mod.storage_leakage_loss])
+               mod.storage_hybrid_generation_project, mod.storage_hybrid_min_capacity_ratio, 
+               mod.storage_hybrid_max_capacity_ratio, mod.storage_leakage_loss])
     
     
     
@@ -420,5 +455,4 @@ def post_solve(instance, outdir):
         output_file=os.path.join(outdir, "storage_cycle_count.csv"),
         headings=("generation_project", "period", "storage_max_annual_cycles", "Battery_Cycle_Count"),
         values=lambda m, g, p: (
-            g, p, m.storage_max_annual_cycles[g], m.Battery_Cycle_Count[g, p]
-            ))
+            g, p, m.storage_max_annual_cycles[g], m.Battery_Cycle_Count[g, p]))

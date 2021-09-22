@@ -9,4 +9,4 @@ installed.
 
 NOTE: This software was forked from Switch version 2.0.5
 """
-__version__='0.2.0'
+__version__='0.3.0'

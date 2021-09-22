@@ -48,70 +48,61 @@ def define_components(mod):
 
 
     """
-
-    # NOTE: DispatchBaseloadByPeriod should eventually be replaced by
-    # an "ActiveCapacityDuringPeriod" decision variable that applies to all
-    # projects. This should be constrained
-    # based on the amount of installed capacity each period, and then
-    # DispatchUpperLimit and DispatchLowerLimit should be calculated
-    # relative to ActiveCapacityDuringPeriod. Fixed O&M (but not capital
-    # costs) should be calculated based on ActiveCapacityDuringPeriod.
-    # This would allow mothballing (and possibly restarting) projects.
-
-    # Choose flat operating level for baseload plants during each period
-    # (not necessarily running all available capacity)
-    # Note: this is unconstrained, because other constraints limit project
-    # dispatch during each timepoint and therefore the level of this variable.
-    # TODO: this should be harmonized with the treatment of baseload generators
-    # in generators.core.commit, where baseload just means they will all be
-    # committed all the time, but not required to run at a constant output
-    # level. That's the definition of baseload used in the Hawaii power system,
-    # while the definition used here is more like common usage (run at a flat level
-    # or don't run). Since there are multiple meanings, we should probably
-    # have separate parameters for constant_output and always_commit. Or
-    # we could implement those via time-varying values for min/max commitment
-    # and dispatch. 
     
     # BASELOAD GENERATOR DISPATCH
     #############################
-    # TODO: update baseload generation to be dispatchable, but always on
+    # baseload generators must be dispatched at their full capacity factor, and cannot have any excessgen
     """
-    mod.BASELOAD_GEN_PERIODS = Set(
-        dimen=2,
-        initialize=lambda m:
-            [(g, p) for g in m.BASELOAD_GENS for p in m.PERIODS_FOR_GEN[g]])
-    mod.BASELOAD_GEN_TPS = Set(
-        dimen=2,
-        initialize=lambda m:
-            [(g, t) for g, p in m.BASELOAD_GEN_PERIODS for t in m.TPS_IN_PERIOD[p]])
-
-    mod.DispatchBaseloadByPeriod = Var(mod.BASELOAD_GEN_PERIODS)
-
-    mod.Enforce_Dispatch_Baseload_Flat = Constraint(
+    mod.Enforce_Full_Dispatch_Baseload = Constraint(
         mod.BASELOAD_GEN_TPS,
         rule=lambda m, g, t:
-            m.DispatchGen[g, t] == m.DispatchBaseloadByPeriod[g, m.tp_period[t]])
-    """
+            m.DispatchGen[g, t] == m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.baseload_capacity_factor[g, t])
+    """    
+    # ECONOMIC CURTAILMENT
+    ######################
+    mod.CurtailGen = Var(
+        mod.VARIABLE_GEN_TPS,
+        within=NonNegativeReals)
+
+    #limit curtailment to below the cap
+    mod.Maximum_Annual_Curtailment = Constraint(
+        mod.VARIABLE_GENS, mod.PERIODS,
+        rule=lambda m, g, p: sum(m.CurtailGen[g,t] for t in m.TPS_IN_PERIOD[p]) <= (m.gen_curtailment_limit[g] * m.GenCapacity[g, p]))
+
     # DISPATCH UPPER LIMITS
+    #######################
 
     def DispatchUpperLimit_expr(m, g, t):
-        return m.GenCapacityInTP[g, t] * m.gen_availability[g]
+        if g in m.VARIABLE_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.variable_capacity_factor[g, t])
+        elif g in m.BASELOAD_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.baseload_capacity_factor[g, t])
+        else:
+            return m.GenCapacityInTP[g, t] * m.gen_availability[g]
     mod.DispatchUpperLimit = Expression(
-        mod.DISPATCHABLE_GEN_TPS,
+        mod.NON_STORAGE_GEN_TPS,
         rule=DispatchUpperLimit_expr)
 
+    def EnforceDispatchUpperLimit_rule(m,g,t):
+        if g in m.VARIABLE_GENS:
+            return (m.DispatchGen[g, t] + m.CurtailGen[g,t] <= m.DispatchUpperLimit[g, t]) 
+        elif g in m.BASELOAD_GENS:
+            return (m.DispatchGen[g, t] == m.DispatchUpperLimit[g, t]) 
+        else: 
+            return (m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t])
     mod.Enforce_Dispatch_Upper_Limit = Constraint(
-        mod.DISPATCHABLE_GEN_TPS,
-        rule=lambda m, g, t: (
-            m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t]))
+        mod.NON_STORAGE_GEN_TPS,
+        rule=EnforceDispatchUpperLimit_rule)
 
     # EXCESS GENERATION
     ###################
-    # TODO: delete commented code
-    """    
+    #TODO: Add CurtailGen back in
     mod.ExcessGen = Expression(
-        mod.NON_STORAGE_GEN_TPS, #for each variable generator in each period
-        rule=lambda m, g, t: m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] if g in m.VARIABLE_GENS else 0 #calculate a value according to the rule 
+        mod.VARIABLE_GEN_TPS, #for each variable generator in each period
+        rule=lambda m, g, t: m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] - m.CurtailGen[g,t] if g in m.VARIABLE_GENS else 0 #calculate a value according to the rule 
     )
 
     mod.ZoneTotalExcessGen = Expression(
@@ -119,7 +110,7 @@ def define_components(mod):
         rule=lambda m, z, t: \
             sum(m.ExcessGen[g, t]
                 for g in m.GENS_IN_ZONE[z]
-                if (g, t) in m.NON_STORAGE_GEN_TPS),
+                if (g, t) in m.VARIABLE_GEN_TPS),
     )
     
     #calculate the total excess energy for each variable generator in each period
@@ -130,26 +121,14 @@ def define_components(mod):
         )
         return excess
     mod.AnnualExcessGen = Expression(
-        mod.NON_STORAGE_GENS, mod.PERIODS, #for each variable generator in each period
+        mod.VARIABLE_GENS, mod.PERIODS, #for each variable generator in each period
         rule=Calculate_Annual_Excess_Energy_By_Gen #calculate a value according to the rule 
     )
 
-    mod.ExcessGenCostInTP = Expression(
+    mod.ExcessGenPPACostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
-            m.ExcessGen[g, t] * m.ppa_energy_cost[g]
-            for g in m.GENS_IN_PERIOD[m.tp_period[t]] if g in m.NON_STORAGE_GENS),
+            m.ExcessGen[g, t] * (m.ppa_energy_cost[g])
+            for g in m.GENS_IN_PERIOD[m.tp_period[t]] if g in m.VARIABLE_GENS),
         doc="Summarize costs for the objective function")
-    mod.Cost_Components_Per_TP.append('ExcessGenCostInTP')
-
-    #define the input parameter for the annual number of hours of curtialment/excess gen allowed
-    mod.gen_excess_max = Param(mod.GENERATION_PROJECTS, within=NonNegativeReals, default=float("inf"))
-
-    #limit curtailment to below the cap
-    mod.max_AnnualExcessGen = Constraint(
-        mod.GENERATION_PROJECTS, mod.PERIODS, #for each variable generator in each period
-        rule=lambda m, g, p: Constraint.Skip if m.gen_excess_max[g] == float("inf")
-        else
-        (m.AnnualExcessGen[g,p] <= (m.gen_excess_max[g] * m.GenCapacity[g, p]))
-    )
-    """
+    mod.Cost_Components_Per_TP.append('ExcessGenPPACostInTP')

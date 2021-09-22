@@ -22,12 +22,16 @@ def define_arguments(argparser):
         "Generation must be located in the same LOAD_ZONE as load to be counted toward an hourly goal"
     )
 
+    argparser.add_argument('--excess_generation_limit_type', choices=['annual', 'hourly', None], default=None,
+        help="If specified, whether the limit on excess generation is applied to each hour, or to the entire year"
+    )
+
 def define_components(mod):
     """
     renewable_target[p] is a parameter that describes how much of load (as a percentage) must be served by GENERATION_PROJECTS.
     This assumes that all GENERATION_PROJECTS are renewable generators that count toward the goal.
 
-    system_power_cost[z,t] is a parameter that describes the cost of system/grid power ($/MWh) for each timepoint in each load zone. 
+    hedge_cost[z,t] is a parameter that describes the cost of system/grid power ($/MWh) for each timepoint in each load zone. 
     This could describe wholesale prices of electricity at the demand node or your utility rate structure 
     (whereever you will be buying energy from if not procuring from one of the GENERATION_PROJECTS)
 
@@ -64,9 +68,16 @@ def define_components(mod):
         default=1,
         within=PercentFraction)
 
-    mod.system_power_cost = Param(
+    mod.excess_generation_limit = Param(
+        mod.PERIODS,
+        within=PercentFraction)
+
+    # if no hedge cost is specified, set the cost to a very small amount
+    # This discourages use of system power 
+    mod.hedge_cost = Param(
         mod.ZONE_TIMEPOINTS,
-        within=Reals)
+        within=Reals,
+        default=0.0000001)
 
     mod.tp_in_subset = Param(mod.TIMEPOINTS, within=Boolean, default=False)
     
@@ -79,10 +90,11 @@ def define_components(mod):
     mod.Zone_Power_Injections.append('SystemPower')
 
     #calculate the cost of using system power for the objective function
-    mod.SystemPowerCost = Expression(
+    mod.SystemPowerHedgeCost = Expression(
         mod.TIMEPOINTS,
-        rule=lambda m, t: sum(m.SystemPower[z, t] * m.system_power_cost[z, t] for z in m.LOAD_ZONES) 
+        rule=lambda m, t: sum(m.SystemPower[z, t] * m.hedge_cost[z, t] for z in m.LOAD_ZONES) 
     )
+    mod.Cost_Components_Per_TP.append('SystemPowerHedgeCost')
     
     # add system power cost to objective function so that its cost can be balanced against generator cost
     # NOTE: (3/9/21) if system power cost is negative, it encourages use of system power when not needed. 
@@ -130,12 +142,25 @@ def define_components(mod):
         # Calculate the total generation in the period
         mod.total_generation_in_period = Expression(
             mod.PERIODS,
-            rule=lambda m, p: sum(m.ZoneTotalGeneratorDispatch[z,t] + m.ZoneTotalVariableGeneration[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
+            rule=lambda m, p: sum(m.ZoneTotalGeneratorDispatch[z,t] + m.ZoneTotalExcessGen[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
         )
 
         mod.Enforce_Annual_Renewable_Target = Constraint(
             mod.PERIODS, # for each zone in each period
             rule=lambda m, p: (m.total_generation_in_period[p] >= m.renewable_target[p] * m.total_demand_in_period[p]))
+
+    #Enforce limit on excess generation
+    if mod.options.excess_generation_limit_type == "annual":
+        mod.Enforce_Annual_Excess_Generation_Limit = Constraint(
+            mod.LOAD_ZONES, mod.PERIODS,
+            rule = lambda m, z, p: sum(m.ZoneTotalExcessGen[z,t] for t in m.TPS_IN_PERIOD[p]) <= sum(m.ZoneTotalGeneratorDispatch[z,t] for t in m.TPS_IN_PERIOD[p]) * m.excess_generation_limit[p]
+        )
+    elif mod.options.excess_generation_limit_type == "hourly":
+        mod.Enforce_Hourly_Excess_Generation_Limit = Constraint(
+            mod.LOAD_ZONES, mod.TIMEPOINTS,
+            rule = lambda m, z, t: m.ZoneTotalExcessGen[z,t] <= m.ZoneTotalGeneratorDispatch[z,t] * m.excess_generation_limit[m.tp_period[t]]
+        )
+
         
 
 def load_inputs(mod, switch_data, inputs_dir):
@@ -145,8 +170,8 @@ def load_inputs(mod, switch_data, inputs_dir):
     renewable_target.csv
         period, renewable_target
 
-    system_power_cost.csv
-        load_zone, timepoint, system_power_cost
+    hedge_cost.csv
+        load_zone, timepoint, hedge_cost
 
     days.csv
         timepoint_id, tp_day, tp_in_subset
@@ -156,14 +181,14 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'renewable_target.csv'),
         autoselect=True,
-        param=[mod.renewable_target])
+        param=[mod.renewable_target, mod.excess_generation_limit])
 
     #load inputs which include costs for each timepoint in each zone
     switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'system_power_cost.csv'),
-        select=('load_zone','timepoint','system_power_cost'),
+        filename=os.path.join(inputs_dir, 'hedge_cost.csv'),
+        select=('load_zone','timepoint','hedge_cost'),
         index=mod.ZONE_TIMEPOINTS,
-        param=[mod.system_power_cost])
+        param=[mod.hedge_cost])
 
     # load optional data specifying subset days
     switch_data.load_aug(
@@ -184,11 +209,11 @@ def post_solve(instance, outdir):
         "period": instance.tp_period[t],
         "load_zone": z,
         "System_Power_MW":value(instance.SystemPower[z,t]),
-        "System_Power_Cost_per_MWh":instance.system_power_cost[z,t],
+        "hedge_cost_per_MWh":instance.hedge_cost[z,t],
         "System_Power_GWh_per_year": value(
             instance.SystemPower[z,t] * instance.tp_weight_in_year[t] / 1000),
-        "Annual_System_Power_Cost": value(
-            instance.SystemPower[z,t] * instance.system_power_cost[z,t] *
+        "Annual_hedge_cost": value(
+            instance.SystemPower[z,t] * instance.hedge_cost[z,t] *
             instance.tp_weight_in_year[t])
     } for z, t in instance.ZONE_TIMEPOINTS ]
     SP_df = pd.DataFrame(system_power_dat)

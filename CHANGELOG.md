@@ -1,4 +1,65 @@
 -------------------------------------------------------------------------------
+Commmit 2021.09.22 (Version 0.3.0)
+-------------------------------------------------------------------------------
+This commit includes many major updates to how generation and storage is dispatched in the model, and which costs are being optimized. 
+
+## Closes #4
+Wholesale costs
+- changes the name of `congestion_pricing.py` to `wholesale_pricing.py`
+- We remove `CongestionCostInTP` from the objective function, and instead only optimize for `GenPnodeRevenue` and `DLAPLoadCostInTP`
+
+### Over-building issue
+- In some cases, the weighted average Pnode revenue is greater than the weighted average PPA cost for a generator, meaning that the model would try to build as much as possible, leading to an unbounded problem if the generator capacity was not constrained. 
+- To identify these issues, we added a validation calculation to `generate_input_files.py` to warn us when the Pnode revenue would exceed PPA cost.
+- To fix this, we needed to add a disincentive for increasing ExcessGen, so we removed the `ExcessGenPnodeRevenue` term from the objective function. In order to calculate the total cost, we will need to add this term back in to the summary_report
+- This essentially puts an economic penalty on excess_generation, equivalent to the financial reprecussions of curtailing all excess generation (must pay PPA cost, but don't earn Pnode revenue)
+
+## Closes #9
+Adds a decision variable for renewable curtailment, limited by the cap on curtailment. This should lead to economic curtailment during times when wholesale prices are low or negative. 
+
+## Closes #10
+Adds option to limit excess generation through a hard constraint. This can be implemented as an annual limit on excess generation, or a limit on the amount of excess generation in each hour. The limit is expressed as percentage of DispatchGen, so a limit of 0.10 would mean that ExcessGen could be no more than 10% of DispatchGen, either on an annual or hourly basis
+
+## Closes #17
+We wanted to ensure that storage was only charging from renewable generation, rather than grid power.
+To do this, we implemented a new constraint that requires total storage charging to be less than total generator dispatch. 
+This may mean that at some times, grid power is being consumed when batteries are charging. To get around this, we will simply
+adjust our accounting such that grid power is only ever assigned to load, and the charging reduces the net renewable generation
+available to meet load.
+
+## Closes #19
+Previously, we had allowed power injections to be >= withdrawals, because we had specified that the full renewable capacity would be dispatched.
+We have changed the accounting so that generator dispatch is split into DispatchGen (the amount of dispatch needed to meet load and storage charging) 
+and ExcessGen (the amount of generation available that is not used in that hour). This means that the load balance constraint is now an equality constraint, where
+Power injections == power withdrawals in all hours. 
+
+## Closes #34
+Allows the storage portion of hybrid projects to be built in any ratio with the generator portion, between a minimum and maximum ratio.
+- Split `storage_hybrid_capacity_ratio` into `storage_hybrid_min_capacity_ratio` and `storage_hybrid_max_capacity_ratio`
+- Replaced the `Enforce_Hybrid_Build` constraint with two two constraints: `Enforce_Minimum_Hybrid_Build` and `Enforce_Maximum_Hybrid_Build`
+
+## Closes #35
+Adds hedge contract premiums to the objective function
+- Replaced `system_power_cost` with `hedge_cost`
+- Set a default value of $0.0000001 to disincentivize using grid power even if hedge cost is not specified
+
+## Simultaneous Storage Charging and Discharging
+- In some instances (especially when wholesale prices are negative), there is an incentive for storage to simultaneously charge and discharge, which is not physically realistic.
+- To prevent this, we introduced a constraint that uses a binary indicator variable that indicates when each storage asset is charging, and prevents simultaneous discharging (and vise versa)
+- Adding this binary variable makes the problem into a mixed-integer linear program (MILP), which increases solve time
+- An alternative approach which seems to limit the amount of simultaneous charging and discharging that occurs is to add a $1 penalty to every MWh discharged. This approach can be accessed by using the `storage_nonbinary.py` module.
+
+## Re-implements baseload generation functionality
+Previously, baseload generators (like geothermal) were implemented as variable generators. However, now that we have allowed variable generators to have `ExcessGen` and `CurtailGen`, it makes sense to separate baseload resources out. In this implementation, baseload resources are still given a capacity factor for each timepoint (like variable generators), but baseload generators must dispatch at this capacity factor, and are not allowed to have excess gen. For baseload generators, this requires using all of their output, which either must be matched to load, or charged in a battery.
+- replaced `gen_max_capacity_factor` with `variable_capacity_factor`, which is indexed to `VARIABLE_GENS`
+- created an equivalent `baseload_capacity_factor`, which is indexed to `BASELOAD_GENS`
+- there are now two separate input files for these factors: `variable_capacity_factors.csv` and `baseload_capacity_factors.csv`
+
+## Other fixes:
+- Fixed issue where Generator Pnode revenue was being optimized as a positive cost, rather than a revenue (negative cost)
+- Adds a "solver_options" tab to the model inputs spreadsheet, which allows the user to specify solver options
+
+-------------------------------------------------------------------------------
 Commmit 2021.08.26 (Version 0.2.0)
 -------------------------------------------------------------------------------
 Fixes #25
