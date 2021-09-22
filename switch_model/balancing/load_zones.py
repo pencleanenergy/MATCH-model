@@ -168,9 +168,10 @@ def post_solve(instance, outdir):
         output_file=os.path.join(outdir, "load_balance.csv"),
         headings=("load_zone", "timestamp",) + tuple(
             instance.Zone_Power_Injections +
-            instance.Zone_Power_Withdrawals),
+            instance.Zone_Power_Withdrawals) + ('ZoneTotalExcessGen',),
         values=lambda m, z, t: (z, m.tp_timestamp[t],) + tuple(
             getattr(m, component)[z, t]
             for component in (
                 m.Zone_Power_Injections +
-                m.Zone_Power_Withdrawals)))
+                m.Zone_Power_Withdrawals)) + 
+            (m.ZoneTotalExcessGen[z,t],))

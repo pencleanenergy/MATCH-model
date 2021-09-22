@@ -99,10 +99,14 @@ def define_components(mod):
 
     # EXCESS GENERATION
     ###################
-    #TODO: Add CurtailGen back in
     mod.ExcessGen = Expression(
         mod.VARIABLE_GEN_TPS, #for each variable generator in each period
         rule=lambda m, g, t: m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] - m.CurtailGen[g,t] if g in m.VARIABLE_GENS else 0 #calculate a value according to the rule 
+    )
+
+    mod.TotalGen = Expression(
+        mod.NON_STORAGE_GEN_TPS,
+        rule=lambda m, g, t: (m.DispatchGen[g, t] + m.ExcessGen[g,t]) if m.gen_is_variable[g] else m.DispatchGen[g, t]
     )
 
     mod.ZoneTotalExcessGen = Expression(

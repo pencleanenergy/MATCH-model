@@ -1,4 +1,12 @@
 -------------------------------------------------------------------------------
+Commmit 2021.09.XX (Version 0.3.1)
+-------------------------------------------------------------------------------
+
+^^ Need to update date
+
+This commit fixes and streamlines the post_solve and reporting process
+
+-------------------------------------------------------------------------------
 Commmit 2021.09.22 (Version 0.3.0)
 -------------------------------------------------------------------------------
 This commit includes many major updates to how generation and storage is dispatched in the model, and which costs are being optimized. 
