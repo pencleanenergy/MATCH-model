@@ -52,12 +52,13 @@ def define_components(mod):
     # BASELOAD GENERATOR DISPATCH
     #############################
     # baseload generators must be dispatched at their full capacity factor, and cannot have any excessgen
+    """
     mod.Enforce_Full_Dispatch_Baseload = Constraint(
         mod.BASELOAD_GEN_TPS,
         rule=lambda m, g, t:
             m.DispatchGen[g, t] == m.GenCapacityInTP[g, t] * m.gen_availability[g] *
-                    m.gen_max_capacity_factor[g, t])
-    
+                    m.baseload_capacity_factor[g, t])
+    """    
     # ECONOMIC CURTAILMENT
     ######################
     mod.CurtailGen = Var(
@@ -75,19 +76,26 @@ def define_components(mod):
     def DispatchUpperLimit_expr(m, g, t):
         if g in m.VARIABLE_GENS:
             return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
-                    m.gen_max_capacity_factor[g, t])
+                    m.variable_capacity_factor[g, t])
+        elif g in m.BASELOAD_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.baseload_capacity_factor[g, t])
         else:
             return m.GenCapacityInTP[g, t] * m.gen_availability[g]
     mod.DispatchUpperLimit = Expression(
         mod.NON_STORAGE_GEN_TPS,
         rule=DispatchUpperLimit_expr)
 
-    # TODO: Add CurtailGen back in
+    def EnforceDispatchUpperLimit_rule(m,g,t):
+        if g in m.VARIABLE_GENS:
+            return (m.DispatchGen[g, t] + m.CurtailGen[g,t] <= m.DispatchUpperLimit[g, t]) 
+        elif g in m.BASELOAD_GENS:
+            return (m.DispatchGen[g, t] == m.DispatchUpperLimit[g, t]) 
+        else: 
+            return (m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t])
     mod.Enforce_Dispatch_Upper_Limit = Constraint(
         mod.NON_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: 
-            (m.DispatchGen[g, t] + m.CurtailGen[g,t] <= m.DispatchUpperLimit[g, t]) if g in m.VARIABLE_GENS 
-            else (m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t]))
+        rule=EnforceDispatchUpperLimit_rule)
 
     # EXCESS GENERATION
     ###################

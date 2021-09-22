@@ -72,7 +72,7 @@ def define_components(mod):
         mod.PERIODS,
         within=PercentFraction)
 
-    # if no system power cost is specified, set the cost to a very small amount
+    # if no hedge cost is specified, set the cost to a very small amount
     # This discourages use of system power 
     mod.hedge_cost = Param(
         mod.ZONE_TIMEPOINTS,
@@ -90,11 +90,11 @@ def define_components(mod):
     mod.Zone_Power_Injections.append('SystemPower')
 
     #calculate the cost of using system power for the objective function
-    mod.SystemPowerCost = Expression(
+    mod.SystemPowerHedgeCost = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(m.SystemPower[z, t] * m.hedge_cost[z, t] for z in m.LOAD_ZONES) 
     )
-    mod.Cost_Components_Per_TP.append('SystemPowerCost')
+    mod.Cost_Components_Per_TP.append('SystemPowerHedgeCost')
     
     # add system power cost to objective function so that its cost can be balanced against generator cost
     # NOTE: (3/9/21) if system power cost is negative, it encourages use of system power when not needed. 

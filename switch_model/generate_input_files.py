@@ -210,7 +210,7 @@ def generate_inputs(model_workspace):
 
         vcf_input_types = list(vcf_inputs.capacity_factor_input.unique())
 
-        #create a blank dataframe with a datetimeindex
+        #create a blank dataframe with a datetimeindex for variable capacity factors
         df_vcf = pd.DataFrame(data=range(1,8761), columns=['timepoint']).set_index('timepoint')
 
 
@@ -410,7 +410,8 @@ def generate_inputs(model_workspace):
                         'storage_max_annual_cycles',	
                         'storage_leakage_loss',	
                         'storage_hybrid_generation_project',	
-                        'storage_hybrid_capacity_ratio',
+                        'storage_hybrid_min_capacity_ratio',
+                        'storage_hybrid_max_capacity_ratio',
                         'gen_pricing_node',
                         'ppa_energy_cost',
                         'ppa_penalty',	
@@ -535,11 +536,25 @@ def generate_inputs(model_workspace):
             df_vcf_scenario = df_vcf.copy()
 
             #melt the data and save as csv
-            df_vcf_scenario = df_vcf_scenario.melt(id_vars="timepoint", var_name="GENERATION_PROJECT", value_name="gen_max_capacity_factor")
+            df_vcf_scenario = df_vcf_scenario.melt(id_vars="timepoint", var_name="GENERATION_PROJECT", value_name="variable_capacity_factor")
 
             #reorder the columns
-            df_vcf_scenario = df_vcf_scenario[['GENERATION_PROJECT','timepoint','gen_max_capacity_factor']]
+            df_vcf_scenario = df_vcf_scenario[['GENERATION_PROJECT','timepoint','variable_capacity_factor']]
+
+            # split any baseload generators into a separate capacity factor dataframe
+            df_bcf_scenario = df_vcf_scenario.copy()
+            # get a list of all baseload generation projects
+            baseload_list = generation_projects_info.loc[generation_projects_info['gen_is_baseload'] == 1, 'GENERATION_PROJECT'].tolist()
+            # keep baseload generators
+            df_bcf_scenario = df_bcf_scenario[df_bcf_scenario['GENERATION_PROJECT'].isin(baseload_list)]
+            # change param name
+            df_bcf_scenario = df_bcf_scenario.rename(columns={'variable_capacity_factor':'baseload_capacity_factor'})
+            # drop baseload generators from vcf dataframe
+            df_vcf_scenario = df_vcf_scenario[~df_vcf_scenario['GENERATION_PROJECT'].isin(baseload_list)]
+
+            # save data to csv
             df_vcf_scenario.to_csv(input_dir / 'variable_capacity_factors.csv', index=False)
+            df_bcf_scenario.to_csv(input_dir / 'baseload_capacity_factors.csv', index=False)
 
 
 

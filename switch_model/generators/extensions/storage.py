@@ -177,7 +177,11 @@ def define_components(mod):
         mod.HYBRID_STORAGE_GENS,
         validate= lambda m,val,g: val in m.GENERATION_PROJECTS and val not in m.STORAGE_GENS, #validate the paired generator is in the generator list and isnt another storage project
         within=Any) 
-    mod.storage_hybrid_capacity_ratio = Param(
+    mod.storage_hybrid_min_capacity_ratio = Param(
+        mod.STORAGE_GENS,
+        within=NonNegativeReals,
+        default=float("inf"))
+    mod.storage_hybrid_max_capacity_ratio = Param(
         mod.STORAGE_GENS,
         within=NonNegativeReals,
         default=float("inf"))
@@ -196,12 +200,30 @@ def define_components(mod):
     # TODO: add a condition that hybrid storage and paired generator must be built together
     #if generator is built, storage must be built
 
+    """
     mod.Enforce_Hybrid_Build = Constraint(
         mod.STORAGE_GEN_BLD_YRS,
         rule=lambda m, g, y: 
         Constraint.Skip if m.storage_hybrid_capacity_ratio[g] == float("inf") # no value specified
         else
         (m.BuildGen[g, y] == m.storage_hybrid_capacity_ratio[g] * m.BuildGen[m.storage_hybrid_generation_project[g], y])
+    )
+    """
+
+    mod.Enforce_Minimum_Hybrid_Build = Constraint(
+        mod.STORAGE_GEN_BLD_YRS,
+        rule=lambda m, g, y: 
+        Constraint.Skip if m.storage_hybrid_min_capacity_ratio[g] == float("inf") # no value specified
+        else
+        (m.BuildGen[g, y] >= m.storage_hybrid_min_capacity_ratio[g] * m.BuildGen[m.storage_hybrid_generation_project[g], y])
+    )
+
+    mod.Enforce_Maximum_Hybrid_Build = Constraint(
+        mod.STORAGE_GEN_BLD_YRS,
+        rule=lambda m, g, y: 
+        Constraint.Skip if m.storage_hybrid_max_capacity_ratio[g] == float("inf") # no value specified
+        else
+        (m.BuildGen[g, y] <= m.storage_hybrid_max_capacity_ratio[g] * m.BuildGen[m.storage_hybrid_generation_project[g], y])
     )
 
     mod.StorageEnergyCapacity = Expression(
@@ -388,8 +410,8 @@ def load_inputs(mod, switch_data, inputs_dir):
         optional_params=['storage_charge_to_discharge_ratio', 'storage_energy_to_power_ratio', 'storage_max_annual_cycles'],
         param=[mod.storage_roundtrip_efficiency, mod.storage_charge_to_discharge_ratio, 
                mod.storage_energy_to_power_ratio, mod.storage_max_annual_cycles, 
-               mod.storage_hybrid_generation_project, mod.storage_hybrid_capacity_ratio, 
-               mod.storage_leakage_loss])
+               mod.storage_hybrid_generation_project, mod.storage_hybrid_min_capacity_ratio, 
+               mod.storage_hybrid_max_capacity_ratio, mod.storage_leakage_loss])
     
     
     

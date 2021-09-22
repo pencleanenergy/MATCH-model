@@ -84,8 +84,8 @@ def post_solve(instance, outdir):
     congestion_data = [{
         "generation_project": g,
         "timestamp": instance.tp_timestamp[t],
-        "Generation_MW": value(instance.DispatchGen[g, t] + instance.ExcessGen[g,t]),
-        "Generator Pnode Revenue": value(instance.GenPnodeRevenue[g,t] + instance.ExcessGenPnodeRevenue[g,t]),
+        "Generation_MW": value(instance.DispatchGen[g, t] + instance.ExcessGen[g,t]) if instance.gen_is_variable[g] else value(instance.DispatchGen[g, t]), 
+        "Generator Pnode Revenue": value(instance.GenPnodeRevenue[g,t] + instance.ExcessGenPnodeRevenue[g,t]) if instance.gen_is_variable[g] else value(instance.GenPnodeRevenue[g, t]),
     } for (g, t) in instance.NON_STORAGE_GEN_TPS]
     nodal_by_gen_df = pd.DataFrame(congestion_data)
     nodal_by_gen_df.set_index(["generation_project", "timestamp"], inplace=True)

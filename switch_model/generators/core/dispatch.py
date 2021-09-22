@@ -76,7 +76,7 @@ def define_components(mod):
     scheduled to produce power, so their availability is only derated
     based on their forced outage rates.
 
-    gen_max_capacity_factor[g, t] is defined for variable renewable
+    variable_capacity_factor[g, t] is defined for variable renewable
     projects and is the ratio of average power output to nameplate
     capacity in that timepoint. Most renewable capacity factors should
     be in the range of 0 to 1. Some solar capacity factors will be above
@@ -188,20 +188,27 @@ def define_components(mod):
 
     mod.VARIABLE_GEN_TPS_RAW = Set(
         dimen=2,
-        within=mod.VARIABLE_GENS * mod.TIMEPOINTS,
+        within=mod.VARIABLE_GENS * mod.TIMEPOINTS
     )
-    mod.gen_max_capacity_factor = Param(
+    mod.variable_capacity_factor = Param(
         mod.VARIABLE_GEN_TPS_RAW,
         within=Reals,
         validate=lambda m, val, g, t: -1 < val < 2)
-    # Validate that a gen_max_capacity_factor has been defined for every
+    # Validate that a variable_capacity_factor has been defined for every
     # variable gen / timepoint that we need. Extra cap factors (like beyond an
     # existing plant's lifetime) shouldn't cause any problems.
-    # This replaces: mod.min_data_check('gen_max_capacity_factor') from when
-    # gen_max_capacity_factor was indexed by VARIABLE_GEN_TPS.
-    mod.have_minimal_gen_max_capacity_factors = BuildCheck(
+    mod.have_minimal_variable_capacity_factors = BuildCheck(
         mod.VARIABLE_GEN_TPS,
         rule=lambda m, g, t: (g,t) in m.VARIABLE_GEN_TPS_RAW)
+
+    mod.BASELOAD_GEN_TPS_RAW = Set(
+        dimen=2,
+        within=mod.BASELOAD_GENS * mod.TIMEPOINTS)
+
+    mod.baseload_capacity_factor = Param(
+        mod.BASELOAD_GEN_TPS_RAW,
+        within=Reals,
+        validate=lambda m, val, g, t: -1 < val < 2)
     
     mod.DispatchGen = Var(
         mod.NON_STORAGE_GEN_TPS,
@@ -235,7 +242,7 @@ def load_inputs(mod, switch_data, inputs_dir):
     renewable projects are considered in the optimization.
 
     variable_capacity_factors.csv
-        GENERATION_PROJECT, timepoint, gen_max_capacity_factor
+        GENERATION_PROJECT, timepoint, variable_capacity_factor
 
     """
 
@@ -244,7 +251,14 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'variable_capacity_factors.csv'),
         autoselect=True,
         index=mod.VARIABLE_GEN_TPS_RAW,
-        param=[mod.gen_max_capacity_factor])
+        param=[mod.variable_capacity_factor])
+
+    switch_data.load_aug(
+        optional=True,
+        filename=os.path.join(inputs_dir, 'baseload_capacity_factors.csv'),
+        autoselect=True,
+        index=mod.BASELOAD_GEN_TPS_RAW,
+        param=[mod.baseload_capacity_factor])
 
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'pricing_nodes.csv'),
@@ -284,8 +298,8 @@ def post_solve(instance, outdir):
         "generation_project": g,
         "timestamp": instance.tp_timestamp[t],
         "DispatchGen_MW": value(instance.DispatchGen[g, t]),
-        "ExcessGen_MW":value(instance.ExcessGen[g, t]),
-        "CurtailGen_MW":value(instance.CurtailGen[g, t]),
+        "ExcessGen_MW":value(instance.ExcessGen[g, t]) if instance.gen_is_variable[g] else 0,
+        "CurtailGen_MW":value(instance.CurtailGen[g, t]) if instance.gen_is_variable[g] else 0
     } for g, t in instance.NON_STORAGE_GEN_TPS]
     dispatch_full_df = pd.DataFrame(gen_data)
     dispatch_full_df.set_index(["generation_project", "timestamp"], inplace=True)
