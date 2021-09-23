@@ -180,6 +180,43 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
     return gen_costs
 
 
+def power_content_label(load_balance, dispatch, generation_projects_info):
+    """
+    Calculates the mix of delivered energy.
+    First, calculate the percentage of energy from system power
+    Then, assign the remaineder the mix of dispatchgen
+    """
+
+    # calculate the percent of energy from grid power
+    percent_from_grid = load_balance.SystemPower.sum() / load_balance.zone_demand_mw.sum()
+    
+    # get the list of technologies
+    generator_technology_dict = generation_projects_info[['GENERATION_PROJECT','gen_tech']]
+    generator_technology_dict = dict(zip(generator_technology_dict.GENERATION_PROJECT, generator_technology_dict.gen_tech))
+
+    # add a generator technology column to the dispatch data
+    dispatch['gen_tech'] = dispatch['generation_project'].map(generator_technology_dict)
+
+    # calculate the mix of dispatched energy
+    dispatch_mix = dispatch.groupby('gen_tech').sum().reset_index()[['gen_tech','DispatchGen_MW']]
+
+    # discount by the inverse of the system power percentage
+    dispatch_mix['DispatchGen_MW'] = dispatch_mix['DispatchGen_MW'] * (1 - percent_from_grid)
+
+    dispatch_mix = dispatch_mix.append({'gen_tech':'Grid Energy','DispatchGen_MW': load_balance.SystemPower.sum()}, ignore_index=True)
+
+    dispatch_mix = dispatch_mix.rename(columns={'gen_tech':'Source','DispatchGen_MW':'MWh'})
+
+    # replace underscores in the gen tech name with spaces
+    dispatch_mix.Source = dispatch_mix.Source.str.replace('_',' ')
+
+    # round to no decimal places
+    dispatch_mix = dispatch_mix.round(0)
+
+    # drop any rows with zero generation
+    dispatch_mix = dispatch_mix[dispatch_mix['MWh'] > 0]
+
+    return dispatch_mix
 
 
 
