@@ -186,6 +186,12 @@ def generate_inputs(model_workspace):
 
     xl_shift = pd.read_excel(io=model_inputs, sheet_name='load_shift', header=[0,1], index_col=0).dropna(axis=1, how='all')
 
+    # rec_value.csv
+    xl_rec_value = pd.read_excel(io=model_inputs, sheet_name='rec_value').dropna(axis=1, how='all')
+
+    # fixed_costs.csv
+    xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs').dropna(axis=1, how='all')
+
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
     vcf_sets = xl_scenarios[xl_scenarios['Input Type'].isin(['Resource year(s)', 'Generator Set'])].drop(columns=['Input Type','Parameter','Description']).transpose().reset_index()
@@ -329,7 +335,6 @@ def generate_inputs(model_workspace):
 
             # summary_report.ipynb
             shutil.copy('reporting/summary_report.ipynb', input_dir)
-            shutil.copy('reporting/summary_report_public.ipynb', input_dir)
 
             df_periods.to_csv(input_dir / 'periods.csv', index=False)
             df_timeseries.to_csv(input_dir / 'timeseries.csv', index=False)
@@ -374,6 +379,12 @@ def generate_inputs(model_workspace):
             df_timepoints[['timepoint_id','tp_day','tp_in_subset']].to_csv(input_dir / 'days.csv', index=False)
 
             df_financials.to_csv(input_dir / 'financials.csv', index=False)
+
+            # rec_value.csv
+            xl_rec_value.to_csv(input_dir / 'rec_value.csv', index=False)
+
+            # rec_value.csv
+            xl_fixed_costs.to_csv(input_dir / 'fixed_costs.csv', index=False)
 
             # gen_build_years.csv
             gen_build_years = set_gens.copy()[['GENERATION_PROJECT']]

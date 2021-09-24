@@ -4,6 +4,7 @@
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import plotly.express as px
 
 """
 This module contains a collection of functions that are called from the summary_report.ipynb, used for reporting final outputs
@@ -135,7 +136,7 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
     storage_costs = storage_costs.groupby('generation_project').sum().reset_index()
 
     # add storage contract costs
-    storage_costs = storage_costs.merge(gen_cap[['generation_project','Annual_PPA_Capacity_Cost']], how='left', on='generation_project').fillna(0)
+    storage_costs = storage_costs.merge(gen_cap[['generation_project','PPA_Capacity_Cost']], how='left', on='generation_project').fillna(0)
 
     # replace hybrid storage names with the name of the paired generator
     storage_costs['generation_project'] = storage_costs['generation_project'].replace(hybrid_pair)
@@ -156,7 +157,7 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
 
     # rename columns
     gen_costs = gen_costs.rename(columns={'Contract_Cost':'Energy Contract Cost',
-                                          'Annual_PPA_Capacity_Cost':'Capacity Contract Cost',
+                                          'PPA_Capacity_Cost':'Capacity Contract Cost',
                                           'Pnode_Revenue':'Pnode Revenue',
                                           'StorageDispatchPnodeCost':'Storage Arbitrage Revenue',
                                           'Delivery_Cost':'Delivery Cost',
@@ -218,7 +219,114 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
 
     return dispatch_mix
 
+def hourly_cost_of_power(system_power, costs_by_tp, RA_summary, gen_cap, storage_dispatch, fixed_costs, rec_value, load_balance):
+    """
+    Calculates the cost of power for each hour of the year
 
+    Hourly costs include: energy contract costs, nodal costs/revenues, hedge costs, DLAP cost
+    Annual costs include: capacity contract costs, RA costs, fixed costs
+    Sellable costs include: excess RA, RECs
 
+    We will need to calculate costs for dispatched energy, and for all generated energy
+    """
 
-    
+    # start with system power hedge cost and build from there 
+    hourly_costs = system_power.copy().drop(columns=['load_zone','system_power_MW'])
+
+    # if the hedge cost was set as the default value, remove the hedge cost
+    if hourly_costs['hedge_cost_per_MWh'].mean() == 0.0000001:
+        hourly_costs['hedge_cost'] = 0
+
+    hourly_costs = hourly_costs.drop(columns=['hedge_cost_per_MWh'])
+
+    # add generator timepoint costs next
+    hourly_costs = hourly_costs.merge(costs_by_tp, how='left', on='timestamp')
+
+    # set the excess RA value as a negative cost
+    RA_summary['Excess_RA_Value'] = - RA_summary['Excess_RA_Value']
+
+    # calculate annual ra costs
+    RA_summary = RA_summary[['RA_Open_Position_Cost','Excess_RA_Value']].sum()
+
+    # divide these costs by the number of timepoints
+    RA_summary = RA_summary / len(hourly_costs.index)
+
+    # add the RA costs to the hourly costs
+    hourly_costs['ra_open_position_cost'] = RA_summary['RA_Open_Position_Cost']
+    hourly_costs['excess_ra_value'] = RA_summary['Excess_RA_Value']
+
+    # calculate annual capacity costs
+    gen_cap = gen_cap[['PPA_Capacity_Cost']].sum()
+
+    # divide these costs by the number of timepoints
+    gen_cap = gen_cap / len(hourly_costs.index)
+
+    # add the capacity costs to the hourly costs
+    hourly_costs['Capacity Contract Cost'] = gen_cap['PPA_Capacity_Cost']
+
+    # add storage nodal costs
+    storage_cost = storage_dispatch[['timestamp','StorageDispatchPnodeCost']]
+    # sum for each timestamp
+    storage_cost = storage_cost.groupby('timestamp').sum()
+    # merge the data
+    hourly_costs = hourly_costs.merge(storage_cost, how='left', on='timestamp')
+
+    # calculate the hourly value for annual fixed costs
+    fixed_cost_component = fixed_costs.copy()
+    fixed_cost_component['annual_cost'] = fixed_cost_component['annual_cost'] / len(hourly_costs.index)
+
+    # create new columns in the hourly cost for each of these fixed costs
+    for val in fixed_cost_component['cost_name']:
+        hourly_costs[val] = fixed_cost_component.loc[fixed_cost_component['cost_name'] == val, 'annual_cost'].item()
+
+    # calculate value of excess recs
+    excess_generation = load_balance.copy()[['timestamp', 'ZoneTotalExcessGen']]
+    excess_generation['Excess REC Value'] = excess_generation['ZoneTotalExcessGen'] * -rec_value
+
+    # merge the REC sale value
+    hourly_costs = hourly_costs.merge(excess_generation[['timestamp', 'Excess REC Value']], how='left', on='timestamp')
+
+    # parse dates
+    hourly_costs = hourly_costs.set_index(pd.to_datetime(hourly_costs['timestamp'])).drop(columns=['timestamp'])
+
+    # rename columns
+    hourly_costs = hourly_costs.rename(columns={'DLAP Cost':'DLAP Load Cost',
+                                                'hedge_cost': 'Hedge Contract Cost',
+                                                'Capacity Contract Cost':'Storage Capacity PPA Cost',
+                                                'ra_open_position_cost':'RA Open Position Cost',
+                                                'StorageDispatchPnodeCost':'Storage Wholesale Price Arbitrage',
+                                                'excess_ra_value':'Excess RA Value'})
+
+    return hourly_costs
+
+def build_hourly_cost_plot(hourly_costs, load):
+    """
+    """
+    costs = hourly_costs.copy()
+
+    # drop columns that include resale values
+    costs = costs.drop(columns=['Excess RA Value', 'Excess REC Value'])
+
+    # specify the names and order of cost columns
+    cost_columns = costs.columns
+
+    # calculate the cost per MWh
+    for col in cost_columns:
+        costs[col] = costs[col] / load['zone_demand_mw']
+
+    # add a column for total cost
+    costs['Total Cost'] = costs.sum(axis=1)
+
+    # average by season-hour
+    costs = costs.groupby([costs.index.quarter, costs.index.hour]).mean()
+    costs.index = costs.index.set_names(['quarter','hour'])
+    costs = costs.reset_index().rename(columns={0:'cost'})
+
+    # build the cost plot
+    hourly_cost_plot = px.bar(costs, x='hour',y=cost_columns,facet_col='quarter').update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
+    hourly_cost_plot.add_scatter(x=costs.loc[costs['quarter'] == 1, 'hour'], y=costs.loc[costs['quarter'] == 1, 'Total Cost'], row=1, col=1, line=dict(color='black', width=4), name='Total')
+    hourly_cost_plot.add_scatter(x=costs.loc[costs['quarter'] == 2, 'hour'], y=costs.loc[costs['quarter'] == 2, 'Total Cost'], row=1, col=2, line=dict(color='black', width=4), name='Total')
+    hourly_cost_plot.add_scatter(x=costs.loc[costs['quarter'] == 3, 'hour'], y=costs.loc[costs['quarter'] == 3, 'Total Cost'], row=1, col=3, line=dict(color='black', width=4), name='Total')
+    hourly_cost_plot.add_scatter(x=costs.loc[costs['quarter'] == 4, 'hour'], y=costs.loc[costs['quarter'] == 4, 'Total Cost'], row=1, col=4, line=dict(color='black', width=4), name='Total')
+
+    return hourly_cost_plot

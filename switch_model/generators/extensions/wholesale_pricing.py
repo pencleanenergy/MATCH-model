@@ -95,12 +95,15 @@ def post_solve(instance, outdir):
 
     nodal_data = [{
         "timestamp": instance.tp_timestamp[t],
-        "Generator Pnode Revenue": value(instance.GenPnodeRevenueInTP[t]),
+        "Dispatched Generation PPA Cost":value(instance.GenPPACostInTP[t]),
+        "Excess Generation PPA Cost":value(instance.ExcessGenPPACostInTP[t]),
+        "Dispatched Generation Pnode Revenue": value(instance.GenPnodeRevenueInTP[t]),
+        "Excess Generation Pnode Revenue": value(instance.ExcessGenPnodeRevenueInTP[t]),
         "DLAP Cost": value(instance.DLAPLoadCostInTP[t]),
     } for t in instance.TIMEPOINTS]
     nodal_df = pd.DataFrame(nodal_data)
     nodal_df.set_index(["timestamp"], inplace=True)
-    nodal_df.to_csv(os.path.join(outdir, "nodal_costs.csv"))
+    nodal_df.to_csv(os.path.join(outdir, "costs_by_tp.csv"))
 
 
 

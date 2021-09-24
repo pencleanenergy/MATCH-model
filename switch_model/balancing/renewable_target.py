@@ -206,13 +206,10 @@ def post_solve(instance, outdir):
 
     system_power_dat = [{
         "timestamp": instance.tp_timestamp[t],
-        "period": instance.tp_period[t],
         "load_zone": z,
-        "System_Power_MW":value(instance.SystemPower[z,t]),
+        "system_power_MW":value(instance.SystemPower[z,t]),
         "hedge_cost_per_MWh":instance.hedge_cost[z,t],
-        "System_Power_GWh_per_year": value(
-            instance.SystemPower[z,t] * instance.tp_weight_in_year[t] / 1000),
-        "Annual_hedge_cost": value(
+        "hedge_cost": value(
             instance.SystemPower[z,t] * instance.hedge_cost[z,t] *
             instance.tp_weight_in_year[t])
     } for z, t in instance.ZONE_TIMEPOINTS ]
