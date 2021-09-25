@@ -219,7 +219,7 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
 
     return dispatch_mix
 
-def hourly_cost_of_power(system_power, costs_by_tp, RA_summary, gen_cap, storage_dispatch, fixed_costs, rec_value, load_balance):
+def hourly_cost_of_power(system_power, costs_by_tp, ra_open, gen_cap, storage_dispatch, fixed_costs, rec_value, load_balance):
     """
     Calculates the cost of power for each hour of the year
 
@@ -243,17 +243,17 @@ def hourly_cost_of_power(system_power, costs_by_tp, RA_summary, gen_cap, storage
     hourly_costs = hourly_costs.merge(costs_by_tp, how='left', on='timestamp')
 
     # set the excess RA value as a negative cost
-    RA_summary['Excess_RA_Value'] = - RA_summary['Excess_RA_Value']
+    ra_open['Excess_RA_Value'] = - ra_open['Excess_RA_Value']
 
     # calculate annual ra costs
-    RA_summary = RA_summary[['RA_Open_Position_Cost','Excess_RA_Value']].sum()
+    ra_open = ra_open[['RA_Open_Position_Cost','Excess_RA_Value']].sum()
 
     # divide these costs by the number of timepoints
-    RA_summary = RA_summary / len(hourly_costs.index)
+    ra_open = ra_open / len(hourly_costs.index)
 
     # add the RA costs to the hourly costs
-    hourly_costs['ra_open_position_cost'] = RA_summary['RA_Open_Position_Cost']
-    hourly_costs['excess_ra_value'] = RA_summary['Excess_RA_Value']
+    hourly_costs['ra_open_position_cost'] = ra_open['RA_Open_Position_Cost']
+    hourly_costs['excess_ra_value'] = ra_open['Excess_RA_Value']
 
     # calculate annual capacity costs
     gen_cap = gen_cap[['PPA_Capacity_Cost']].sum()
@@ -299,10 +299,11 @@ def hourly_cost_of_power(system_power, costs_by_tp, RA_summary, gen_cap, storage
 
     return hourly_costs
 
-def build_hourly_cost_plot(hourly_costs, load):
+def build_hourly_cost_plot(hourly_costs, load_balance):
     """
     """
     costs = hourly_costs.copy()
+    load = load_balance.copy().set_index(pd.to_datetime(load_balance['timestamp'])).drop(columns=['timestamp'])
 
     # drop columns that include resale values
     costs = costs.drop(columns=['Excess RA Value', 'Excess REC Value'])
@@ -330,3 +331,204 @@ def build_hourly_cost_plot(hourly_costs, load):
     hourly_cost_plot.add_scatter(x=costs.loc[costs['quarter'] == 4, 'hour'], y=costs.loc[costs['quarter'] == 4, 'Total Cost'], row=1, col=4, line=dict(color='black', width=4), name='Total')
 
     return hourly_cost_plot
+
+def construct_cost_and_resale_tables(hourly_costs, load_balance, ra_summary):
+    """
+    Constructs tables that break down costs by component
+    """
+    # calculate total cost 
+    cost_table = hourly_costs.sum(axis=0).reset_index().rename(columns={'index':'Cost Component',0:'Annual Real Cost'})
+
+    # calculate the total demand
+    load = load_balance['zone_demand_mw'].sum()
+
+    # replace the Excess RA Value with the actual value
+    cost_table.loc[cost_table['Cost Component'] == 'Excess RA Value', 'Annual Real Cost'] = -1 * calculate_sellable_excess_RA(ra_summary)
+
+    # calculate the cost per MWh consumed
+    cost_table['Cost Per MWh'] = cost_table['Annual Real Cost'] / load
+
+    # TODO: START HERE
+    # remove resale costs to a separate table
+    resale_components = ['Excess RA Value', 'Excess REC Value']
+    resale_table = cost_table.copy()[cost_table['Cost Component'].isin(resale_components)]
+
+    # add a total column
+    resale_table = resale_table.append({'Cost Component':'Total', 'Annual Real Cost':resale_table['Annual Real Cost'].sum(), 'Cost Per MWh': resale_table['Cost Per MWh'].sum()}, ignore_index=True)
+
+    # remove resale data from cost table
+    cost_table = cost_table[~cost_table['Cost Component'].isin(resale_components)]
+
+    # create a column that categorizes all of the costs
+    cost_category_dict = {'Hedge Contract Cost':'Contract', 
+                        'Dispatched Generation PPA Cost':'Contract',
+                        'Excess Generation PPA Cost':'Contract',
+                        'Dispatched Generation Pnode Revenue':'Wholesale Market',
+                        'Excess Generation Pnode Revenue':'Wholesale Market', 
+                        'DLAP Load Cost':'Wholesale Market',
+                        'RA Open Position Cost':'Resource Adequacy', 
+                        'Storage Capacity PPA Cost': 'Contract',
+                        'Storage Wholesale Price Arbitrage':'Wholesale Market'}
+    cost_table['Cost Category'] = cost_table['Cost Component'].map(cost_category_dict).fillna('Fixed')
+
+    # sort the values by category and cost
+    cost_table = cost_table.sort_values(by=['Cost Category', 'Annual Real Cost'], ascending=[True,False])
+
+    # re-order the columns
+    cost_table = cost_table[['Cost Category','Cost Component', 'Annual Real Cost', 'Cost Per MWh']]
+
+    # add a total column
+    cost_table = cost_table.append({'Cost Category':'Total','Cost Component':'Total', 'Annual Real Cost':cost_table['Annual Real Cost'].sum(), 'Cost Per MWh': cost_table['Cost Per MWh'].sum()}, ignore_index=True)
+
+    return cost_table, resale_table
+
+def build_ra_open_position_plot(ra_summary):
+    """
+    """
+    ra_open = ra_summary.copy()
+    #where RA Position is negative, it indicates an open position
+    ra_open['Position'] = np.where(ra_open["RA_Position_MW"]<0, 'Open Position', 'Excess RA')
+
+    #create a plot of monthly RA position
+    monthly_ra_open_fig = px.bar(ra_open, 
+                                    x='Month', 
+                                    y='RA_Position_MW', 
+                                    facet_col='RA_Requirement', 
+                                    color='Position', 
+                                    color_discrete_map={'Excess RA':'green', 'Open Position':'red'}, 
+                                    title='Monthly RA position by requirement')
+    monthly_ra_open_fig.for_each_annotation(lambda a: a.update(text=a.text.replace("RA_Requirement=", "")))
+
+    return monthly_ra_open_fig
+
+def calculate_sellable_excess_RA(ra_summary):
+    """
+    The total value of excess RA cannot be calculated as the simple product of the excess RA and the resale value.
+    Flex RA must be paired with system RA to sell. 
+    Because local RA also contributes to system RA, we cannot sell it as both.
+    """
+    sellable_flex = ra_summary.copy()
+    sellable_flex = sellable_flex[(sellable_flex['RA_Requirement'] == 'flexible_RA') & (sellable_flex['RA_Position_MW'] > 0)]
+
+    #flex RA must be paired with regular RA to sell, so we need to limit it
+    def calculate_sellable_flex(row, ra_summary):
+        # get the month number
+        month = row['Month']
+        #get the amount of excess system RA
+        system_ra_summary_MW = ra_summary.loc[(ra_summary['RA_Requirement'] == 'system_RA') & (ra_summary['Month'] == month), 'Excess_RA_MW'].item()
+        # find the minimum of the excess system RA and excess flex RA
+        sellable = min(row['RA_Position_MW'], system_ra_summary_MW)
+        return sellable   
+
+    sellable_flex.loc[:,'Sellable_Flex_MW'] = sellable_flex.apply(lambda row: calculate_sellable_flex(row, ra_summary), axis=1)
+
+    #re-calculate the sellable position of flex RA
+    sellable_flex['Excess_RA_Value'] = sellable_flex['RA_Value'] * sellable_flex['Sellable_Flex_MW']
+
+    #calculate how much system could be sold for subtracting the local
+    sellable_system = ra_summary[(ra_summary['RA_Requirement'] == 'system_RA')]
+
+    local_RA = ra_summary[(ra_summary['RA_Requirement'] != 'system_RA') & (ra_summary['RA_Requirement'] != 'flexible_RA')][['Month','Excess_RA_MW']]
+    local_RA = local_RA.groupby('Month').sum().reset_index().rename(columns={'Excess_RA_MW':'Local_RA_MW'})
+
+    #merge local RA data into system data
+    sellable_system = sellable_system.merge(local_RA, how='left', on='Month').fillna(0)
+    sellable_system['Sellable_System_MW'] = sellable_system['Excess_RA_MW'] - sellable_system['Local_RA_MW']
+
+    sellable_system['Excess_RA_Value'] = sellable_system['RA_Value'] * sellable_system['Sellable_System_MW']
+
+    #calculate total RA costs and value
+    excess_flex_RA_value = sellable_flex['Excess_RA_Value'].sum()
+    excess_local_RA_value = ra_summary.loc[(ra_summary['RA_Requirement'] != 'system_RA') & (ra_summary['RA_Requirement'] != 'flexible_RA'), 'Excess_RA_Value'].sum()
+    excess_system_RA_value = sellable_system['Excess_RA_Value'].sum()
+
+    sellable_ra = excess_flex_RA_value + excess_local_RA_value + excess_system_RA_value
+
+    return sellable_ra
+
+def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, load_balance, system_power, technology_color_map):
+    """
+    """
+    # get the list of technologies
+    generator_technology_dict = generation_projects_info[['GENERATION_PROJECT','gen_tech']]
+    generator_technology_dict = dict(zip(generator_technology_dict.GENERATION_PROJECT, generator_technology_dict.gen_tech))
+
+    dispatch_data = dispatch.copy()
+
+    # add a generator technology column to the dispatch data
+    dispatch_data['Technology'] = dispatch_data['generation_project'].map(generator_technology_dict)
+
+    # replace underscores in the gen tech name with spaces
+    dispatch_data.Technology = dispatch_data.Technology.str.replace('_',' ')
+
+    # drop the curtailment column
+    dispatch_data = dispatch_data.drop(columns=['CurtailGen_MW','generation_project'])
+
+    # rename the columns
+    dispatch_data = dispatch_data.rename(columns={'DispatchGen_MW':'Consumed','ExcessGen_MW':'Excess'})
+
+    # melt the data
+    dispatch_data = dispatch_data.melt(id_vars=['Technology','timestamp'], value_vars=['Consumed','Excess'], var_name='Generation Type', value_name='MWh')
+
+    # concatenate the technology and type columns
+    dispatch_data['Technology'] = dispatch_data['Generation Type'] + ' ' + dispatch_data['Technology']
+
+    # group the data by technology type
+    dispatch_by_tech = dispatch_data.groupby(['Technology','timestamp']).sum().reset_index()
+
+    #append storage 
+    storage_discharge = storage_dispatch.copy()[['timestamp','DischargeMW']].rename(columns={'DischargeMW':'MWh'})
+    # group the data
+    storage_discharge = storage_discharge.groupby('timestamp').sum().reset_index()
+    # add a technology column
+    storage_discharge['Technology'] = 'Storage Discharge'
+    dispatch_by_tech = dispatch_by_tech.append(storage_discharge)
+
+    # append grid energy
+    grid_energy = system_power.copy()[['timestamp','system_power_MW']].groupby('timestamp').sum().reset_index().rename(columns={'system_power_MW':'MWh'})
+    grid_energy['Technology'] = 'Grid Energy'
+    dispatch_by_tech = dispatch_by_tech.append(grid_energy)
+
+    #only keep observations greater than 0
+    dispatch_by_tech = dispatch_by_tech[dispatch_by_tech['MWh'] > 0]
+
+    dispatch_by_tech['timestamp'] = pd.to_datetime(dispatch_by_tech['timestamp'])
+
+    # prepare demand data
+    load_line = load_balance.copy()[['timestamp','zone_demand_mw']]
+    load_line['timestamp'] = pd.to_datetime(load_line['timestamp'])
+
+    # prepare storage charging data
+    storage_charge = storage_dispatch.copy()[['timestamp','ChargeMW']]
+    # group the data
+    storage_charge = storage_charge.groupby('timestamp').sum().reset_index()
+    storage_charge['timestamp'] = pd.to_datetime(storage_charge['timestamp'])
+    storage_charge['Load+Charge'] = load_line['zone_demand_mw'] + storage_charge['ChargeMW']
+
+    # Build Figure
+
+    dispatch_fig = px.area(dispatch_by_tech, 
+                        x='timestamp', 
+                        y='MWh', 
+                        color='Technology', 
+                        color_discrete_map=technology_color_map, 
+                        category_orders={'Technology':['Consumed Geothermal','Consumed Small Hydro', 'Consumed Onshore Wind','Consumed Solar PV',
+                                                        'Storage Discharge', 'Grid Energy','Excess Solar PV', 'Excess Onshore Wind']},
+                        labels={'timestamp':'Datetime','Technology':'Key'})
+    dispatch_fig.update_traces(line={'width':0})
+    dispatch_fig.layout.template = 'plotly_white'
+    # add load and storage charging lines
+    dispatch_fig.add_scatter(x=storage_charge.timestamp, y=storage_charge['Load+Charge'], text=storage_charge['ChargeMW'], line=dict(color='green', width=3), name='Storage Charge')
+    dispatch_fig.add_scatter(x=load_line.timestamp, y=load_line.zone_demand_mw, line=dict(color='black', width=3), name='Demand')
+
+    dispatch_fig.update_xaxes(
+        rangeslider_visible=True,
+        rangeselector=dict(
+            buttons=list([
+                dict(count=1, label="1d", step="day", stepmode="backward"),
+                dict(count=7, label="1w", step="day", stepmode="backward"),
+                dict(count=1, label="1m", step="month", stepmode="backward"),
+                dict(step="all")
+            ])))
+
+    return dispatch_fig
