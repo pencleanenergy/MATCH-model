@@ -7,6 +7,7 @@ Defines the type of renewable energy goal and allows for load to be served by gr
 """
 
 import os
+from sys import modules
 from pyomo.environ import *
 import pandas as pd
 
@@ -79,6 +80,11 @@ def define_components(mod):
         within=Reals,
         default=0.0000001)
 
+    mod.hedge_settlement_node = Param(
+        mod.LOAD_ZONES,
+        within=Any
+    )
+
     mod.tp_in_subset = Param(mod.TIMEPOINTS, within=Boolean, default=False)
     
     #implementation of system power as a decision variable
@@ -145,9 +151,21 @@ def define_components(mod):
             rule=lambda m, p: sum(m.ZoneTotalGeneratorDispatch[z,t] + m.ZoneTotalExcessGen[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
         )
 
+        # if there are any storage generators in the model
+        try:
+            mod.total_storage_losses_in_period = Expression(
+                mod.PERIODS,
+                rule=lambda m, p: sum(m.ZoneTotalStorageCharge[z,t] - m.ZoneTotalStorageDischarge[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
+            )
+        except:
+            mod.total_storage_losses_in_period = Param(
+                mod.PERIODS,
+                default=0
+            )
+
         mod.Enforce_Annual_Renewable_Target = Constraint(
             mod.PERIODS, # for each zone in each period
-            rule=lambda m, p: (m.total_generation_in_period[p] >= m.renewable_target[p] * m.total_demand_in_period[p]))
+            rule=lambda m, p: (m.total_generation_in_period[p] - m.total_storage_losses_in_period[p] >= m.renewable_target[p] * m.total_demand_in_period[p]))
 
     #Enforce limit on excess generation
     if mod.options.excess_generation_limit_type == "annual":
@@ -185,10 +203,16 @@ def load_inputs(mod, switch_data, inputs_dir):
 
     #load inputs which include costs for each timepoint in each zone
     switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'hedge_cost.csv'),
-        select=('load_zone','timepoint','hedge_cost'),
+        filename=os.path.join(inputs_dir, 'hedge_contract_cost.csv'),
+        select=('load_zone','timepoint','hedge_contract_cost'),
         index=mod.ZONE_TIMEPOINTS,
         param=[mod.hedge_cost])
+
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'hedge_settlement_node.csv'),
+        select=('load_zone','hedge_settlement_node'),
+        index=mod.LOAD_ZONES,
+        param=[mod.hedge_settlement_node])
 
     # load optional data specifying subset days
     switch_data.load_aug(
@@ -208,10 +232,11 @@ def post_solve(instance, outdir):
         "timestamp": instance.tp_timestamp[t],
         "load_zone": z,
         "system_power_MW":value(instance.SystemPower[z,t]),
-        "hedge_cost_per_MWh":instance.hedge_cost[z,t],
-        "hedge_cost": value(
+        "hedge_contract_cost_per_MWh":instance.hedge_cost[z,t],
+        "hedge_contract_cost": value(
             instance.SystemPower[z,t] * instance.hedge_cost[z,t] *
-            instance.tp_weight_in_year[t])
+            instance.tp_weight_in_year[t]),
+        "hedge_market_revenue": value(instance.SystemPower[z,t] * - instance.nodal_price[instance.hedge_settlement_node[z],t]),
     } for z, t in instance.ZONE_TIMEPOINTS ]
     SP_df = pd.DataFrame(system_power_dat)
     SP_df.set_index(["load_zone","timestamp"], inplace=True)

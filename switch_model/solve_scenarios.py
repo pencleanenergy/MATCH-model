@@ -165,6 +165,8 @@ def main(args=None):
 
         mark_completed(scenario_name)
     
+    # NOTE: (9/28/21) Disabling this until final summary_report updates are completed
+    """
     if len(running_scenarios) == 0:
         # run the comparison reports for all of the scenarios once run
         print('Generating scenario comparison reports.')
@@ -194,6 +196,7 @@ def main(args=None):
         df.to_csv('outputs/scenario_comparison.csv', header=False)
         df_build = df_build.fillna('N/A')
         df_build.to_csv('outputs/portfolio_comparison.csv', index=False)
+    """
     
 
 def scenarios_to_run():

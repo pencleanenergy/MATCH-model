@@ -182,7 +182,9 @@ def generate_inputs(model_workspace):
 
     xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
 
-    xl_hedge_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_cost', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
+    xl_hedge_contract_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_contract_cost', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
+
+    xl_hedge_settlement_node = pd.read_excel(io=model_inputs, sheet_name='hedge_settlement_node', index_col='load_zone').dropna(axis=1, how='all')
 
     xl_shift = pd.read_excel(io=model_inputs, sheet_name='load_shift', header=[0,1], index_col=0).dropna(axis=1, how='all')
 
@@ -495,11 +497,14 @@ def generate_inputs(model_workspace):
                 ra_requirement_categories.to_csv(input_dir / 'ra_requirement_categories.csv', index=False)
             
             # hedge_cost.csv
-            hedge_cost = xl_hedge_cost.reset_index(drop=True)
+            hedge_cost = xl_hedge_contract_cost.reset_index(drop=True)
             hedge_cost['timepoint'] = hedge_cost.index + 1
-            hedge_cost = hedge_cost.melt(id_vars=['timepoint'], var_name='load_zone', value_name='hedge_cost')
-            hedge_cost = hedge_cost[['load_zone','timepoint','hedge_cost']]
-            hedge_cost.to_csv(input_dir / 'hedge_cost.csv', index=False)
+            hedge_cost = hedge_cost.melt(id_vars=['timepoint'], var_name='load_zone', value_name='hedge_contract_cost')
+            hedge_cost = hedge_cost[['load_zone','timepoint','hedge_contract_cost']]
+            hedge_cost.to_csv(input_dir / 'hedge_contract_cost.csv', index=False)
+
+            # hedge_settlement_node.csv
+            xl_hedge_settlement_node.to_csv(input_dir / 'hedge_settlement_node.csv')
 
             # pricing_nodes.csv
             node_list = list(set_gens.gen_pricing_node.unique())

@@ -190,6 +190,9 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
 
     # calculate the percent of energy from grid power
     percent_from_grid = load_balance.SystemPower.sum() / load_balance.zone_demand_mw.sum()
+
+    # calculate the amount of load served by portfolio generation (less storage losses)
+    load_from_dispatch = load_balance.zone_demand_mw.sum() - load_balance.SystemPower.sum()
     
     # get the list of technologies
     generator_technology_dict = generation_projects_info[['GENERATION_PROJECT','gen_tech']]
@@ -201,8 +204,11 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
     # calculate the mix of dispatched energy
     dispatch_mix = dispatch.groupby('gen_tech').sum().reset_index()[['gen_tech','DispatchGen_MW']]
 
-    # discount by the inverse of the system power percentage
-    dispatch_mix['DispatchGen_MW'] = dispatch_mix['DispatchGen_MW'] * (1 - percent_from_grid)
+    # calculate scaling factor for dispatched generation
+    generation_scaling_factor = load_from_dispatch / dispatch_mix.DispatchGen_MW.sum()
+    
+    # discount generation by this scaling factor
+    dispatch_mix['DispatchGen_MW'] = dispatch_mix['DispatchGen_MW'] * generation_scaling_factor
 
     dispatch_mix = dispatch_mix.append({'gen_tech':'Grid Energy','DispatchGen_MW': load_balance.SystemPower.sum()}, ignore_index=True)
 
@@ -234,10 +240,10 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_open, gen_cap, storage_di
     hourly_costs = system_power.copy().drop(columns=['load_zone','system_power_MW'])
 
     # if the hedge cost was set as the default value, remove the hedge cost
-    if hourly_costs['hedge_cost_per_MWh'].mean() == 0.0000001:
-        hourly_costs['hedge_cost'] = 0
+    if hourly_costs['hedge_contract_cost_per_MWh'].mean() == 0.0000001:
+        hourly_costs['hedge_contract_cost'] = 0
 
-    hourly_costs = hourly_costs.drop(columns=['hedge_cost_per_MWh'])
+    hourly_costs = hourly_costs.drop(columns=['hedge_contract_cost_per_MWh'])
 
     # add generator timepoint costs next
     hourly_costs = hourly_costs.merge(costs_by_tp, how='left', on='timestamp')
@@ -286,12 +292,16 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_open, gen_cap, storage_di
     # merge the REC sale value
     hourly_costs = hourly_costs.merge(excess_generation[['timestamp', 'Excess REC Value']], how='left', on='timestamp')
 
+    # calculate hedge market costs
+
+
     # parse dates
     hourly_costs = hourly_costs.set_index(pd.to_datetime(hourly_costs['timestamp'])).drop(columns=['timestamp'])
 
     # rename columns
     hourly_costs = hourly_costs.rename(columns={'DLAP Cost':'DLAP Load Cost',
-                                                'hedge_cost': 'Hedge Contract Cost',
+                                                'hedge_contract_cost': 'Hedge Contract Cost',
+                                                'hedge_market_revenue':'Hedge Market Revenue',
                                                 'Capacity Contract Cost':'Storage Capacity PPA Cost',
                                                 'ra_open_position_cost':'RA Open Position Cost',
                                                 'StorageDispatchPnodeCost':'Storage Wholesale Price Arbitrage',
@@ -396,7 +406,7 @@ def build_ra_open_position_plot(ra_summary):
                                     facet_col='RA_Requirement', 
                                     color='Position', 
                                     color_discrete_map={'Excess RA':'green', 'Open Position':'red'}, 
-                                    title='Monthly RA position by requirement')
+                                    title='Monthly RA position by requirement').update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
     monthly_ra_open_fig.for_each_annotation(lambda a: a.update(text=a.text.replace("RA_Requirement=", "")))
 
     return monthly_ra_open_fig
@@ -532,3 +542,288 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
             ])))
 
     return dispatch_fig
+
+def build_nodal_prices_plot(nodal_prices, timestamps, generation_projects_info):
+    """
+    Builds a timeseries plot of all nodal prices used in the model
+    """
+    # merge the timestamp data
+    nodal_data = nodal_prices.copy().merge(timestamps, how='left', left_on='timepoint', right_on='timepoint_id')
+
+    # create a dictionary mapping nodes to projects
+    node_map = dict()
+    for node in generation_projects_info.gen_pricing_node.unique():
+        node_map[node] = list(generation_projects_info.loc[generation_projects_info['gen_pricing_node'] == node, 'GENERATION_PROJECT'].unique())
+
+    nodal_data['Generators'] = nodal_data['pricing_node'].map(node_map)
+
+    nodal_fig = px.line(nodal_data, 
+                        x='timestamp', 
+                        y='nodal_price', 
+                        color='pricing_node', 
+                        hover_data=nodal_data[['Generators']],
+                        labels={'nodal_price':'$/MWh','timestamp':'Datetime','pricing_node':'Node'}, 
+                        title='Nodal Prices', 
+                        template='plotly_white').update_layout(hovermode="x").update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
+    nodal_fig.update_xaxes(
+        rangeslider_visible=True,
+        rangeselector=dict(
+            buttons=list([
+                dict(count=1, label="1d", step="day", stepmode="backward"),
+                dict(count=7, label="1w", step="day", stepmode="backward"),
+                dict(count=1, label="1m", step="month", stepmode="backward"),
+                dict(step="all")
+            ])))
+    
+    return nodal_fig
+
+def build_state_of_charge_plot(storage_dispatch, storage_builds, generation_projects_info):
+    """
+    """
+    soc = storage_dispatch.copy()[['generation_project','timestamp','StateOfCharge']]
+
+    soc['timestamp'] = pd.to_datetime(soc['timestamp'])
+
+    #soc = storage.pivot(index='timestamp', columns='generation_project', values='StateOfCharge')
+
+    # identify which projects are hybrids
+    hybrid_list = list(generation_projects_info.loc[generation_projects_info['storage_hybrid_generation_project'] != '.', 'GENERATION_PROJECT'].unique())
+
+
+    #load storage capacity
+    storage_energy_capacity = storage_builds.copy()[['generation_project','OnlineEnergyCapacityMWh']]
+    # add a column specifying the storage type
+    storage_energy_capacity['Type'] = 'Standalone Storage'
+    storage_energy_capacity.loc[storage_energy_capacity['generation_project'].isin(hybrid_list),'Type'] = 'Hybrid Storage'
+    # groupby type
+    storage_energy_capacity = storage_energy_capacity.groupby('Type').sum()
+    #create another dictionary of storage energy capacity summed by storage type
+    grouped_storage_energy_capacity_dict = storage_energy_capacity.to_dict()['OnlineEnergyCapacityMWh']
+
+    # add a column specifying the storage type
+    soc['Type'] = 'Standalone Storage'
+    soc.loc[soc['generation_project'].isin(hybrid_list),'Type'] = 'Hybrid Storage'
+    # groupby type
+    soc = soc.groupby(['timestamp','Type']).sum().reset_index()
+
+    soc = soc.pivot(index='timestamp', columns='Type', values='StateOfCharge')
+
+    #divide by the total capacity to get state of charge
+    soc = soc.div(soc.assign(**grouped_storage_energy_capacity_dict))
+
+    #soc.index = pd.to_datetime(soc.index)
+    soc = soc.reset_index()
+
+    soc_fig = px.line(soc, x='timestamp', y=['Hybrid Storage','Standalone Storage'], color_discrete_map={'Standalone Storage':'green','Hybrid Storage':'yellowgreen'}, labels={'timestamp':'Datetime','value':'%'}, title='Storage State of Charge')
+
+    soc_fig.update_xaxes(
+    rangeslider_visible=True,
+    rangeselector=dict(
+        buttons=list([
+            dict(count=1, label="1d", step="day", stepmode="backward"),
+            dict(count=7, label="1w", step="day", stepmode="backward"),
+            dict(count=1, label="1m", step="month", stepmode="backward"),
+            dict(step="all")
+        ])))
+
+
+    return soc_fig
+
+def build_month_hour_dispatch_plot(dispatch, load_balance):
+    """
+    Under construction
+    """
+    """
+    mh_dispatch = dispatch.copy()
+    mh_dispatch = mh_dispatch.set_index('timestamp')
+
+    #groupby month and hour
+    mh_dispatch = mh_dispatch.groupby(['generation_project', mh_dispatch.index.month, mh_dispatch.index.hour], axis=0).mean()
+    mh_dispatch.index = mh_dispatch.index.rename(['Project','Month','Hour'])
+    mh_dispatch = mh_dispatch.reset_index()
+
+    #add a technology column
+    mh_dispatch['Technology'] = mh_dispatch['Project'].str.split('_', expand=True)[0]
+
+    mh_dispatch = mh_dispatch[mh_dispatch['DispatchMW'] > 0]
+
+
+    #load data
+    mh_load = pd.read_csv(data_dir / 'load_balance.csv', usecols=['timestamp','zone_demand_mw'], index_col='timestamp', parse_dates=True, infer_datetime_format=True).rename(columns={'zone_demand_mw':'DEMAND'})
+    mh_load = mh_load.groupby([mh_load.index.month, mh_load.index.hour], axis=0).mean()
+    mh_load.index = mh_load.index.rename(['Month','Hour'])
+    mh_load = mh_load.reset_index()
+
+    try:
+        mh_charge = storage_charge.copy().set_index('timestamp')
+        mh_charge = mh_charge.groupby([mh_charge.index.month, mh_charge.index.hour], axis=0).mean()
+        mh_charge.index = mh_charge.index.rename(['Month','Hour'])
+        mh_charge = mh_charge.reset_index()
+        #merge load data
+        mh_charge = mh_charge.merge(mh_load, how='left', on=['Month','Hour'])
+        mh_charge['ChargeMW'] = mh_charge['ChargeMW'] + mh_charge['DEMAND']
+    except NameError:
+        pass
+
+
+    # Generate the Figure
+    #####################
+
+    color_map = {'HYDRO':'Purple',
+    'ONWIND':'Blue',
+    'OFFWIND':'Navy',
+    'PV':'Yellow',
+    'PVHYBRID':'GreenYellow',
+    'CSP':'Orange',
+    'GEO':'Sienna',
+    'STORAGE':'Green',
+    'STORAGEHYBRID':'GreenYellow',
+    'SYSTEM':'Red'}
+
+    mh_fig = px.area(mh_dispatch, x='Hour', y='DispatchMW', facet_col='Month', color='Technology', line_group='Project', color_discrete_map=color_map, facet_col_wrap=6, width=1000, height=600, title='Month-Hour Average Generation Profiles')
+    mh_fig.layout.template = 'plotly_white'
+    mh_fig.update_traces(line={'dash':'dot'})
+
+    try:
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 1, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 1, 'ChargeMW'], line=dict(color='green', width=4), row=2, col=1, name='STORAGE_Charge', showlegend=True)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 2, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 2, 'ChargeMW'], line=dict(color='green', width=4), row=2, col=2, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 3, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 3, 'ChargeMW'], line=dict(color='green', width=4), row=2, col=3, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 4, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 4, 'ChargeMW'], line=dict(color='green', width=4), row=2, col=4, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 5, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 5, 'ChargeMW'], line=dict(color='green', width=4), row=2, col=5, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 6, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 6, 'ChargeMW'], line=dict(color='green', width=4), row=2, col=6, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 7, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 7, 'ChargeMW'], line=dict(color='green', width=4), row=1, col=1, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 8, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 8, 'ChargeMW'], line=dict(color='green', width=4), row=1, col=2, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 9, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 9, 'ChargeMW'], line=dict(color='green', width=4), row=1, col=3, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 10, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 10, 'ChargeMW'], line=dict(color='green', width=4), row=1, col=4, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 11, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 11, 'ChargeMW'], line=dict(color='green', width=4), row=1, col=5, name='STORAGE_Charge', showlegend=False)
+        mh_fig.add_scatter(x=mh_charge.loc[mh_charge['Month'] == 12, 'Hour'], y=mh_charge.loc[mh_charge['Month'] == 12, 'ChargeMW'], line=dict(color='green', width=4), row=1, col=6, name='STORAGE_Charge', showlegend=False)
+    except (NameError, KeyError) as e:
+        pass
+
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 1, 'Hour'], y=mh_load.loc[mh_load['Month'] == 1, 'DEMAND'], line=dict(color='black', width=4), row=2, col=1, name='Demand', showlegend=True)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 2, 'Hour'], y=mh_load.loc[mh_load['Month'] == 2, 'DEMAND'], line=dict(color='black', width=4), row=2, col=2, name='Demand',showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 3, 'Hour'], y=mh_load.loc[mh_load['Month'] == 3, 'DEMAND'], line=dict(color='black', width=4), row=2, col=3, name='Demand', showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 4, 'Hour'], y=mh_load.loc[mh_load['Month'] == 4, 'DEMAND'], line=dict(color='black', width=4), row=2, col=4, name='Demand', showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 5, 'Hour'], y=mh_load.loc[mh_load['Month'] == 5, 'DEMAND'], line=dict(color='black', width=4), row=2, col=5, name='Demand', showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 6, 'Hour'], y=mh_load.loc[mh_load['Month'] == 6, 'DEMAND'], line=dict(color='black', width=4), row=2, col=6, name='Demand', showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 7, 'Hour'], y=mh_load.loc[mh_load['Month'] == 7, 'DEMAND'], line=dict(color='black', width=4), row=1, col=1, name='Demand', showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 8, 'Hour'], y=mh_load.loc[mh_load['Month'] == 8, 'DEMAND'], line=dict(color='black', width=4), row=1, col=2, name='Demand', showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 9, 'Hour'], y=mh_load.loc[mh_load['Month'] == 9, 'DEMAND'], line=dict(color='black', width=4), row=1, col=3, name='Demand', showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 10, 'Hour'], y=mh_load.loc[mh_load['Month'] == 10, 'DEMAND'], line=dict(color='black', width=4), row=1, col=4, name='Demand', showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 11, 'Hour'], y=mh_load.loc[mh_load['Month'] == 11, 'DEMAND'], line=dict(color='black', width=4), row=1, col=5, name='Demand', showlegend=False)
+    mh_fig.add_scatter(x=mh_load.loc[mh_load['Month'] == 12, 'Hour'], y=mh_load.loc[mh_load['Month'] == 12, 'DEMAND'], line=dict(color='black', width=4), row=1, col=6, name='Demand', showlegend=False)
+
+    month_names = ['July', 'August', 'September', 'October', 'November', 'December','January', 'February', 'March', 'April', 'May', 'June']
+    for i, a in enumerate(mh_fig.layout.annotations):
+        a.text = month_names[i]
+
+
+    mh_fig.update_xaxes(dtick=3)
+    
+    return mh_fig
+    """
+
+def build_open_position_plot(load_balance):
+    """
+    """
+    #merge mismatch data
+    mismatch = load_balance.copy()
+    mismatch['timestamp'] = pd.to_datetime(mismatch['timestamp'])
+
+    mismatch['Net generation'] = mismatch['ZoneTotalGeneratorDispatch'] + mismatch['ZoneTotalExcessGen'] - mismatch['zone_demand_mw']
+    mismatch['Net position with storage'] = mismatch['Net generation'] + mismatch['ZoneTotalStorageDischarge'] - mismatch['ZoneTotalStorageCharge']
+
+    mismatch = mismatch.set_index('timestamp')
+
+    mismatch = mismatch.groupby([mismatch.index.month, mismatch.index.hour], axis=0).mean()
+    mismatch.index = mismatch.index.rename(['Month','Hour'])
+    mismatch = mismatch.reset_index()
+
+    # set month numbers to names
+    month_names = {1:'January',2:'February',3:'March', 4:'April', 5:'May', 6:'June',7:'July', 8:'August', 9:'September', 10:'October', 11:'November', 12:'December'}
+    mismatch['Month'] = mismatch['Month'].replace(month_names)
+
+    mh_mismatch_fig = px.line(mismatch, 
+                            x='Hour', 
+                            y=['Net generation','Net position with storage'], 
+                            facet_col='Month', 
+                            facet_col_wrap=3, 
+                            width=1000, 
+                            height=1000,
+                            labels={'variable':'Position','value':'MW'}).update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
+    mh_mismatch_fig.update_xaxes(dtick=3)
+    mh_mismatch_fig.for_each_annotation(lambda a: a.update(text=a.text.replace("Month=", "")))
+    mh_mismatch_fig.update_traces(fill='tozeroy')
+
+    return mh_mismatch_fig
+
+def construct_storage_stats_table(storage_cycle_count, storage_builds, storage_dispatch):
+
+    cycles = storage_cycle_count.copy()[['generation_project','storage_max_annual_cycles','Battery_Cycle_Count']]
+    cycles = cycles.round(decimals=2)
+    cycles = cycles[cycles['Battery_Cycle_Count'] > 0]
+
+    # merge average state of charge data
+    soc = storage_dispatch.copy()[['generation_project','StateOfCharge']]
+    soc = soc.groupby('generation_project').mean().reset_index()
+    cycles = cycles.merge(soc, how='left', on='generation_project')
+
+    # merge energy capacity data
+    storage_energy_capacity = storage_builds.copy()[['generation_project','OnlineEnergyCapacityMWh']]
+    cycles = cycles.merge(storage_energy_capacity, how='left', on='generation_project')
+
+    # calculate the number of cycles
+    cycles['Battery_Cycle_Count'] = cycles['Battery_Cycle_Count'] / cycles['OnlineEnergyCapacityMWh']
+
+    # calculate the average state of charge
+    cycles['Average SOC Percent'] = cycles['StateOfCharge'] / cycles['OnlineEnergyCapacityMWh'] * 100
+
+    # drop unused columns
+    cycles = cycles.drop(columns=['OnlineEnergyCapacityMWh','StateOfCharge']).set_index('generation_project')
+    cycles['Battery_Cycle_Count'] = cycles['Battery_Cycle_Count'].astype(int)
+
+    cycles = cycles.rename(columns={'Battery_Cycle_Count':'Annual Cycles', 'storage_max_annual_cycles':'Maximum Annual Cycle Limit'})
+
+    return cycles
+
+def export_scenario_summary():
+    """
+    """
+    summary = pd.DataFrame(columns=['Scenario Name'], data=['test'])
+
+    summary['Scenario Name'] = scenario_name
+
+    #Goal Data
+    summary['Time-coincident Delivered %'] = tc_percent_renewable
+    summary['Time-coincident Generation %'] = tc_no_storage_percent_renewable
+    summary['Annual Volumetric Renewable %'] = annual_percent_renewable
+
+    unformatted_cost = unformatted_cost.rename(columns={'Annual Real Cost': ' (Annual)',	'Delivered Cost per MWh': ' (per MWh)'}).melt(id_vars=['Cost Component'], var_name='type', value_name=0)
+    unformatted_cost['col_name'] = unformatted_cost['Cost Component'] + unformatted_cost['type']
+
+
+    summary = pd.concat([summary, unformatted_cost[['col_name',0]].set_index('col_name').T], axis=1)
+
+    #Portfolio Mix
+    portfolio_summary = portfolio[['MW','Status','Technology']].groupby(['Status','Technology']).sum().reset_index()
+    portfolio_summary['Description'] = portfolio_summary['Status'] + " " + portfolio_summary['Technology']
+    portfolio_summary = portfolio_summary.drop(columns=['Status','Technology'])
+    portfolio_summary = portfolio_summary.set_index('Description').transpose().reset_index(drop=True).add_prefix('MW Capacity from ')
+
+    summary = pd.concat([summary, portfolio_summary], axis=1)
+
+    #Load
+    summary['Customer Load GWh'] = load['zone_demand_mw'].sum(axis=0) / 1000
+    try:
+        summary['Total Load with Storage GWh'] = (load['zone_demand_mw'].sum(axis=0) + storage_charge['ChargeMW'].sum(axis=0)) / 1000
+    except (KeyError, NameError):
+        summary['Total Load with Storage GWh'] = summary['Customer Load GWh']
+
+    #Generation Mix
+    generation_summary = generation_mix.set_index('Source').transpose().reset_index(drop=True).add_prefix('GWh Generation from ')
+    summary = pd.concat([summary, generation_summary], axis=1)
+
+    summary = summary.transpose()
+    summary.columns = [f'{scenario_name}']
+
+    summary.to_csv(data_dir / 'scenario_summary.csv')

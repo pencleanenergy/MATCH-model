@@ -1,10 +1,22 @@
 -------------------------------------------------------------------------------
-Commmit 2021.09.XX (Version 0.3.1)
+Commmit 2021.09.28 (Version 0.3.1)
 -------------------------------------------------------------------------------
 
-^^ Need to update date
+This commit fixes and streamlines the post_solve and reporting process. 
 
-This commit fixes and streamlines the post_solve and reporting process
+We have updated `summary_report.ipynb` with the main/essential reporting outputs for model validation. Other output tables/plots still need to be added, but are less critical. 
+In updating the summary report, we moved all of the functions that manipulate the output data to a separate file `report_functions`, which is imported into `summary_report.ipynb`. This reduces the amount of actual code found in the summary report, makes the code more modular, and eliminates duplicate `pd.read_csv()` functions within the file.
+
+### Closes #22 and #37
+- Updates post-solve functions to reduce output file size and unneccesary output files
+- removes `switch_model.reporting` from the default/required modules for each model run. This module exported csvs for each decision variable, which duplicated data exported as part of other post solve functions. Removing this module also gets rid of the `total_cost.txt` and `cost_components.csv` outputs, and also removes the "--sorted-output" option from the `options.txt` file
+- `model_inputs.xlsx` has been updated to remove `switch_model.reporting` from teh scenarios tab, and `sorted-output` from the solver options tab.
+
+Other updates
+- updated README
+- Disabled the functionality to generate scenario comparison reports until we have completed updates on the summary_report
+- Updated how the annual renewable target was calculated to take storage losses into account
+- Adds a calculation of hedge market revenue to the `system_power.csv` output, based on a new input `hedge_settlement_node`, which specifies at which wholesale pricing node the hedge contract should be settled. This hedge market revenue is not included in the objective function, in order to prevent over-reliance on system power if the hedge is in the money.
 
 -------------------------------------------------------------------------------
 Commmit 2021.09.22 (Version 0.3.0)
