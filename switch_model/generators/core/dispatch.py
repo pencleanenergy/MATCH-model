@@ -22,9 +22,7 @@ except:
     can_plot = False
 
 dependencies = 'switch_model.timescales', 'switch_model.balancing.load_zones',\
-    'switch_model.financials', 'switch_model.energy_sources.properties', \
-    'switch_model.generators.core.build'
-optional_dependencies = 'switch_model.transmission.local_td'
+    'switch_model.financials', 'switch_model.generators.core.build'
 
 def define_components(mod):
     """

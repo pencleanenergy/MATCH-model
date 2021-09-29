@@ -1,4 +1,28 @@
 -------------------------------------------------------------------------------
+Commmit 2021.09.29 (Version 0.4.0)
+-------------------------------------------------------------------------------
+
+Implements changes that allow for dispatchable generators to be modeled, and for the GHG emissions from generation to be accounted for.
+Addresses #23, #27
+Closes #38
+
+## Emissions Accounting
+
+The old switch model tracked emissions based on fuel consumption of each generator. However, since this model focuses on contracted generation (for which fuel costs and combustion are not direct concerns of the off-taker), we remove variables that track fuels and fuel costs. The newly-implemented emissions tracking assigns an emission factor (unit of emissions / MWh) to each generator. Grid emissions are assigned an emission factor for each hour (timepoint). Our implementation does not require a specific unit for the emission factor, as long as these units are consistent across all of the model inputs. For example, this allows the flexibility for the user to use their preferred mass unit (lb, kg, metric tonnes), GHG gas (CO2, CO2eq), and scope (direct emissions vs lifecycle emissions). In the `model_inputs.xlsx` spreadsheet, the user specifies which unit they are using in the "general" tab, and this unit will be pulled into the output reports.
+
+This current implementation is meant to track attributional emissions using a market-based accounting method. This implementation does not track avoided or marginal emissions from the portfolio.
+
+
+- Removes non_fuel_energy_sources, fuel, and fuel_cost inputs
+- Removes `switch_model.energy_sources.properties` as a required module
+- Creates `switch_model.energy_sources.emissions` as a new module that can track emissions from each generator and from any system power consumed
+- small changes to `generate_input_files` to allow for dispatchable, non-variable, non-baseload generators to be modeled. 
+- Moves the parameters for CCS-equipped generators to the emissions module from `switch_model.generators.extensions.gen_fuel_costs`
+- Removes the following modules from the model: `switch_model.energy_sources.properties`, `switch_model.generators.extensions.gen_fuel_costs`, `switch_model.energy_sources.fuel_costs`
+- Removed the interest rate from the financials, since it is not used
+- Adds emissions data to summary report
+
+-------------------------------------------------------------------------------
 Commmit 2021.09.28 (Version 0.3.1)
 -------------------------------------------------------------------------------
 

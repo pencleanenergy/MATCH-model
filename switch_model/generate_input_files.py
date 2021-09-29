@@ -23,34 +23,36 @@ import PySAM.Windpower as wind
 def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
     # add a column for ppa penalty
     xl_gen['ppa_penalty'] = 0
+
+    # remove any generation projects that are not variable or baseload
+    gens_to_check = xl_gen.copy().loc[(xl_gen['gen_is_variable'] == 1) | (xl_gen['gen_is_baseload'] == 1),:]
+    # create a list of unique generators 
+    gens_to_check = list(gens_to_check['GENERATION_PROJECT'].unique())
     
     # for each generator
-    for gen in list(xl_gen['GENERATION_PROJECT'].unique()):
-        if 'STORAGE' not in gen:
-            ppa_price = xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].values[0]
-            node = xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
-            nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
-            profile = df_vcf.copy()[[gen]].reset_index(drop=True)
+    for gen in gens_to_check:
+        ppa_price = xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].values[0]
+        node = xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
+        nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
+        profile = df_vcf.copy()[[gen]].reset_index(drop=True)
 
-            # calculate PPA cost
-            mean_ppa_cost = (profile[gen] * ppa_price).sum() / profile[gen].sum()
+        # calculate PPA cost
+        mean_ppa_cost = (profile[gen] * ppa_price).sum() / profile[gen].sum()
 
-            # caclulate nodal revenue
-            mean_nodal_revenue = (profile[gen] * nodal_price[node]).sum() / profile[gen].sum()
+        # caclulate nodal revenue
+        mean_nodal_revenue = (profile[gen] * nodal_price[node]).sum() / profile[gen].sum()
 
-            # if the mean nodal revenue is greater than the mean PPA cost
-            if mean_nodal_revenue >= mean_ppa_cost:
-                # calculate a penalty value that makes the mean PPA value higher than nodal revenue by $0.01 per MWh
-                ppa_penalty = round(mean_nodal_revenue - mean_ppa_cost + 0.01, 3)
-                print(f'WARNING: {gen} nodal revenue greater than PPA cost')
-                print('This may lead to over-procurement of this resource')
-                print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MWh')
-                print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MWh')
-                print(f'Adding ${ppa_penalty} penalty to PPA cost')
-                xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'ppa_penalty'] = ppa_penalty
-            else:
-                ppa_penalty = 0
-    
+        # if the mean nodal revenue is greater than the mean PPA cost
+        if mean_nodal_revenue >= mean_ppa_cost:
+            # calculate a penalty value that makes the mean PPA value higher than nodal revenue by $0.01 per MWh
+            ppa_penalty = round(mean_nodal_revenue - mean_ppa_cost + 0.01, 3)
+            print(f'WARNING: {gen} nodal revenue greater than PPA cost')
+            print('This may lead to over-procurement of this resource')
+            print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MWh')
+            print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MWh')
+            print(f'Adding ${ppa_penalty} penalty to PPA cost')
+            xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'ppa_penalty'] = ppa_penalty
+
     return xl_gen
 
         
@@ -80,7 +82,7 @@ def generate_inputs(model_workspace):
     timezone = xl_general.loc[xl_general['Parameter'] == 'Timezone', 'Input'].item()
     nrel_api_key = xl_general.loc[xl_general['Parameter'] == 'NREL API key', 'Input'].item()
     nrel_api_email = xl_general.loc[xl_general['Parameter'] == 'NREL API email', 'Input'].item()
-    
+    emissions_unit = xl_general.loc[xl_general['Parameter'] == 'GHG Emissions Unit', 'Input'].item()
 
     tz_offset = np.round(datetime(year=2020,month=1,day=1,tzinfo=pytz.timezone(timezone)).utcoffset().total_seconds()/3600)
 
@@ -144,13 +146,12 @@ def generate_inputs(model_workspace):
     #financials
     df_financials = pd.DataFrame(
         data={'base_financial_year': [int(xl_general.loc[xl_general['Parameter'] == 'Base Financial Year', 'Input'].item())],
-            'discount_rate': [xl_general.loc[xl_general['Parameter'] == 'Discount Rate', 'Input'].item()],
-            'interest_rate': [xl_general.loc[xl_general['Parameter'] == 'Interest Rate', 'Input'].item()]}
+            'discount_rate': [xl_general.loc[xl_general['Parameter'] == 'Discount Rate', 'Input'].item()]}
     )
 
     # Read data from the excel file
 
-    xl_gen = pd.read_excel(io=model_inputs, sheet_name='generation').dropna(axis=1, how='all')
+    xl_gen = pd.read_excel(io=model_inputs, sheet_name='generation', skiprows=2).dropna(axis=1, how='all')
     if xl_gen.isnull().values.any():
         raise ValueError("The generation tab contains a missing value. Please fix")
 
@@ -193,6 +194,9 @@ def generate_inputs(model_workspace):
 
     # fixed_costs.csv
     xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs').dropna(axis=1, how='all')
+
+    # grid_emissions.csv
+    xl_grid_emissions = pd.read_excel(io=model_inputs, sheet_name='grid_emissions', skiprows=1).dropna(axis=1, how='all')
 
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
@@ -385,8 +389,20 @@ def generate_inputs(model_workspace):
             # rec_value.csv
             xl_rec_value.to_csv(input_dir / 'rec_value.csv', index=False)
 
-            # rec_value.csv
+            # emission unit.txt
+            ghg_emissions_unit = open(input_dir / 'ghg_emissions_unit.txt', 'w+')
+            ghg_emissions_unit.write(emissions_unit)
+            ghg_emissions_unit.close()
+
+            # fixed_costs.csv
             xl_fixed_costs.to_csv(input_dir / 'fixed_costs.csv', index=False)
+
+            # grid_emissions.csv
+            grid_emissions = xl_grid_emissions.reset_index(drop=True).drop(columns=['Datetime'])
+            grid_emissions['timepoint'] = grid_emissions.index + 1
+            grid_emissions = grid_emissions.melt(id_vars=['timepoint'], var_name='load_zone', value_name='grid_emission_factor')
+            grid_emissions = grid_emissions[['load_zone','timepoint','grid_emission_factor']]
+            grid_emissions.to_csv(input_dir / 'grid_emissions.csv', index=False)
 
             # gen_build_years.csv
             gen_build_years = set_gens.copy()[['GENERATION_PROJECT']]
@@ -412,11 +428,11 @@ def generate_inputs(model_workspace):
                         'gen_is_variable',	
                         'gen_is_baseload',
                         'gen_is_storage',	
-                        'gen_capacity_limit_mw',	
-                        'gen_full_load_heat_rate',	
+                        'gen_capacity_limit_mw',		
                         'gen_scheduled_outage_rate',	
                         'gen_forced_outage_rate',
                         'gen_curtailment_limit',	
+                        'gen_emission_factor',
                         'storage_roundtrip_efficiency',	
                         'storage_charge_to_discharge_ratio',	
                         'storage_energy_to_power_ratio',	
@@ -448,17 +464,9 @@ def generate_inputs(model_workspace):
 
             generation_projects_info.to_csv(input_dir / 'generation_projects_info.csv', index=False)
 
-            # non_fuel_energy_sources.csv
-            non_fuel_energy_sources = set_gens[['gen_energy_source']].drop_duplicates(ignore_index=True).rename(columns={'gen_energy_source':'energy_source'})
-            non_fuel_energy_sources.to_csv(input_dir / 'non_fuel_energy_sources.csv', index=False)
-
-            # fuels.csv
-            fuels = pd.DataFrame(columns=['fuel','co2_intensity','upstream_co2_intensity'])
-            fuels.to_csv(input_dir / 'fuels.csv', index=False)
-
-            # fuel_cost.csv
-            fuel_cost = pd.DataFrame(columns=['load_zone','fuel','period','fuel_cost'])
-            fuel_cost.to_csv(input_dir / 'fuel_cost.csv', index=False)
+            # energy_sources.csv
+            energy_sources = set_gens[['gen_energy_source']].drop_duplicates(ignore_index=True).rename(columns={'gen_energy_source':'energy_source'})
+            energy_sources.to_csv(input_dir / 'energy_sources.csv', index=False)
 
             # LOAD DATA #
 

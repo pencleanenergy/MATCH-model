@@ -78,6 +78,30 @@ def hourly_renewable_percentage(load_balance):
 
     return percent
 
+def build_hourly_emissions_heatmap(grid_emissions, emissions, emissions_unit):
+    """
+    """
+    # get the maximum grid emissions factor
+    grid_max_ef = grid_emissions['grid_emission_factor'].max()
+
+    # rearrange data in a grid
+    emissions_heatmap_data = emissions.copy()[['timestamp','Delivered Emission Factor']]
+    emissions_heatmap_data.index = pd.to_datetime(emissions_heatmap_data['timestamp']) 
+    emissions_heatmap_data['Date'] = emissions_heatmap_data.index.date
+    emissions_heatmap_data['Hour of Day'] = emissions_heatmap_data.index.hour
+    emissions_heatmap_data = emissions_heatmap_data.pivot(index='Hour of Day', columns='Date', values='Delivered Emission Factor')
+    emissions_heatmap_data = emissions_heatmap_data.round(4)
+
+    emissions_heatmap = px.imshow(emissions_heatmap_data, 
+            x=emissions_heatmap_data.columns, 
+            y=emissions_heatmap_data.index, 
+            color_continuous_scale='rdylgn_r', 
+            range_color=[0,grid_max_ef], 
+            title=f'Hourly Emisission Intensity of Delivered Energy ({emissions_unit})').update_yaxes(dtick=3)
+    
+    return emissions_heatmap
+
+
 
 def generator_portfolio(gen_cap, gen_build_predetermined):
     """
