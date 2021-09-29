@@ -11,8 +11,7 @@ import os
 from pyomo.environ import *
 
 dependencies = 'switch_model.timescales', 'switch_model.balancing.load_zones',\
-    'switch_model.financials', 'switch_model.energy_sources.properties.properties', \
-    'switch_model.generators.core.build', 'switch_model.generators.core.dispatch'
+    'switch_model.financials', 'switch_model.generators.core.build', 'switch_model.generators.core.dispatch'
 
 def define_components(mod):
     """

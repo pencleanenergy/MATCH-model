@@ -221,6 +221,7 @@ def define_components(mod):
         {m.gen_tech[g] for g in m.GENERATION_PROJECTS},
         ordered=False
     )
+    mod.ENERGY_SOURCES = Set(dimen=1)
     mod.gen_energy_source = Param(mod.GENERATION_PROJECTS,
         validate=lambda m,val,g: val in m.ENERGY_SOURCES or val == "multiple", within=Any)
     mod.gen_load_zone = Param(mod.GENERATION_PROJECTS, within=mod.LOAD_ZONES)
@@ -268,8 +269,10 @@ def define_components(mod):
         return result
     mod.GENS_IN_ZONE = Set(
         mod.LOAD_ZONES,
-        initialize=GENS_IN_ZONE_init
-    )
+        initialize=GENS_IN_ZONE_init)
+    mod.NON_STORAGE_GENS_IN_ZONE = Set(
+        mod.LOAD_ZONES,
+        initialize=lambda m, z: [g for g in m.GENS_IN_ZONE[z] if not m.gen_is_storage[g]])
 
     def GENS_BY_TECHNOLOGY_init(m, t):
         if not hasattr(m, 'GENS_BY_TECH_dict'):
@@ -573,6 +576,9 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'gen_build_years.csv'),
         set=mod.GEN_BLD_YRS)
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'energy_sources.csv'),
+        set=mod.ENERGY_SOURCES)
 
 
 def post_solve(m, outdir):

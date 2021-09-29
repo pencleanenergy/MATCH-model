@@ -126,12 +126,6 @@ def define_components(mod):
     year. Future dollars are brought back to this dollar-year via the
     discount_rate.
 
-    interest_rate is real interest rate paid on a loan from a bank. In
-    economic equilibrium conditions, this will be equal to the discount
-    rate. We have specified it separately from discount rate so people
-    can independently explore the impacts of different choices of
-    discount rates without making assumptions about loan conditions.
-
     discount_rate is the annual real discount rate used to convert
     future dollars into net present value for purposes of comparison. It
     is mathematically similar to interest rate, but has very different
@@ -217,10 +211,9 @@ def define_components(mod):
     """
 
     mod.base_financial_year = Param(within=NonNegativeReals)
-    mod.interest_rate = Param(within=NonNegativeReals)
     mod.discount_rate = Param(
-        within=NonNegativeReals, default=lambda m: value(m.interest_rate))
-    mod.min_data_check('base_financial_year', 'interest_rate')
+        within=NonNegativeReals)
+    mod.min_data_check('base_financial_year', 'discount_rate')
     mod.bring_annual_costs_to_base_year = Param(
         mod.PERIODS,
         within=NonNegativeReals,
@@ -307,14 +300,14 @@ def load_inputs(mod, switch_data, inputs_dir):
     """
     Import base financial data from a .csv file. The inputs_dir should
     contain the file financials.csv that gives parameter values for
-    base_financial_year, interest_rate and optionally discount_rate.
+    base_financial_year and discount_rate.
     The names of parameters go on the first row and the values go on
     the second.
     """
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'financials.csv'),
         optional=False, auto_select=True,
-        param=[mod.base_financial_year, mod.interest_rate, mod.discount_rate]
+        param=[mod.base_financial_year, mod.discount_rate]
     )
 
 def post_solve(instance, outdir):
