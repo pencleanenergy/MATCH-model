@@ -282,14 +282,14 @@ def define_components(mod):
             m.ChargeStorage[g,t] <= m.GenCapacityInTP[g, t] * m.storage_charge_to_discharge_ratio[g]))
 
     # Summarize storage charging for the energy balance equations
-    mod.ZoneTotalStorageDispatch = Expression(
+    mod.ZoneTotalStorageDischarge = Expression(
         mod.ZONE_TIMEPOINTS,
         rule=lambda m, z, t: \
             sum(m.DischargeStorage[g, t]
                 for g in m.STORAGE_GENS_IN_ZONE[z]
                 if (g, t) in m.STORAGE_GEN_TPS),
     )
-    mod.Zone_Power_Injections.append('ZoneTotalStorageDispatch')
+    mod.Zone_Power_Injections.append('ZoneTotalStorageDischarge')
 
 
     mod.ZoneTotalStorageCharge = Expression(
@@ -379,6 +379,18 @@ def define_components(mod):
     )
     mod.Cost_Components_Per_TP.append('StorageNodalEnergyCostInTP')
 
+    # calculate delivery costs
+    def StorageDeliveryCost_Expr(m,g,t):
+        delivery_cost = m.DischargeStorage[g,t] * m.nodal_price[m.gen_load_zone[g],t]
+        if g in m.HYBRID_STORAGE_GENS:
+            # hybrid charging should discount the delivery cost of the paired generation, since that generation is being consumed at the same pnode
+            delivery_cost = delivery_cost - (m.ChargeStorage[g,t] * m.nodal_price[m.gen_load_zone[g],t])
+        return delivery_cost
+    mod.StorageDispatchDeliveryCost = Expression(
+        mod.STORAGE_GEN_TPS,
+        rule = StorageDeliveryCost_Expr
+    )
+
 
 
 def load_inputs(mod, switch_data, inputs_dir):
@@ -442,13 +454,13 @@ def post_solve(instance, outdir):
     reporting.write_table(
         instance, instance.STORAGE_GEN_TPS,
         output_file=os.path.join(outdir, "storage_dispatch.csv"),
-        headings=("generation_project", "timestamp", "load_zone",
-                  "ChargeMW", 'DispatchMW', 
-                  "StateOfCharge", "StorageDispatchPnodeCost",),
+        headings=("generation_project", "timestamp",
+                  "ChargeMW", 'DischargeMW', 
+                  "StateOfCharge", "StorageDispatchPnodeCost","StorageDispatchDeliveryCost"),
         values=lambda m, g, t: (
-            g, m.tp_timestamp[t], m.gen_load_zone[g],
+            g, m.tp_timestamp[t],
             m.ChargeStorage[g, t], m.DischargeStorage[g, t], 
-            m.StateOfCharge[g, t], m.StorageDispatchPnodeCost[g, t]
+            m.StateOfCharge[g, t], m.StorageDispatchPnodeCost[g, t], m.StorageDispatchDeliveryCost[g,t]
             ))
     reporting.write_table(
         instance, instance.STORAGE_GENS, instance.PERIODS,

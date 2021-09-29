@@ -307,8 +307,7 @@ def load_inputs(mod, switch_data, inputs_dir):
 
 def post_solve(instance, outdir):
     """
-    Export storage build information to storage_builds.csv, and storage
-    dispatch info to storage_dispatch.csv
+
     """
     ra_dat = [{
         "Period": p,
@@ -321,7 +320,7 @@ def post_solve(instance, outdir):
         "Excess_RA_MW":  value(instance.RAExcess[p,r,mo]),
         "RA_Cost": value(instance.ra_cost[p,r,mo]),
         "RA_Value": value(instance.ra_resell_value[p,r,mo]),
-        "Open_Position_Cost": value(instance.RAOpenPosition[p,r,mo] * instance.ra_cost[p,r,mo]),
+        "RA_Open_Position_Cost": value(instance.RAOpenPosition[p,r,mo] * instance.ra_cost[p,r,mo]),
         "Excess_RA_Value": value(instance.RAExcess[p,r,mo] * instance.ra_resell_value[p,r,mo])
     } for (r, mo) in instance.RA_MONTHS for p in instance.PERIODS]
     RA_df = pd.DataFrame(ra_dat)
@@ -338,7 +337,7 @@ def post_solve(instance, outdir):
         "Excess_RA_MW": value(instance.FlexRAExcess[p,mo]),
         "RA_Cost": value(instance.flexible_ra_cost[p,mo]),
         "RA_Value": value(instance.flexible_ra_resell_value[p,mo]),
-        "Open_Position_Cost": value(instance.FlexRAOpenPosition[p,mo] * instance.flexible_ra_cost[p,mo]),
+        "RA_Open_Position_Cost": value(instance.FlexRAOpenPosition[p,mo] * instance.flexible_ra_cost[p,mo]),
         "Excess_RA_Value": value(instance.FlexRAExcess[p,mo] * instance.flexible_ra_resell_value[p,mo])
     } for mo in instance.MONTHS for p in instance.PERIODS]
     FRA_df = pd.DataFrame(flex_dat)
@@ -346,11 +345,7 @@ def post_solve(instance, outdir):
 
     RA_df = pd.concat([RA_df,FRA_df])
 
-    RA_df.to_csv(os.path.join(outdir, "RA_open_position.csv"))
-
-    RA_summary = RA_df.groupby(['Period',"Month"]).sum()
-    RA_summary.to_csv(
-        os.path.join(outdir, "RA_monthly_cost.csv"), columns=["Open_Position_Cost"])
+    RA_df.to_csv(os.path.join(outdir, "RA_summary.csv"))
 
     def areas_for_rar(instance,r):
         return [a for (_r, a) in instance.RAR_AREAS if _r == r]

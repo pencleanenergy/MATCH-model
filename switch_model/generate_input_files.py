@@ -182,9 +182,17 @@ def generate_inputs(model_workspace):
 
     xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
 
-    xl_hedge_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_cost', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
+    xl_hedge_contract_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_contract_cost', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
+
+    xl_hedge_settlement_node = pd.read_excel(io=model_inputs, sheet_name='hedge_settlement_node', index_col='load_zone').dropna(axis=1, how='all')
 
     xl_shift = pd.read_excel(io=model_inputs, sheet_name='load_shift', header=[0,1], index_col=0).dropna(axis=1, how='all')
+
+    # rec_value.csv
+    xl_rec_value = pd.read_excel(io=model_inputs, sheet_name='rec_value').dropna(axis=1, how='all')
+
+    # fixed_costs.csv
+    xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs').dropna(axis=1, how='all')
 
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
@@ -329,7 +337,6 @@ def generate_inputs(model_workspace):
 
             # summary_report.ipynb
             shutil.copy('reporting/summary_report.ipynb', input_dir)
-            shutil.copy('reporting/summary_report_public.ipynb', input_dir)
 
             df_periods.to_csv(input_dir / 'periods.csv', index=False)
             df_timeseries.to_csv(input_dir / 'timeseries.csv', index=False)
@@ -374,6 +381,12 @@ def generate_inputs(model_workspace):
             df_timepoints[['timepoint_id','tp_day','tp_in_subset']].to_csv(input_dir / 'days.csv', index=False)
 
             df_financials.to_csv(input_dir / 'financials.csv', index=False)
+
+            # rec_value.csv
+            xl_rec_value.to_csv(input_dir / 'rec_value.csv', index=False)
+
+            # rec_value.csv
+            xl_fixed_costs.to_csv(input_dir / 'fixed_costs.csv', index=False)
 
             # gen_build_years.csv
             gen_build_years = set_gens.copy()[['GENERATION_PROJECT']]
@@ -484,11 +497,14 @@ def generate_inputs(model_workspace):
                 ra_requirement_categories.to_csv(input_dir / 'ra_requirement_categories.csv', index=False)
             
             # hedge_cost.csv
-            hedge_cost = xl_hedge_cost.reset_index(drop=True)
+            hedge_cost = xl_hedge_contract_cost.reset_index(drop=True)
             hedge_cost['timepoint'] = hedge_cost.index + 1
-            hedge_cost = hedge_cost.melt(id_vars=['timepoint'], var_name='load_zone', value_name='hedge_cost')
-            hedge_cost = hedge_cost[['load_zone','timepoint','hedge_cost']]
-            hedge_cost.to_csv(input_dir / 'hedge_cost.csv', index=False)
+            hedge_cost = hedge_cost.melt(id_vars=['timepoint'], var_name='load_zone', value_name='hedge_contract_cost')
+            hedge_cost = hedge_cost[['load_zone','timepoint','hedge_contract_cost']]
+            hedge_cost.to_csv(input_dir / 'hedge_contract_cost.csv', index=False)
+
+            # hedge_settlement_node.csv
+            xl_hedge_settlement_node.to_csv(input_dir / 'hedge_settlement_node.csv')
 
             # pricing_nodes.csv
             node_list = list(set_gens.gen_pricing_node.unique())

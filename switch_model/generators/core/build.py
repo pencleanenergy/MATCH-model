@@ -578,12 +578,12 @@ def load_inputs(mod, switch_data, inputs_dir):
 def post_solve(m, outdir):
     write_table(
         m,
-        sorted(m.GEN_PERIODS) if m.options.sorted_output else m.GEN_PERIODS,
+        sorted(m.GEN_PERIODS),
         output_file=os.path.join(outdir, "gen_cap.csv"),
         headings=(
             "generation_project", "PERIOD",
             "gen_tech", "gen_load_zone", "gen_energy_source",
-            "GenCapacity", "Annual_PPA_Capacity_Cost"),
+            "GenCapacity", "PPA_Capacity_Cost"),
         # Indexes are provided as a tuple, so put (g,p) in parentheses to
         # access the two components of the index individually.
         values=lambda m, g, p: (

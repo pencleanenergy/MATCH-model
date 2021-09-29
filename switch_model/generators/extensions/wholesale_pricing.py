@@ -53,12 +53,12 @@ def define_components(mod):
     #mod.Cost_Components_Per_TP.append('ExcessGenPnodeRevenueInTP')
 
     # TODO: Delete commented code
-    """
     # The delivery cost is the cost of offtaking the generated energy at the demand node
     mod.GenDeliveryCost = Expression(
         mod.NON_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: (m.DispatchGen[g,t] * m.nodal_price[m.gen_load_zone[g],t] if g in m.DISPATCHABLE_GENS else 0) +\
-            (m.VariableGen[g,t] * m.nodal_price[m.gen_load_zone[g],t] if g in m.VARIABLE_GENS else 0))
+        rule=lambda m, g, t: (m.TotalGen[g,t] * m.nodal_price[m.gen_load_zone[g],t]))
+    """
+    
     mod.GenDeliveryCostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m,t: sum(m.GenDeliveryCost[g,t] for g in m.NON_STORAGE_GENS))
@@ -84,21 +84,26 @@ def post_solve(instance, outdir):
     congestion_data = [{
         "generation_project": g,
         "timestamp": instance.tp_timestamp[t],
-        "Generation_MW": value(instance.DispatchGen[g, t] + instance.ExcessGen[g,t]) if instance.gen_is_variable[g] else value(instance.DispatchGen[g, t]), 
-        "Generator Pnode Revenue": value(instance.GenPnodeRevenue[g,t] + instance.ExcessGenPnodeRevenue[g,t]) if instance.gen_is_variable[g] else value(instance.GenPnodeRevenue[g, t]),
+        "Generation_MW": value(instance.TotalGen[g, t]), 
+        "Contract_Cost": value(instance.TotalGen[g, t] * instance.ppa_energy_cost[g]),
+        "Pnode_Revenue": value(instance.GenPnodeRevenue[g,t] + instance.ExcessGenPnodeRevenue[g,t]) if instance.gen_is_variable[g] else value(instance.GenPnodeRevenue[g, t]),
+        "Delivery_Cost": value(instance.GenDeliveryCost[g,t]),
     } for (g, t) in instance.NON_STORAGE_GEN_TPS]
     nodal_by_gen_df = pd.DataFrame(congestion_data)
     nodal_by_gen_df.set_index(["generation_project", "timestamp"], inplace=True)
-    nodal_by_gen_df.to_csv(os.path.join(outdir, "nodal_costs_by_gen.csv"))
+    nodal_by_gen_df.to_csv(os.path.join(outdir, "costs_by_gen.csv"))
 
     nodal_data = [{
         "timestamp": instance.tp_timestamp[t],
-        "Generator Pnode Revenue": value(instance.GenPnodeRevenueInTP[t]),
+        "Dispatched Generation PPA Cost":value(instance.GenPPACostInTP[t]),
+        "Excess Generation PPA Cost":value(instance.ExcessGenPPACostInTP[t]),
+        "Dispatched Generation Pnode Revenue": value(instance.GenPnodeRevenueInTP[t]),
+        "Excess Generation Pnode Revenue": value(instance.ExcessGenPnodeRevenueInTP[t]),
         "DLAP Cost": value(instance.DLAPLoadCostInTP[t]),
     } for t in instance.TIMEPOINTS]
     nodal_df = pd.DataFrame(nodal_data)
     nodal_df.set_index(["timestamp"], inplace=True)
-    nodal_df.to_csv(os.path.join(outdir, "nodal_costs.csv"))
+    nodal_df.to_csv(os.path.join(outdir, "costs_by_tp.csv"))
 
 
 

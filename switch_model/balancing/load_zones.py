@@ -68,7 +68,7 @@ def define_components(mod):
 
     """
 
-    mod.LOAD_ZONES = Set()
+    mod.LOAD_ZONES = Set(dimen=1)
     mod.ZONE_TIMEPOINTS = Set(dimen=2,
         initialize=lambda m: m.LOAD_ZONES * m.TIMEPOINTS,
         doc="The cross product of load zones and timepoints, used for indexing.")
@@ -168,9 +168,10 @@ def post_solve(instance, outdir):
         output_file=os.path.join(outdir, "load_balance.csv"),
         headings=("load_zone", "timestamp",) + tuple(
             instance.Zone_Power_Injections +
-            instance.Zone_Power_Withdrawals),
+            instance.Zone_Power_Withdrawals) + ('ZoneTotalExcessGen',),
         values=lambda m, z, t: (z, m.tp_timestamp[t],) + tuple(
             getattr(m, component)[z, t]
             for component in (
                 m.Zone_Power_Injections +
-                m.Zone_Power_Withdrawals)))
+                m.Zone_Power_Withdrawals)) + 
+            (m.ZoneTotalExcessGen[z,t],))
