@@ -24,6 +24,12 @@ except:
 dependencies = 'switch_model.timescales', 'switch_model.balancing.load_zones',\
     'switch_model.financials', 'switch_model.generators.core.build'
 
+def define_arguments(argparser):
+    argparser.add_argument('--sell_excess_RECs', choices=['none', 'sell'], default='none',
+        help=
+            "Whether or not to consider the resale value of excess RECs in the objective function. "
+            "Specify 'none' to disable.")
+
 def define_components(mod):
     """
 
@@ -105,6 +111,35 @@ def define_components(mod):
     Hybrid project support (pumped hydro & CAES) will eventually get
     implemented in separate modules.
 
+    Adds components to a Pyomo abstract model object to constrain
+    dispatch decisions subject to available capacity, renewable resource
+    availability, and baseload restrictions. Unless otherwise stated,
+    all power capacity is specified in units of MW and all sets and
+    parameters are mandatory. This module estimates project dispatch
+    limits and fuel consumption without consideration of unit
+    commitment. This can be a useful approximation if fuel startup
+    requirements are a small portion of overall fuel consumption, so
+    that the aggregate fuel consumption with respect to energy
+    production can be approximated as a line with a 0 intercept. This
+    estimation method has been known to result in excessive cycling of
+    Combined Cycle Gas Turbines in the Switch-WECC model.
+
+    DispatchUpperLimit[(g, t) in GEN_TPS] is an
+    expression that defines the upper bounds of dispatch subject to
+    installed capacity, average expected outage rates, and renewable
+    resource availability.
+
+    DispatchLowerLimit[(g, t) in GEN_TPS] in an
+    expression that defines the lower bounds of dispatch, which is 0
+    except for baseload plants where is it the upper limit.
+
+    Enforce_Dispatch_Lower_Limit[(g, t) in GEN_TPS] and
+    Enforce_Dispatch_Upper_Limit[(g, t) in GEN_TPS] are
+    constraints that limit DispatchGen to the upper and lower bounds
+    defined above.
+
+        DispatchLowerLimit <= DispatchGen <= DispatchUpperLimit
+
     """
 
     def period_active_gen_rule(m, period):
@@ -168,6 +203,12 @@ def define_components(mod):
         mod.NODE_TIMEPOINTS,
         within=Reals)
 
+    mod.rec_resale_value = Param(
+        mod.PERIODS,
+        within=NonNegativeReals,
+        default=0
+    )
+
     mod.GenCapacityInTP = Expression(
         mod.GEN_TPS,
         rule=lambda m, g, t: m.GenCapacity[g, m.tp_period[t]])
@@ -230,6 +271,92 @@ def define_components(mod):
         doc="Summarize costs for the objective function")
     mod.Cost_Components_Per_TP.append('GenPPACostInTP')
 
+    # ECONOMIC CURTAILMENT
+    ######################
+    mod.CurtailGen = Var(
+        mod.VARIABLE_GEN_TPS,
+        within=NonNegativeReals)
+
+    #limit curtailment to below the cap
+    mod.Maximum_Annual_Curtailment = Constraint(
+        mod.VARIABLE_GENS, mod.PERIODS,
+        rule=lambda m, g, p: sum(m.CurtailGen[g,t] for t in m.TPS_IN_PERIOD[p]) <= (m.gen_curtailment_limit[g] * m.GenCapacity[g, p]))
+
+    # DISPATCH UPPER LIMITS
+    #######################
+
+    def DispatchUpperLimit_expr(m, g, t):
+        if g in m.VARIABLE_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.variable_capacity_factor[g, t])
+        elif g in m.BASELOAD_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.baseload_capacity_factor[g, t])
+        else:
+            return m.GenCapacityInTP[g, t] * m.gen_availability[g]
+    mod.DispatchUpperLimit = Expression(
+        mod.NON_STORAGE_GEN_TPS,
+        rule=DispatchUpperLimit_expr)
+
+    def EnforceDispatchUpperLimit_rule(m,g,t):
+        if g in m.VARIABLE_GENS:
+            return (m.DispatchGen[g, t] + m.CurtailGen[g,t] <= m.DispatchUpperLimit[g, t]) 
+        elif g in m.BASELOAD_GENS:
+            return (m.DispatchGen[g, t] == m.DispatchUpperLimit[g, t]) 
+        else: 
+            return (m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t])
+    mod.Enforce_Dispatch_Upper_Limit = Constraint(
+        mod.NON_STORAGE_GEN_TPS,
+        rule=EnforceDispatchUpperLimit_rule)
+
+    # EXCESS GENERATION
+    ###################
+    mod.ExcessGen = Expression(
+        mod.VARIABLE_GEN_TPS, #for each variable generator in each period
+        rule=lambda m, g, t: m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] - m.CurtailGen[g,t] if g in m.VARIABLE_GENS else 0 #calculate a value according to the rule 
+    )
+
+    mod.TotalGen = Expression(
+        mod.NON_STORAGE_GEN_TPS,
+        rule=lambda m, g, t: (m.DispatchGen[g, t] + m.ExcessGen[g,t]) if m.gen_is_variable[g] else m.DispatchGen[g, t]
+    )
+
+    mod.ZoneTotalExcessGen = Expression(
+        mod.ZONE_TIMEPOINTS,
+        rule=lambda m, z, t: \
+            sum(m.ExcessGen[g, t]
+                for g in m.GENS_IN_ZONE[z]
+                if (g, t) in m.VARIABLE_GEN_TPS),
+    )
+    
+    #calculate the total excess energy for each variable generator in each period
+    def Calculate_Annual_Excess_Energy_By_Gen(m, g, p):
+        excess = sum(m.ExcessGen[g, t] 
+            for t in m.TIMEPOINTS #for each timepoint
+            if m.tp_period[t] == p #if the timepoint is in the current period and the generator is variable
+        )
+        return excess
+    mod.AnnualExcessGen = Expression(
+        mod.VARIABLE_GENS, mod.PERIODS, #for each variable generator in each period
+        rule=Calculate_Annual_Excess_Energy_By_Gen #calculate a value according to the rule 
+    )
+
+    mod.ExcessGenPPACostInTP = Expression(
+        mod.TIMEPOINTS,
+        rule=lambda m, t: sum(
+            m.ExcessGen[g, t] * (m.ppa_energy_cost[g])
+            for g in m.GENS_IN_PERIOD[m.tp_period[t]] if g in m.VARIABLE_GENS),
+        doc="Summarize costs for the objective function")
+    mod.Cost_Components_Per_TP.append('ExcessGenPPACostInTP')
+
+    if mod.options.sell_excess_RECs == 'sell':
+        mod.ExcessRECValue = Expression(
+            mod.PERIODS,
+            rule=lambda m, p: sum(m.AnnualExcessGen[g,p] for g in m.VARIABLE_GENS) * - m.rec_resale_value[p])
+
+        #add to objective function
+        mod.Cost_Components_Per_Period.append('ExcessRECValue')
+
 
 def load_inputs(mod, switch_data, inputs_dir):
     """
@@ -269,6 +396,12 @@ def load_inputs(mod, switch_data, inputs_dir):
         index=mod.NODE_TIMEPOINTS,
         param=[mod.nodal_price]
     )
+
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'rec_value.csv'),
+        auto_select=True,
+        index=mod.PERIODS,
+        param=[mod.rec_resale_value])
 
 
 def post_solve(instance, outdir):
