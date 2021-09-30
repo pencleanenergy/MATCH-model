@@ -110,7 +110,9 @@ def define_components(mod):
     #############
 
     
-    mod.HYBRID_STORAGE_GENS = Set(within=mod.STORAGE_GENS)
+    mod.HYBRID_STORAGE_GENS = Set(
+        initialize=mod.STORAGE_GENS, 
+        filter=lambda m, g: m.gen_is_hybrid[g])
     mod.STORAGE_GEN_PERIODS = Set(
         within=mod.GEN_PERIODS,
         initialize=lambda m: [(g, p) for g in m.STORAGE_GENS for p in m.PERIODS_FOR_GEN[g]]
@@ -425,14 +427,6 @@ def load_inputs(mod, switch_data, inputs_dir):
                mod.storage_hybrid_generation_project, mod.storage_hybrid_min_capacity_ratio, 
                mod.storage_hybrid_max_capacity_ratio, mod.storage_leakage_loss])
     
-    
-    
-    # Base the set of storage projects on storage efficiency being specified.
-    # TODO: define this in a more normal way
-    switch_data.data()['HYBRID_STORAGE_GENS'] = {
-        None: list(switch_data.data(name='storage_hybrid_generation_project').keys())}
-
-
 
 def post_solve(instance, outdir):
     """

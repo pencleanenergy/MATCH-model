@@ -229,7 +229,7 @@ def define_components(mod):
     mod.gen_is_variable = Param(mod.GENERATION_PROJECTS, within=Boolean)
     mod.gen_is_baseload = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_is_storage = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
-    mod.gen_is_cogen = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
+    mod.gen_is_hybrid = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_scheduled_outage_rate = Param(mod.GENERATION_PROJECTS,
         within=PercentFraction, default=0)
     mod.gen_forced_outage_rate = Param(mod.GENERATION_PROJECTS,
@@ -544,14 +544,14 @@ def load_inputs(mod, switch_data, inputs_dir):
         auto_select=True,
         optional_params=['gen_is_baseload', 'gen_scheduled_outage_rate',
         'gen_forced_outage_rate', 'gen_capacity_limit_mw', 'gen_unit_size',
-        'gen_min_build_capacity', 'gen_is_cogen', 'gen_variant_group'],
+        'gen_min_build_capacity',  'gen_variant_group'],
         index=mod.GENERATION_PROJECTS,
         param=[mod.gen_tech, mod.gen_energy_source,
                mod.gen_load_zone, mod.gen_is_variable, mod.gen_is_storage,
-               mod.gen_is_baseload, mod.gen_scheduled_outage_rate,
+               mod.gen_is_baseload, mod.gen_is_hybrid, mod.gen_scheduled_outage_rate,
                mod.gen_forced_outage_rate, mod.gen_curtailment_limit, mod.gen_capacity_limit_mw,
                mod.gen_unit_size, mod.ppa_energy_cost, mod.gen_min_build_capacity,
-               mod.ppa_capacity_cost, mod.gen_is_cogen,
+               mod.ppa_capacity_cost, 
                mod.gen_variant_group, mod.gen_pricing_node])
     # Construct sets of capacity-limited, ccs-capable and unit-size-specified
     # projects. These sets include projects for which these parameters have

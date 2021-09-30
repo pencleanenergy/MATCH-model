@@ -161,7 +161,7 @@ def generate_inputs(model_workspace):
     xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements').dropna(axis=1, how='all')
     ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] != 'flexible_RA']
     ra_requirement['period'] = year
-    ra_requirement = ra_requirement[['period','RA_RESOURCE','tp_month','ra_requirement','ra_cost','ra_resell_value']]
+    ra_requirement = ra_requirement[['period','tp_month','ra_requirement','ra_cost','ra_resell_value']]
 
     # flexible_ra_requirement.csv
     flexible_ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] == 'flexible_RA']
@@ -173,13 +173,7 @@ def generate_inputs(model_workspace):
     # ra_capacity_value.csv
     ra_capacity_value = pd.read_excel(io=model_inputs, sheet_name='RA_capacity_value').dropna(axis=1, how='all')
     ra_capacity_value['period'] = year
-    ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','elcc']]
-
-    # ra_requirement_areas.csv
-    ra_requirement_areas = pd.read_excel(io=model_inputs, sheet_name='RA_areas')
-
-    # ra_requirement_categories.csv
-    ra_requirement_categories = ra_requirement[['RA_RESOURCE']].drop_duplicates(ignore_index=True).rename(columns={'RA_RESOURCE':'RA_REQUIREMENT'})
+    ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','elcc','ra_production_factor']]
 
     xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
 
@@ -188,6 +182,9 @@ def generate_inputs(model_workspace):
     xl_hedge_settlement_node = pd.read_excel(io=model_inputs, sheet_name='hedge_settlement_node', index_col='load_zone').dropna(axis=1, how='all')
 
     xl_shift = pd.read_excel(io=model_inputs, sheet_name='load_shift', header=[0,1], index_col=0).dropna(axis=1, how='all')
+
+    # midterm_reliability_requirement.csv
+    xl_midterm_ra = pd.read_excel(io=model_inputs, sheet_name='midterm_RA_requirement').dropna(axis=1, how='all')
 
     # rec_value.csv
     xl_rec_value = pd.read_excel(io=model_inputs, sheet_name='rec_value').dropna(axis=1, how='all')
@@ -334,6 +331,7 @@ def generate_inputs(model_workspace):
             renewable_target_type = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'goal_type'), scenario].item()
             excess_generation_limit = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excess_generation_limit'), scenario].item()
             excess_generation_limit_type = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excess_generation_limit_type'), scenario].item()
+            select_variants = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'select_variants'), scenario].item()
             renewable_target = pd.DataFrame(data={'period':[year], 
                                                   'renewable_target':[renewable_target_value],
                                                   'excess_generation_limit':[excess_generation_limit]})
@@ -350,19 +348,27 @@ def generate_inputs(model_workspace):
 
             # scenarios.txt
             scenarios = open(model_workspace / 'scenarios.txt', 'a+')
-            if 'select_variants' in option_list:
-                variant_option = ' --select_variants select'
+            if select_variants != 0:
+                variant_option = f' --select_variants {select_variants}'
             else:
                 variant_option = ''
+            
             if renewable_target_type == 'annual':
                 target_option = ' --goal_type annual'
             else:
                 target_option = ''
+            
             if excess_generation_limit_type != 'None':
                 excess_option = f' --excess_generation_limit_type {excess_generation_limit_type}'
             else:
                 excess_option = ''
-            scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}')
+            
+            if 'sell_excess_RA' in option_list:
+                ra_option = ' --sell_excess_RA sell'
+            else:
+                ra_option = ''
+
+            scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}{ra_option}')
             scenarios.write('\n')
             scenarios.close()
 
@@ -423,11 +429,12 @@ def generate_inputs(model_workspace):
                         'gen_tech',	
                         'gen_energy_source',	
                         'gen_load_zone',	
-                        'gen_reliability_area',	
+                        'gen_is_ra_eligible',	
                         'gen_variant_group',
                         'gen_is_variable',	
                         'gen_is_baseload',
                         'gen_is_storage',	
+                        'gen_is_hybrid',
                         'gen_capacity_limit_mw',		
                         'gen_scheduled_outage_rate',	
                         'gen_forced_outage_rate',
@@ -489,9 +496,6 @@ def generate_inputs(model_workspace):
 
             # RA data
             if 'switch_model.generators.extensions.resource_adequacy' in module_list:
-                # local_reliability_areas.csv
-                local_reliability_areas = set_gens[['gen_reliability_area']].drop_duplicates(ignore_index=True).rename(columns={'gen_reliability_area':'LOCAL_RELIABILITY_AREA'})
-                local_reliability_areas.to_csv(input_dir / 'local_reliability_areas.csv', index=False)
 
                 ra_requirement.to_csv(input_dir / 'ra_requirement.csv', index=False)
                 flexible_ra_requirement.to_csv(input_dir / 'flexible_ra_requirement.csv', index=False)
@@ -499,10 +503,8 @@ def generate_inputs(model_workspace):
                 ra_capacity_value_scenario = ra_capacity_value[ra_capacity_value['gen_energy_source'].isin(energy_source_list)]
                 ra_capacity_value_scenario.to_csv(input_dir / 'ra_capacity_value.csv', index=False)
 
-                lra_list = list(local_reliability_areas['LOCAL_RELIABILITY_AREA'])
-                ra_requirement_areas_scenario = ra_requirement_areas[ra_requirement_areas['LOCAL_RELIABILITY_AREA'].isin(lra_list)]
-                ra_requirement_areas_scenario.to_csv(input_dir / 'ra_requirement_areas.csv', index=False)
-                ra_requirement_categories.to_csv(input_dir / 'ra_requirement_categories.csv', index=False)
+                # rec_value.csv
+                xl_midterm_ra.to_csv(input_dir / 'midterm_reliability_requirement.csv', index=False)
             
             # hedge_cost.csv
             hedge_cost = xl_hedge_contract_cost.reset_index(drop=True)
