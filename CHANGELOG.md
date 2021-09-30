@@ -1,4 +1,35 @@
 -------------------------------------------------------------------------------
+Commmit 2021.09.29 (Version 0.5.0)
+-------------------------------------------------------------------------------
+
+Implements updates to the calculation of resource adqueacy
+
+## Closes #1 (Update RA QC/EFC calculations)
+
+Updates the calculation of NQC based on resource type, including new calculations for how NQC must be split between the components of a hybrid generator. 
+
+The formulae for calculating hybrid NQC include a term for storage energy capacity. However, because this is now a decision variable itself (rather than a fixed ratio based on the generator capacity), due to changes made in commit 2021.09.22 (version 0.3.0), we cannot include this term in the calculation without making the model non-linear.
+Our way around this is to take the average value of the minimum and maximum hybrid storage capacity ratio parameters, and assume that to be the storage capacity. While this will not be exactly correct, it minimizes potential error. 
+
+There is no longer a requirement for local RA, so this update removes all references to local ra, including removing references to local reliability areas. the ra requirement is now indexed to a period and month, and not an area.
+
+Adds the ability to add the sale value of excess RA to the objective function, using the option `--sell_excess_RA sell`
+
+## Notes on #14 (align RA calcualtions in model and report)
+
+In the summary_report, the calculation of the value of excess RA takes into account the fact that flex RA must be bundled with system RA, and that you cannot double count local RA and system RA. However, the calculation of this value in the model does not account for this. If including this resale value in the objective function, using the sell ra option, it is important to calculate this value correctly. However, the CPUC is also eliminating the requirement for each LSE to procure local RA, so we do not have to worry about updating the calculation for local RA. Additionaly, for now, we're not going to fix the flex RA calculation unless we start seeing during validation that 
+
+## Midterm reliability constraint
+The CPUC recently issued an order for all LSEs to procure a certain quantity of baseload resources. This model update includes a new parameter `midterm_reliability_requirement` and constraint that requires the amount of baseload capacity to be greater or equal to the requirement.
+
+There is a new requirement to procure a certain number of MW from baseload resources 
+
+
+Other fixes:
+ - introduced parameter `gen_is_hybrid` and updated how the set `HYBRID_STORAGE_GENS` is built
+ - fixes bug that prevented the `select_variants` option from being implemented
+
+-------------------------------------------------------------------------------
 Commmit 2021.09.29 (Version 0.4.0)
 -------------------------------------------------------------------------------
 

@@ -376,9 +376,6 @@ def construct_cost_and_resale_tables(hourly_costs, load_balance, ra_summary):
     # calculate the total demand
     load = load_balance['zone_demand_mw'].sum()
 
-    # replace the Excess RA Value with the actual value
-    cost_table.loc[cost_table['Cost Component'] == 'Excess RA Value', 'Annual Real Cost'] = -1 * calculate_sellable_excess_RA(ra_summary)
-
     # calculate the cost per MWh consumed
     cost_table['Cost Per MWh'] = cost_table['Annual Real Cost'] / load
 
@@ -434,51 +431,6 @@ def build_ra_open_position_plot(ra_summary):
     monthly_ra_open_fig.for_each_annotation(lambda a: a.update(text=a.text.replace("RA_Requirement=", "")))
 
     return monthly_ra_open_fig
-
-def calculate_sellable_excess_RA(ra_summary):
-    """
-    The total value of excess RA cannot be calculated as the simple product of the excess RA and the resale value.
-    Flex RA must be paired with system RA to sell. 
-    Because local RA also contributes to system RA, we cannot sell it as both.
-    """
-    sellable_flex = ra_summary.copy()
-    sellable_flex = sellable_flex[(sellable_flex['RA_Requirement'] == 'flexible_RA') & (sellable_flex['RA_Position_MW'] > 0)]
-
-    #flex RA must be paired with regular RA to sell, so we need to limit it
-    def calculate_sellable_flex(row, ra_summary):
-        # get the month number
-        month = row['Month']
-        #get the amount of excess system RA
-        system_ra_summary_MW = ra_summary.loc[(ra_summary['RA_Requirement'] == 'system_RA') & (ra_summary['Month'] == month), 'Excess_RA_MW'].item()
-        # find the minimum of the excess system RA and excess flex RA
-        sellable = min(row['RA_Position_MW'], system_ra_summary_MW)
-        return sellable   
-
-    sellable_flex.loc[:,'Sellable_Flex_MW'] = sellable_flex.apply(lambda row: calculate_sellable_flex(row, ra_summary), axis=1)
-
-    #re-calculate the sellable position of flex RA
-    sellable_flex['Excess_RA_Value'] = sellable_flex['RA_Value'] * sellable_flex['Sellable_Flex_MW']
-
-    #calculate how much system could be sold for subtracting the local
-    sellable_system = ra_summary[(ra_summary['RA_Requirement'] == 'system_RA')]
-
-    local_RA = ra_summary[(ra_summary['RA_Requirement'] != 'system_RA') & (ra_summary['RA_Requirement'] != 'flexible_RA')][['Month','Excess_RA_MW']]
-    local_RA = local_RA.groupby('Month').sum().reset_index().rename(columns={'Excess_RA_MW':'Local_RA_MW'})
-
-    #merge local RA data into system data
-    sellable_system = sellable_system.merge(local_RA, how='left', on='Month').fillna(0)
-    sellable_system['Sellable_System_MW'] = sellable_system['Excess_RA_MW'] - sellable_system['Local_RA_MW']
-
-    sellable_system['Excess_RA_Value'] = sellable_system['RA_Value'] * sellable_system['Sellable_System_MW']
-
-    #calculate total RA costs and value
-    excess_flex_RA_value = sellable_flex['Excess_RA_Value'].sum()
-    excess_local_RA_value = ra_summary.loc[(ra_summary['RA_Requirement'] != 'system_RA') & (ra_summary['RA_Requirement'] != 'flexible_RA'), 'Excess_RA_Value'].sum()
-    excess_system_RA_value = sellable_system['Excess_RA_Value'].sum()
-
-    sellable_ra = excess_flex_RA_value + excess_local_RA_value + excess_system_RA_value
-
-    return sellable_ra
 
 def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, load_balance, system_power, technology_color_map):
     """

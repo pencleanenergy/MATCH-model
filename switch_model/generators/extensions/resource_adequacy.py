@@ -57,40 +57,6 @@ def define_components(mod):
     #set of months
     mod.MONTHS = Set(ordered=True, initialize=[1,2,3,4,5,6,7,8,9,10,11,12], dimen=1)
 
-    #set of RA resource (RAR) types
-    mod.RA_REQUIREMENT_CATEGORIES = Set(
-        doc="Types of RA for which a requirement is specified")
-
-    #set of local reliability areas (LRA)
-    mod.LOCAL_RELIABILITY_AREAS = Set()
-
-    #link between RAR and LRA
-    mod.RAR_AREAS = Set(
-        dimen=2,
-        doc="A set of (r, a) that describes which local reliability areas contribute to each RA Requirement.")
-
-    mod.RA_MONTHS = Set(dimen=2,
-        initialize=lambda m: m.RA_REQUIREMENT_CATEGORIES * m.MONTHS,
-        doc="The cross product of RA requirements and Months, used for indexing.")
-    
-    #describe the local reliability area that each generator is in
-    mod.gen_reliability_area = Param (
-        mod.GENERATION_PROJECTS, 
-        within=mod.LOCAL_RELIABILITY_AREAS)
-
-    def GENS_IN_AREA_init(m, a):
-        if not hasattr(m, 'GENS_IN_AREA_dict'):
-            m.GENS_IN_AREA_dict = {_a: [] for _a in m.LOCAL_RELIABILITY_AREAS}
-            for g in m.GENERATION_PROJECTS:
-                m.GENS_IN_AREA_dict[m.gen_reliability_area[g]].append(g)
-        result = m.GENS_IN_AREA_dict.pop(a)
-        if not m.GENS_IN_AREA_dict:
-            del m.GENS_IN_AREA_dict
-        return result
-    mod.GENS_IN_AREA = Set(
-        mod.LOCAL_RELIABILITY_AREAS,
-        initialize=GENS_IN_AREA_init)
-
 
     #specify which month each timepoint is associated with
     # mod.tp_month = Param(mod.TIMEPOINTS, within=mod.MONTHS)
@@ -98,9 +64,11 @@ def define_components(mod):
     # Define Parameters
     ###################
 
+    mod.gen_is_ra_eligible = Param(mod.GENERATION_PROJECTS, within=Boolean)
+
     #specify the ra requirement for each resource type and month
     mod.ra_requirement = Param(
-        mod.PERIODS, mod.RA_MONTHS,
+        mod.PERIODS, mod.MONTHS,
         within=NonNegativeReals)
 
     #specify the flexible RA requirement
@@ -110,12 +78,12 @@ def define_components(mod):
 
     #specify the market cost of RA
     mod.ra_cost = Param(
-        mod.PERIODS, mod.RA_MONTHS,
+        mod.PERIODS, mod.MONTHS,
         within=NonNegativeReals)
 
     #specify the resell value of RA
     mod.ra_resell_value = Param(
-        mod.PERIODS, mod.RA_MONTHS,
+        mod.PERIODS, mod.MONTHS,
         within=NonNegativeReals,
         default=0) 
 
@@ -134,58 +102,80 @@ def define_components(mod):
         mod.PERIODS, mod.ENERGY_SOURCES, mod.MONTHS,
         within=NonNegativeReals)
 
-    
+    mod.ra_production_factor = Param(
+        mod.PERIODS, mod.ENERGY_SOURCES, mod.MONTHS,
+        within=NonNegativeReals)
+
+    mod.midterm_reliability_requirement = Param(
+        mod.PERIODS,
+        within=NonNegativeReals,
+        default=0)
     
     #calculate monthly RA of all generators in each LRA
-    
-    mod.RAValueByArea = Expression (
-        mod.PERIODS, mod.LOCAL_RELIABILITY_AREAS, mod.MONTHS,
-        rule=lambda m, p, a, mo: sum(
-            m.GenCapacity[g,p] * m.elcc[p, m.gen_energy_source[g], mo]
-            for g in m.GENS_IN_AREA[a]))
+    def CalculateNetQualifyingCapacity(m,p,mo):
+        total_nqc = 0
+        for g in m.GENERATION_PROJECTS:
+            if m.gen_is_ra_eligible[g]:
+                if m.gen_is_variable[g]:
+                    # NQC = Pmax * ELCC
+                    nqc = m.GenCapacity[g,p] * m.elcc[p, m.gen_energy_source[g], mo]
+                    total_nqc = total_nqc + nqc
+                elif m.gen_is_baseload[g]:
+                    # NQC = average production during hours of 4-9pm in each month
+                    # We will use the alternate method of using published technology factors
+                    nqc = m.GenCapacity[g,p] * m.elcc[p, m.gen_energy_source[g], mo]
+                    total_nqc = total_nqc + nqc
+                elif m.gen_is_storage[g] and not m.gen_is_hybrid[g]:
+                    # standalone storage
+                    nqc = m.GenCapacity[g,p] * m.elcc[p, m.gen_energy_source[g], mo]
+                    total_nqc = total_nqc + nqc
+                elif m.gen_is_storage[g] and m.gen_is_hybrid[g]:
+                    # energy storage portion of hybrid
+                    # the minimum functions work because they are calculating the minumum of static parameters, not variables
+                    # however, since implementing min and max hybrid capacity ratios, the actual capacity ratio is no longer static
+                    # to fix this, we take the average of the min and max ratio to minimize error in the calcukation
+                    storage_hybrid_capacity_ratio = (m.storage_hybrid_min_capacity_ratio[g] + m.storage_hybrid_max_capacity_ratio[g]) / 2
+                    nqc = m.GenCapacity[g,p] * min(storage_hybrid_capacity_ratio, (min(storage_hybrid_capacity_ratio * m.storage_energy_to_power_ratio[g],m.ra_production_factor[p, m.gen_energy_source[g], mo]))/4)
+                    total_nqc = total_nqc + nqc
+                elif m.gen_is_hybrid[g] and not m.gen_is_storage[g]:
+                    # renewable energy portion of hybrid
+                    storage_hybrid_capacity_ratio = (m.storage_hybrid_min_capacity_ratio[g] + m.storage_hybrid_max_capacity_ratio[g]) / 2
+                    nqc = m.GenCapacity[g,p] * (m.elcc[p, m.gen_energy_source[g], mo] * ((m.ra_production_factor[p, m.gen_energy_source[g], mo] - min(storage_hybrid_capacity_ratio * m.storage_energy_to_power_ratio[g],m.ra_production_factor[p, m.gen_energy_source[g], mo]))/m.ra_production_factor[p, m.gen_energy_source[g], mo]))
+                    total_nqc = total_nqc + nqc
+                else:
+                    # dispatchable generators
+                    nqc = m.GenCapacity[g,p]
+                    total_nqc = total_nqc + nqc
+        return total_nqc
 
-    def areas_for_rar(m,r):
-        return [a for (_r, a) in m.RAR_AREAS if _r == r]
-    
-    #calculate total RA available to meet requirement
-    def AvailableRACapacity_rule(m,p,r,mo):
-        AREAS = areas_for_rar(m,r)
-        capacity = sum(m.RAValueByArea[p,a,mo] for a in AREAS)
-        return capacity
-    mod.AvailableRACapacity = Expression ( #was called RAValueByRequirement
-        mod.PERIODS, mod.RA_MONTHS,
-        rule=AvailableRACapacity_rule)
+    mod.AvailableRACapacity = Expression (
+        mod.PERIODS, mod.MONTHS,
+        rule=CalculateNetQualifyingCapacity)
 
     #calculate RA open position
     mod.RAOpenPosition = Var(
-        mod.PERIODS, mod.RA_MONTHS,
+        mod.PERIODS, mod.MONTHS,
         within=NonNegativeReals)
 
     #specify that the open position should be 0 if the available capacity > the requirement. and otherwise should make up the difference
     mod.RA_Purchase_Constraint = Constraint(
-        mod.PERIODS, mod.RA_MONTHS,
-        rule=lambda m, p, r, mo: m.RAOpenPosition[p,r,mo] + m.AvailableRACapacity[p,r,mo] >= m.ra_requirement[p,r,mo]
-    )
+        mod.PERIODS, mod.MONTHS,
+        rule=lambda m, p, mo: m.RAOpenPosition[p,mo] + m.AvailableRACapacity[p,mo] >= m.ra_requirement[p,mo])
 
     #calculate cost of RA open position
-    mod.AnnualRAOpenPositionCostByRequirement = Expression (
-        mod.PERIODS, mod.RA_REQUIREMENT_CATEGORIES,
-        rule=lambda m, p, r: sum(m.RAOpenPosition[p,r,mo] * m.ra_cost[p,r,mo] for mo in m.MONTHS))
-
-    #calculate total RA open position cost for the year
     mod.AnnualRAOpenPositionCost = Expression (
         mod.PERIODS, 
-        rule=lambda m, p: sum(m.AnnualRAOpenPositionCostByRequirement[p,r] for r in m.RA_REQUIREMENT_CATEGORIES))
-
+        rule=lambda m, p: sum(m.RAOpenPosition[p,mo] * m.ra_cost[p,mo] for mo in m.MONTHS))
+    
     #calculate excess RA by category
     mod.RAExcess = Expression(
-        mod.PERIODS, mod.RA_MONTHS,
-        rule=lambda m, p, r, mo: m.AvailableRACapacity[p,r,mo] - m.ra_requirement[p,r,mo] + m.RAOpenPosition[p,r,mo])
+        mod.PERIODS, mod.MONTHS,
+        rule=lambda m, p, mo: m.AvailableRACapacity[p,mo] - m.ra_requirement[p,mo] + m.RAOpenPosition[p,mo])
 
     #calculate the resell value of excess RA
     mod.AnnualRAExcessValue = Expression (
         mod.PERIODS, 
-        rule=lambda m, p: sum(m.RAExcess[p,r,mo] * m.ra_resell_value[p,r,mo] for mo in m.MONTHS for r in m.RA_REQUIREMENT_CATEGORIES))
+        rule=lambda m, p: - sum(m.RAExcess[p,mo] * m.ra_resell_value[p,mo] for mo in m.MONTHS))
 
     # Flexible RA
     #############
@@ -195,7 +185,7 @@ def define_components(mod):
         storage = sum(
             m.GenCapacity[g,p] * (1 + m.storage_charge_to_discharge_ratio[g]) 
             for g in m.STORAGE_GENS 
-            if m.gen_reliability_area[g] != "Ineligible")
+            if m.gen_is_ra_eligible[g])
         #in the future if other non-storage renewables can provide flexible capacity, rules can be added here
         other = 0
         total_flex = storage + other
@@ -224,10 +214,22 @@ def define_components(mod):
         mod.PERIODS, mod.MONTHS,
         rule=lambda m, p, mo: m.AvailableFlexRACapacity[p] - m.flexible_ra_requirement[p,mo] + m.FlexRAOpenPosition[p,mo])
 
+    mod.SellableExcessFlexRA = Var(
+        mod.PERIODS, mod.MONTHS,
+        within=NonNegativeReals)
+
+    mod.SellableExcessFlexRAConstraint_1 = Constraint(
+        mod.PERIODS, mod.MONTHS,
+        rule=lambda m, p, mo: m.SellableExcessFlexRA[p, mo] <= m.RAExcess[p,mo])
+
+    mod.SellableExcessFlexRAConstraint_2 = Constraint(
+        mod.PERIODS, mod.MONTHS,
+        rule=lambda m, p, mo: m.SellableExcessFlexRA[p, mo] <= m.FlexRAExcess[p,mo])
+
     #calculate the resell value of excess RA
     mod.AnnualFlexRAExcessValue = Expression (
         mod.PERIODS, 
-        rule=lambda m, p: sum(m.FlexRAExcess[p,mo] * m.flexible_ra_resell_value[p,mo] for mo in m.MONTHS))
+        rule=lambda m, p: - sum(m.SellableExcessFlexRA[p,mo] * m.flexible_ra_resell_value[p,mo] for mo in m.MONTHS))
 
 
     # Calculate total RA Open Position Cost
@@ -245,11 +247,18 @@ def define_components(mod):
     if mod.options.sell_excess_RA == 'sell':
         mod.TotalRAExcessValue = Expression(
             mod.PERIODS,
-            rule=lambda m, p: -m.AnnualRAExcessValue[p] - m.AnnualFlexRAExcessValue[p]
+            rule=lambda m, p: m.AnnualRAExcessValue[p] + m.AnnualFlexRAExcessValue[p]
         )
 
         #add to objective function
         mod.Cost_Components_Per_Period.append('TotalRAExcessValue')
+
+    # Midterm reliability order
+    ###########################
+
+    mod.MidtermReliabilityRequirement_Constraint = Constraint(
+        mod.PERIODS,
+        rule=lambda m,p: sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS) >= m.midterm_reliability_requirement[p])
 
 
 
@@ -274,20 +283,11 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'generation_projects_info.csv'),
         auto_select=True,
         index=mod.GENERATION_PROJECTS,
-        param=[mod.gen_reliability_area])
-    switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'ra_requirement_categories.csv'),
-        set=mod.RA_REQUIREMENT_CATEGORIES)
-    switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'local_reliability_areas.csv'),
-        set=mod.LOCAL_RELIABILITY_AREAS)
-    switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'ra_requirement_areas.csv'),
-        set=mod.RAR_AREAS)
+        param=[mod.gen_is_ra_eligible])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_requirement.csv'),
-        select=('period','RA_RESOURCE','tp_month', 'ra_requirement', 'ra_cost', 'ra_resell_value'),
-        index=[mod.PERIODS, mod.RA_MONTHS],
+        select=('period','tp_month', 'ra_requirement', 'ra_cost', 'ra_resell_value'),
+        index=[mod.PERIODS, mod.MONTHS],
         optional_params=['ra_resell_value'],
         param=[mod.ra_requirement, mod.ra_cost, mod.ra_resell_value])
     switch_data.load_aug(
@@ -298,9 +298,14 @@ def load_inputs(mod, switch_data, inputs_dir):
         param=[mod.flexible_ra_requirement, mod.flexible_ra_cost, mod.flexible_ra_resell_value])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_capacity_value.csv'),
-        select=('period','gen_energy_source', 'tp_month','elcc'),
+        select=('period','gen_energy_source', 'tp_month','elcc','ra_production_factor'),
         index=[mod.PERIODS, mod.ENERGY_SOURCES, mod.MONTHS],
-        param=[mod.elcc])
+        param=[mod.elcc, mod.ra_production_factor])
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'midterm_reliability_requirement.csv'),
+        auto_select=True,
+        index=mod.PERIODS,
+        param=[mod.midterm_reliability_requirement])
 
 
 
@@ -310,18 +315,18 @@ def post_solve(instance, outdir):
     """
     ra_dat = [{
         "Period": p,
-        "RA_Requirement": r,
+        "RA_Requirement": 'system_RA',
         "Month": mo,
-        "RA_Requirement_Need_MW": value(instance.ra_requirement[p,r,mo]),
-        "Available_RA_Capacity_MW": value(instance.AvailableRACapacity[p,r,mo]),
-        "RA_Position_MW": value(instance.AvailableRACapacity[p,r,mo] - instance.ra_requirement[p,r,mo]),
-        "Open_Position_MW": value(instance.RAOpenPosition[p,r,mo]),
-        "Excess_RA_MW":  value(instance.RAExcess[p,r,mo]),
-        "RA_Cost": value(instance.ra_cost[p,r,mo]),
-        "RA_Value": value(instance.ra_resell_value[p,r,mo]),
-        "RA_Open_Position_Cost": value(instance.RAOpenPosition[p,r,mo] * instance.ra_cost[p,r,mo]),
-        "Excess_RA_Value": value(instance.RAExcess[p,r,mo] * instance.ra_resell_value[p,r,mo])
-    } for (r, mo) in instance.RA_MONTHS for p in instance.PERIODS]
+        "RA_Requirement_Need_MW": value(instance.ra_requirement[p,mo]),
+        "Available_RA_Capacity_MW": value(instance.AvailableRACapacity[p,mo]),
+        "RA_Position_MW": value(instance.AvailableRACapacity[p,mo] - instance.ra_requirement[p,mo]),
+        "Open_Position_MW": value(instance.RAOpenPosition[p,mo]),
+        "Excess_RA_MW":  value(instance.RAExcess[p,mo]),
+        "RA_Cost": value(instance.ra_cost[p,mo]),
+        "RA_Value": value(instance.ra_resell_value[p,mo]),
+        "RA_Open_Position_Cost": value(instance.RAOpenPosition[p,mo] * instance.ra_cost[p,mo]),
+        "Excess_RA_Value": value(instance.RAExcess[p,mo] * instance.ra_resell_value[p,mo])
+    } for mo in instance.MONTHS for p in instance.PERIODS]
     RA_df = pd.DataFrame(ra_dat)
     RA_df.set_index(["Period","RA_Requirement","Month"], inplace=True)
 
@@ -346,33 +351,26 @@ def post_solve(instance, outdir):
 
     RA_df.to_csv(os.path.join(outdir, "RA_summary.csv"))
 
-    def areas_for_rar(instance,r):
-        return [a for (_r, a) in instance.RAR_AREAS if _r == r]
 
     gen_dat = [{
         "Period": p,
         "Month": mo,
         "Generation_Project": g,
-        "Local_Reliability_Area": value(instance.gen_reliability_area[g]),
-        "RA_Requirement": r,
+        "RA_Requirement": "system_RA",
         "RA_Value": value(instance.GenCapacity[g,p] * instance.elcc[p, instance.gen_energy_source[g], mo])
-            if instance.gen_reliability_area[g] in areas_for_rar(instance,r) else 0
-    } for g in instance.GENERATION_PROJECTS for (r,mo) in instance.RA_MONTHS for p in instance.PERIODS]
+    } for g in instance.GENERATION_PROJECTS for mo in instance.MONTHS for p in instance.PERIODS]
     gen_df = pd.DataFrame(gen_dat)
 
     gen_flex_dat = [{
         "Period": p,
         "Month": mo,
         "Generation_Project": g,
-        "Local_Reliability_Area": value(instance.gen_reliability_area[g]),
         "RA_Requirement": "flexible_RA",
         "RA_Value": value(instance.GenCapacity[g,p] * (1 + instance.storage_charge_to_discharge_ratio[g]))
-            if instance.gen_reliability_area[g] != "Ineligible" else 0
+            if instance.gen_is_ra_eligible[g] else 0
     } for g in instance.STORAGE_GENS for mo in instance.MONTHS for p in instance.PERIODS]
     gen_flex_df = pd.DataFrame(gen_flex_dat)
 
     gen_df = pd.concat([gen_df,gen_flex_df], ignore_index=True)
-
-    #gen_df = gen_df.pivot(index=["Period","Month","Generation_Project","Local_Reliability_Area"], columns=["RA_Requirement"], values=["RA_Value"]).fillna(0)
 
     gen_df.to_csv(os.path.join(outdir, "RA_value_by_generator.csv"), index=False)
