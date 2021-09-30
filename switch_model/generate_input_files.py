@@ -340,7 +340,7 @@ def generate_inputs(model_workspace):
             # summary_report.ipynb
             shutil.copy('reporting/summary_report.ipynb', input_dir)
 
-            df_periods.to_csv(input_dir / 'periods.csv', index=False)
+            df_periods.to_csv(input_dir / 'periods.csv', insdex=False)
             df_timeseries.to_csv(input_dir / 'timeseries.csv', index=False)
 
             #get configuration options
@@ -368,7 +368,12 @@ def generate_inputs(model_workspace):
             else:
                 ra_option = ''
 
-            scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}{ra_option}')
+            if 'sell_excess_RECs' in option_list:
+                rec_option = ' --sell_excess_RECs sell'
+            else:
+                rec_option = '' 
+
+            scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}{ra_option}{rec_option}')
             scenarios.write('\n')
             scenarios.close()
 

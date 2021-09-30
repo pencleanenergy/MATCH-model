@@ -1,4 +1,14 @@
 -------------------------------------------------------------------------------
+Commmit 2021.09.30 (Version 0.6.0)
+-------------------------------------------------------------------------------
+
+## Closes #18 
+Allows the REC value of excess generation to be included in the objective function as an option, using `--sell_excess_RECs sell`
+
+Combines the modules `switch_model.generators.core.dispatch` and `switch_model.generators.core.no_commit` into a single module `switch_model.generators.core.dispatch`.
+Removes `switch_model.generators.core.no_commit` from the model.
+
+-------------------------------------------------------------------------------
 Commmit 2021.09.29 (Version 0.5.0)
 -------------------------------------------------------------------------------
 
