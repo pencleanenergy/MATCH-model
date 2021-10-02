@@ -163,6 +163,11 @@ def load_inputs(model, inputs_dir=None, attach_data_portal=True):
     # Determine which option is available and use that.
     if hasattr(model, 'create_instance'):
         instance = model.create_instance(data)
+
+        # Create a 'dual' suffix component on the instance
+        # so the solver plugin will know which suffixes to collect
+        instance.dual = Suffix(direction=Suffix.IMPORT)
+        instance.rc = Suffix(direction=Suffix.IMPORT)
     else:
         instance = model.create(data)
     if model.options.verbose:

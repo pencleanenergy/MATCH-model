@@ -803,3 +803,133 @@ def export_scenario_summary():
     summary.columns = [f'{scenario_name}']
 
     summary.to_csv(data_dir / 'scenario_summary.csv')
+
+def calculate_BuildGen_reduced_costs(results, generation_projects_info, variable_capacity_factors, baseload_capacity_factors, dispatch):
+    """
+    """
+    # load results into dataframe and reset index
+    rc = pd.DataFrame.from_dict(results.solution.Variable, orient='index')
+    rc = rc.reset_index()
+
+    # split the index column into the variable name and index value
+    rc[['Variable','index']] = rc['index'].str.split('[', expand=True)
+    rc['index'] = rc['index'].str.strip(']')
+
+    rc = rc[rc['Variable'] == 'BuildGen']
+
+    # split the index into the load zone and timepoint components
+    rc[['generation_project','period']] = rc['index'].str.split(',', expand=True)
+    rc = rc.drop(columns=['period','index'])
+
+    # merge in generator characteristic data
+    rc = rc.merge(generation_projects_info[['GENERATION_PROJECT','gen_is_variable','gen_is_baseload','gen_is_storage','ppa_energy_cost','ppa_capacity_cost']], how='left', left_on='generation_project', right_on='GENERATION_PROJECT').drop(columns=['GENERATION_PROJECT'])
+
+    # sum capacity factors by generator
+    vcf = variable_capacity_factors.copy().groupby('GENERATION_PROJECT').sum()[['variable_capacity_factor']].reset_index()
+    bcf = baseload_capacity_factors.copy().groupby('GENERATION_PROJECT').sum()[['baseload_capacity_factor']].reset_index()
+
+    gen_list = list(rc['generation_project'].unique())
+
+
+    for g in gen_list:
+        # if the reduced cost is negative, ignore it
+        if  (rc.loc[rc['generation_project'] == g, 'Rc'].item() < 0):
+            pass
+        # if the generator is variable 
+        elif (rc.loc[rc['generation_project'] == g, 'gen_is_variable'].item() == 1):
+            # calculate the reduced cost per MW capacity
+            rc.loc[rc['generation_project'] == g, 'Rc'] = rc.loc[rc['generation_project'] == g, 'Rc'].item() / vcf.loc[vcf['GENERATION_PROJECT'] == g, 'variable_capacity_factor'].item()
+        # otherwise if the generator is baseload
+        elif (rc.loc[rc['generation_project'] == g, 'gen_is_baseload'].item() == 1):
+            # calculate the reduced cost per MW capacity
+            rc.loc[rc['generation_project'] == g, 'Rc'] = rc.loc[rc['generation_project'] == g, 'Rc'].item() / bcf.loc[bcf['GENERATION_PROJECT'] == g, 'baseload_capacity_factor'].item()
+        # otherwise if the generator is storage
+        elif (rc.loc[rc['generation_project'] == g, 'gen_is_storage'].item() == 1):
+            pass
+        # otherwise the generator is dispatchable and we need to calculate how much it actually dispatched
+        else:
+            # calculate the total dispatch
+            total_dispatch = dispatch[dispatch['generation_project'] == g].sum()[['DispatchGen_MW','ExcessGen_MW']].sum()
+            # convert to a capacity factor total
+            total_cf = total_dispatch / rc.loc[rc['generation_project'] == g, 'Value'].item()
+            # calculate reduced cost per MW capacity
+            rc.loc[rc['generation_project'] == g, 'Rc'] = rc.loc[rc['generation_project'] == g, 'Rc'] / total_cf
+
+
+    # drop unneccessary columns
+    rc = rc.drop(columns=['Variable','gen_is_variable','gen_is_baseload','gen_is_storage'])
+    rc = rc.rename(columns={'Value':'built_MW','Rc':'reduced_cost'})
+
+    rc = rc[['generation_project', 'built_MW','ppa_energy_cost','ppa_capacity_cost','reduced_cost']].set_index('generation_project')
+
+    # negative reduced costs apply to upper bounds
+    neg_rc = rc.copy()[rc['reduced_cost'] < 0]
+    neg_rc = neg_rc.sort_values(by='reduced_cost')
+    # positive reduced costs apply to lower bounds
+    pos_rc = rc.copy()[rc['reduced_cost'] > 0]
+    pos_rc['Cost to be built'] = pos_rc['ppa_energy_cost'] + pos_rc['ppa_capacity_cost'] - pos_rc['reduced_cost']
+    # zero reduced cost with a value of zero means that there is another optimal solution
+    alternate_optima = rc.copy()[(rc['reduced_cost'] == 0) & (rc['built_MW'] == 0)]
+
+    # the positive reduced costs can be split into two groups
+    pos_rc_lower = pos_rc.copy()[pos_rc['built_MW'] == 0]
+    pos_rc_upper = pos_rc.copy()[pos_rc['built_MW'] > 0]
+
+
+    return pos_rc_lower, pos_rc_upper, neg_rc, alternate_optima
+
+def calculate_load_shadow_price(results, timestamps):
+    """
+    """
+    # load the duals into a dataframe and reset the index
+    duals = pd.DataFrame.from_dict(results.solution.Constraint, orient='index')
+    duals = duals.reset_index()
+
+    # split the index into columns for the constraint name and the index value
+    duals[['Constraint','index']] = duals['index'].str.split('[', expand=True)
+    #duals['index'] = '[' + duals['index']
+    duals['index'] = duals['index'].str.strip(']')
+
+    # filter the constraints to the zone energy balance
+    duals = duals[duals['Constraint'] == 'Zone_Energy_Balance']
+
+    # split the index into the load zone and timepoint components
+    duals[['load_zone','timepoint']] = duals['index'].str.split(',', expand=True)
+    duals['timepoint'] = duals['timepoint'].astype(int)
+    duals = duals.drop(columns=['index'])
+
+    # merge the timestamp data
+    duals = duals.copy().merge(timestamps, how='left', left_on='timepoint', right_on='timepoint_id')
+
+    # sort the values
+    duals = duals.sort_values(by=['load_zone','timepoint'])
+
+    #re-order columns
+    #duals = duals[['Constraint', 'load_zone','timepoint','Dual']]
+
+    # replace all negative values with zero since interpretation is complicated by the fact that the nodal revenue of excess generation is not part of the objective function
+
+    duals.loc[duals['Dual'] < 0, 'Dual'] = 0
+
+    # Calculate the month-hour average
+    duals = duals.set_index('timestamp')
+    duals = duals.groupby([duals.index.month, duals.index.hour]).mean()
+    duals.index = duals.index.rename(['Month','Hour'])
+    duals = duals.reset_index()
+
+    # set month numbers to names
+    month_names = {1:'January',2:'February',3:'March', 4:'April', 5:'May', 6:'June',7:'July', 8:'August', 9:'September', 10:'October', 11:'November', 12:'December'}
+    duals['Month'] = duals['Month'].replace(month_names)
+
+    dual_plot = px.line(duals, 
+                        x='Hour', 
+                        y='Dual', 
+                        facet_col='Month', 
+                        facet_col_wrap=6,
+                        labels={'Dual':'Shadow Price ($/MW)'})
+
+    dual_plot.for_each_annotation(lambda a: a.update(text=a.text.replace("Month=", "")))
+    dual_plot.update_xaxes(dtick=3)
+    dual_plot.update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
+
+    return dual_plot

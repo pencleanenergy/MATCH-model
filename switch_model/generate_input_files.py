@@ -340,7 +340,7 @@ def generate_inputs(model_workspace):
             # summary_report.ipynb
             shutil.copy('reporting/summary_report.ipynb', input_dir)
 
-            df_periods.to_csv(input_dir / 'periods.csv', insdex=False)
+            df_periods.to_csv(input_dir / 'periods.csv', index=False)
             df_timeseries.to_csv(input_dir / 'timeseries.csv', index=False)
 
             #get configuration options
