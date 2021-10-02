@@ -2,8 +2,14 @@
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 import os
+import pandas as pd
+import pickle
 
 def post_solve(instance, outdir, inputs_dir):
+    """
+    Runs the summary report
+    """
+
 
     print(outdir)
     s = str(outdir).split('/')[-1]

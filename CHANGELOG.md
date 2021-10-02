@@ -1,4 +1,13 @@
 -------------------------------------------------------------------------------
+Commmit 2021.10.01 (Version 0.7.0)
+-------------------------------------------------------------------------------
+
+## Closes #21 (Integrate duals and reduced costs)
+
+Integrates the reduced costs for the BuildGen variable and the dual values for the load constraint into the summary report.
+Fixes bug where duals were not being retrieved from the CPLEX solver.
+
+-------------------------------------------------------------------------------
 Commmit 2021.09.30 (Version 0.6.0)
 -------------------------------------------------------------------------------
 
