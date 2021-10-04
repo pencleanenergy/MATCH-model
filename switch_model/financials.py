@@ -13,30 +13,6 @@ import pandas as pd
 
 dependencies = 'switch_model.timescales'
 
-def capital_recovery_factor(ir, t):
-    """
-
-    The capital recovery factor is a coefficient applied to a loan to
-    determine annual payments. This function needs an interest rate ir
-    and the number of compounding periods that payments are split
-    across.
-
-    Example: Calculate annual loan payments for a 20-year loan with a 7
-    percent interest rate on $100.
-
-    >>> crf = capital_recovery_factor(.07,20)
-    >>> print(
-    ...     "Capital recovery factor for a loan with a 7 percent annual "
-    ...     "interest rate, paid over 20 years is {crf:0.5f}. If the "
-    ...     "principal was $100, loan payments would be ${lp:0.2f}"
-    ...     .format(crf=crf, lp=100 * crf)
-    ... ) # doctest: +NORMALIZE_WHITESPACE
-    Capital recovery factor for a loan with a 7 percent annual interest\
-    rate, paid over 20 years is 0.09439. If the principal was $100, loan\
-    payments would be $9.44
-    """
-    return 1/t if ir == 0 else ir/(1-(1+ir)**-t)
-
 
 def uniform_series_to_present_value(dr, t):
     """
@@ -45,18 +21,6 @@ def uniform_series_to_present_value(dr, t):
     of dr. To calculate this, we use the formula for the present value of
     an annuity due, which assumes that the payments come at the beginning
     of each period.
-    Example usage:
-    >>> print(
-    ...     "Net present value of a $10 / yr annuity paid for 20 years, "
-    ...     "assuming a 5 percent discount rate is ${npv:0.2f}"
-    ...     .format(npv=10 * uniform_series_to_present_value(.05, 20))
-    ... )
-    Net present value of a $10 / yr annuity paid for 20 years, assuming a 5 percent discount rate is $130.85
-
-    Test for calculation validity compared to CRF using 7 decimal points
-    >>> round(uniform_series_to_present_value(.07,20),7) == \
-        round(1/capital_recovery_factor(.07,20),7)
-    True
     """
     return t if dr == 0 else (1-(1+dr)**-t)/dr*(1+dr)
 

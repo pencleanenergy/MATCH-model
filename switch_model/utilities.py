@@ -178,58 +178,6 @@ def load_inputs(model, inputs_dir=None, attach_data_portal=True):
     return instance
 
 
-def save_inputs_as_dat(model, instance, save_path="inputs/complete_inputs.dat",
-    exclude=[], sorted_output=False):
-    """
-    Save input data to a .dat file for use with PySP or other command line
-    tools that have not been fully integrated with DataPortal.
-    SYNOPSIS:
-        save_inputs_as_dat(model, instance, save_path)
-    """
-    # helper function to convert values to strings,
-    # putting quotes around values that start as strings
-    quote_str = lambda v: '"{}"'.format(v) if isinstance(v, string_types) else '{}'.format(str(v))
-    # helper function to create delimited lists from single items or iterables of any data type
-    from switch_model.reporting import make_iterable
-    join_space = lambda items: ' '.join(map(str, make_iterable(items)))  # space-separated list
-    join_comma = lambda items: ','.join(map(str, make_iterable(items)))  # comma-separated list
-
-    with open(save_path, "w") as f:
-        for component_name in instance.DataPortal.data():
-            if component_name in exclude:
-                continue    # don't write data for components in exclude list
-                            # (they're in scenario-specific files)
-            component = getattr(model, component_name)
-            comp_class = type(component).__name__
-            component_data = instance.DataPortal.data(name=component_name)
-            if comp_class == 'ScalarSet' or comp_class == 'OrderedScalarSet':
-                f.write(
-                    "set {} := {};\n"
-                    .format(component_name, join_space(component_data))
-                )
-            elif comp_class == 'IndexedParam':
-                if component_data:  # omit components for which no data were provided
-                    f.write("param {} := \n".format(component_name))
-                    for key, value in (
-                        sorted(iteritems(component_data))
-                        if sorted_output
-                        else iteritems(component_data)
-                    ):
-                        f.write(" {} {}\n".format(join_space(key), quote_str(value)))
-                    f.write(";\n")
-            elif comp_class == 'ScalarParam':
-                f.write("param {} := {};\n".format(component_name, component_data))
-            elif comp_class == 'IndexedSet':
-                for key, vals in iteritems(component_data):
-                    f.write(
-                        "set {}[{}] := {};\n"
-                        .format(component_name, join_comma(key), join_space(vals))
-                    )
-            else:
-                raise ValueError(
-                    "Error! Component type {} not recognized for model element '{}'.".
-                    format(comp_class, component_name))
-
 def pre_solve(instance, outputs_dir=None):
     """
     Call pre-solve function (if present) in all modules used to compose this model.

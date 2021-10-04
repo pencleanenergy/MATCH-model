@@ -1,3 +1,13 @@
+
+-------------------------------------------------------------------------------
+Commmit 2021.10.04 (Version 0.7.1)
+-------------------------------------------------------------------------------
+
+Cleans up the model a bit.
+
+- Removes `switch_model.balancing.demand_response.iterative` module
+- Removes functions in `switch_model.utilities` and `switch_model.financials` that are not used
+
 -------------------------------------------------------------------------------
 Commmit 2021.10.01 (Version 0.7.0)
 -------------------------------------------------------------------------------

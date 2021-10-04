@@ -2,12 +2,16 @@
 # Copyright (c) 2021 *****************. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
+"""
+This script is used for testing and debugging the process of running and saving the summary report jupyter notebooks
+"""
+
 import os
 import shutil
 import pandas as pd
 
 # modify the file path to the name of the scenario for which you want to re-run the reporting
-run_folder = '../../MODEL_RUNS/test'
+run_folder = '../../MODEL_RUNS/test_PCE'
 #run_folder = '../../../../Box/Supply/24x7 Time-Coincident Work/MODEL_RUNS/test'
 
 scenarios = os.listdir(f'{run_folder}/outputs')
@@ -26,12 +30,6 @@ for s in scenarios:
     os.system(f'jupyter nbconvert --to html --no-input --no-prompt {inputs_dir}/summary_report.ipynb --output-dir {outdir} --output summary_report_{s}')
     os.system(f'jupyter nbconvert --clear-output --inplace {inputs_dir}/summary_report.ipynb')
 
-    # NOTE: 5/24/21: Manually disabled public report until all issues with main report are addressed
-    """
-    os.system(f'jupyter nbconvert --ExecutePreprocessor.kernel_name="python3" --to notebook --execute --inplace {inputs_dir}/summary_report_public.ipynb')
-    os.system(f'jupyter nbconvert --to html --no-input --no-prompt {inputs_dir}/summary_report_public.ipynb --output-dir {outdir} --output summary_report_{s}_public')
-    os.system(f'jupyter nbconvert --clear-output --inplace {inputs_dir}/summary_report_public.ipynb')
-    """
 
 
 #%%
