@@ -1,3 +1,18 @@
+
+-------------------------------------------------------------------------------
+Commmit 2021.10.06 (Version 0.7.1)
+-------------------------------------------------------------------------------
+
+Squashes some bugs
+
+- Removes `switch_model.balancing.demand_response.iterative` module
+- Removes functions in `switch_model.utilities` and `switch_model.financials` that are not used
+- Fixes a bug where variable capacity factors for different generic resources with the same lat/long coordinates were not being generated correctly.
+- Adds blank notes header row in `model_inputs.xlsx` for the user to take notes about the data represented in each column
+- updates color coding of cells in `model_inputs.xlsx`
+- Bug fixes to reporting functions to address errors when certain types of resources are not in the scenario portfolio
+- Re-implements the functionality to export a summary csv table based on the summary_report results and aggregate these outputs together across all scenarios so that they can be easily compared.
+
 -------------------------------------------------------------------------------
 Commmit 2021.10.01 (Version 0.7.0)
 -------------------------------------------------------------------------------

@@ -8,7 +8,6 @@ Defines generation projects build-outs.
 
 import os
 from pyomo.environ import *
-from switch_model.financials import capital_recovery_factor as crf
 from switch_model.reporting import write_table
 
 dependencies = 'switch_model.timescales', 'switch_model.balancing.load_zones',\

@@ -139,7 +139,7 @@ def generator_portfolio(gen_cap, gen_build_predetermined):
     gen_cap = gen_cap.sort_values(by=['Status','Technology'])
 
     # extract the name of the generator
-    gen_cap['generation_project'] = [' '.join(i.split('_')[1:]) for i in gen_cap['generation_project']]
+    #gen_cap['generation_project'] = [' '.join(i.split('_')[1:]) for i in gen_cap['generation_project']]
 
     return gen_cap
 
@@ -498,8 +498,8 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
                         y='MWh', 
                         color='Technology', 
                         color_discrete_map=technology_color_map, 
-                        category_orders={'Technology':['Consumed Geothermal','Consumed Small Hydro', 'Consumed Onshore Wind','Consumed Solar PV',
-                                                        'Storage Discharge', 'Grid Energy','Excess Solar PV', 'Excess Onshore Wind']},
+                        category_orders={'Technology':['Consumed Geothermal','Consumed Small Hydro', 'Consumed Onshore Wind','Consumed Offshore Wind','Consumed Solar PV',
+                                                        'Storage Discharge', 'Grid Energy','Excess Solar PV', 'Excess Onshore Wind','Excess Offshore Wind']},
                         labels={'timestamp':'Datetime','Technology':'Key'})
     dispatch_fig.update_traces(line={'width':0})
     dispatch_fig.layout.template = 'plotly_white'
@@ -587,10 +587,13 @@ def build_state_of_charge_plot(storage_dispatch, storage_builds, generation_proj
     #divide by the total capacity to get state of charge
     soc = soc.div(soc.assign(**grouped_storage_energy_capacity_dict))
 
+    # get a list of the columns in case there is only standalone or only hybrid storage
+    type_columns = list(soc.columns)
+
     #soc.index = pd.to_datetime(soc.index)
     soc = soc.reset_index()
 
-    soc_fig = px.line(soc, x='timestamp', y=['Hybrid Storage','Standalone Storage'], color_discrete_map={'Standalone Storage':'green','Hybrid Storage':'yellowgreen'}, labels={'timestamp':'Datetime','value':'%'}, title='Storage State of Charge')
+    soc_fig = px.line(soc, x='timestamp', y=type_columns, color_discrete_map={'Standalone Storage':'green','Hybrid Storage':'yellowgreen'}, labels={'timestamp':'Datetime','value':'%'}, title='Storage State of Charge')
 
     soc_fig.update_xaxes(
     rangeslider_visible=True,
@@ -826,7 +829,11 @@ def calculate_BuildGen_reduced_costs(results, generation_projects_info, variable
 
     # sum capacity factors by generator
     vcf = variable_capacity_factors.copy().groupby('GENERATION_PROJECT').sum()[['variable_capacity_factor']].reset_index()
-    bcf = baseload_capacity_factors.copy().groupby('GENERATION_PROJECT').sum()[['baseload_capacity_factor']].reset_index()
+    try:
+        bcf = baseload_capacity_factors.copy().groupby('GENERATION_PROJECT').sum()[['baseload_capacity_factor']].reset_index()
+    # if there are no baseload generators
+    except KeyError:
+        bcf = baseload_capacity_factors.copy()
 
     gen_list = list(rc['generation_project'].unique())
 
@@ -933,3 +940,33 @@ def calculate_load_shadow_price(results, timestamps):
     dual_plot.update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
 
     return dual_plot
+
+def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio):
+    """
+    Creates a csv file output of key metrics to compare with other scenarios
+    """
+
+    summary = pd.DataFrame(columns=['Scenario Name'], data=['test'])
+
+    summary['Scenario Name'] = scenario_name
+
+    #Goal Data
+    summary['Time-coincident %'] = hourly_renewable_percentage(load_balance)
+    summary['Annual Volumetric %'] = annual_renewable_percentage(load_balance)
+
+    summary['Portfolio Cost per MWh'] = cost_table.loc[cost_table['Cost Category'] == 'Total', 'Cost Per MWh'].item()
+
+
+    #Portfolio Mix
+    portfolio_summary = portfolio[['MW','Status','Technology']].groupby(['Status','Technology']).sum().reset_index()
+    portfolio_summary['Description'] = portfolio_summary['Status'] + " " + portfolio_summary['Technology']
+    portfolio_summary = portfolio_summary.drop(columns=['Status','Technology'])
+    portfolio_summary = portfolio_summary.set_index('Description').transpose().reset_index(drop=True).add_prefix('MW Capacity from ')
+    portfolio_summary['Total MW Capacity'] = portfolio_summary.sum(axis=1)
+
+    summary = pd.concat([summary, portfolio_summary], axis=1)
+
+    summary = summary.transpose()
+    summary.columns = [f'{scenario_name}']
+
+    return summary
