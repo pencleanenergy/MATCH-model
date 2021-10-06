@@ -118,7 +118,7 @@ def generate_inputs(model_workspace):
         pass
 
     # Scenarios
-    xl_scenarios = pd.read_excel(io=model_inputs, sheet_name='scenarios').dropna(axis=1, how='all')
+    xl_scenarios = pd.read_excel(io=model_inputs, sheet_name='scenarios', skiprows=1).dropna(axis=1, how='all')
 
     scenario_list = list(xl_scenarios.iloc[:, 3:].columns)
 
@@ -157,7 +157,7 @@ def generate_inputs(model_workspace):
     if xl_gen.isnull().values.any():
         raise ValueError("The generation tab contains a missing value. Please fix")
 
-    xl_load = pd.read_excel(io=model_inputs, sheet_name='load', header=[0,1], index_col=0).dropna(axis=1, how='all')
+    xl_load = pd.read_excel(io=model_inputs, sheet_name='load', header=[1,2], index_col=0).dropna(axis=1, how='all')
 
     # ra_requirement.csv
     xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements').dropna(axis=1, how='all')
@@ -195,7 +195,7 @@ def generate_inputs(model_workspace):
     xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs').dropna(axis=1, how='all')
 
     # grid_emissions.csv
-    xl_grid_emissions = pd.read_excel(io=model_inputs, sheet_name='grid_emissions', skiprows=1).dropna(axis=1, how='all')
+    xl_grid_emissions = pd.read_excel(io=model_inputs, sheet_name='grid_emissions', skiprows=2).dropna(axis=1, how='all')
 
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
@@ -226,7 +226,7 @@ def generate_inputs(model_workspace):
 
 
         if 'manual' in vcf_input_types:
-            manual_vcf = pd.read_excel(io=model_inputs, sheet_name='manual_capacity_factors', index_col='Datetime').dropna(axis=1, how='all').reset_index(drop=True)
+            manual_vcf = pd.read_excel(io=model_inputs, sheet_name='manual_capacity_factors', index_col='Datetime', skiprows=1).dropna(axis=1, how='all').reset_index(drop=True)
             if manual_vcf.isnull().values.any():
                 raise ValueError("The manual_capacity_factor tab contains a missing value. Please fix")
             #only keep columns for the current scenario

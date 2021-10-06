@@ -256,9 +256,14 @@ def define_components(mod):
     # Midterm reliability order
     ###########################
 
+    def MidtermReliability_Rule(m,p):
+        if not any(m.GenCapacity[g,p] for g in m.BASELOAD_GENS):
+            return Constraint.Skip
+        return sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS) >= m.midterm_reliability_requirement[p]
+
     mod.MidtermReliabilityRequirement_Constraint = Constraint(
         mod.PERIODS,
-        rule=lambda m,p: sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS) >= m.midterm_reliability_requirement[p])
+        rule=MidtermReliability_Rule)
 
 
 
