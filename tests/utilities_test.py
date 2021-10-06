@@ -25,7 +25,7 @@ class UtilitiesTest(unittest.TestCase):
         from switch_model.utilities import check_mandatory_components
         mod = ConcreteModel()
         mod.set_A = Set(initialize=[1,2])
-        mod.paramA_full = Param(mod.set_A, initialize={1:'a',2:'b'}, within=Any)
+        mod.paramA_full = Param(mod.set_A, initialize={1:'a',2:'b'})
         mod.paramA_empty = Param(mod.set_A)
         mod.set_B = Set()
         mod.paramB_empty = Param(mod.set_B)
@@ -48,7 +48,7 @@ class UtilitiesTest(unittest.TestCase):
         mod = AbstractModel()
         _add_min_data_check(mod)
         mod.set_A = Set(initialize=[1,2])
-        mod.paramA_full = Param(mod.set_A, initialize={1:'a',2:'b'}, within=Any)
+        mod.paramA_full = Param(mod.set_A, initialize={1:'a',2:'b'})
         mod.paramA_empty = Param(mod.set_A)
         mod.min_data_check('set_A', 'paramA_full')
         self.assertIsNotNone(mod.create_instance())

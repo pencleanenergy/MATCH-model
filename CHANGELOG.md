@@ -1,12 +1,15 @@
 
 -------------------------------------------------------------------------------
-Commmit 2021.10.04 (Version 0.7.1)
+Commmit 2021.10.06 (Version 0.7.1)
 -------------------------------------------------------------------------------
 
 Cleans up the model a bit.
 
+NEED TO DELETE TEST_INPUT.PY
+
 - Removes `switch_model.balancing.demand_response.iterative` module
 - Removes functions in `switch_model.utilities` and `switch_model.financials` that are not used
+- Fixes a bug where variable capacity factors for different generic resources with the same lat/long coordinates were not being generated correctly. 
 
 -------------------------------------------------------------------------------
 Commmit 2021.10.01 (Version 0.7.0)

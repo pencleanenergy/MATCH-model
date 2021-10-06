@@ -13,6 +13,7 @@ import os
 import shutil
 from datetime import datetime
 import pytz
+from collections import defaultdict
 
 # Import the PySAM modules for simulating solar, CSP, and wind power generation
 import PySAM.ResourceTools as tools
@@ -35,6 +36,7 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
         node = xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
         nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
         profile = df_vcf.copy()[[gen]].reset_index(drop=True)
+
 
         # calculate PPA cost
         mean_ppa_cost = (profile[gen] * ppa_price).sum() / profile[gen].sum()
@@ -255,7 +257,10 @@ def generate_inputs(model_workspace):
                 #get lat/long coordinates of all resources using this template
                 gen_inputs['long/lat'] = gen_inputs.apply(lambda row: f"({row['longitude']},{row['latitude']})", axis=1)
                 gen_inputs['long/lat'] = gen_inputs['long/lat'].apply(ast.literal_eval)
-                resource_dict = dict(zip(gen_inputs['long/lat'], gen_inputs['GENERATION_PROJECT']))
+                resource_dict = defaultdict(list)
+                zipped_list = zip(gen_inputs['long/lat'], gen_inputs['GENERATION_PROJECT'])
+                for key,value in zipped_list:
+                    resource_dict[key].append(value)
 
                 #get the parameter info for this template
                 resource_template = sam_templates[sam_templates['Template_Name'] == template]
@@ -612,7 +617,6 @@ def simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, confi
         #https://github.com/NREL/pysam/blob/master/Examples/FetchResourceFileExample.py
         #https://nrel-pysam.readthedocs.io/en/master/Tools.html?highlight=download#files.ResourceTools.FetchResourceFiles
 
-        #TODO: allow to fetch single resource year
         nsrdbfetcher = tools.FetchResourceFiles(
                         tech='solar',
                         workers=1,  # thread workers if fetching multiple files
@@ -649,11 +653,21 @@ def simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, confi
             df_output = df_output / systemDesign['system_capacity']
 
             #name the column based on resource name
-            df_output = df_output.rename(columns={0:f'{resource_dict[filename]}-{year}'})
+            # check if the resource name is a list, meaning the profile belongs to several resources
+            if isinstance(resource_dict[filename], list):
+                # merge each resource
+                for gen in resource_dict[filename]:
+                    df_output_gen = df_output.copy().rename(columns={0:f'{gen}-{year}'})
 
-            #merge into the resource
-            df_output.index = df_index
-            df_resource = df_resource.merge(df_output, how='left', left_index=True, right_index=True)
+                    #merge into the resource
+                    df_output_gen.index = df_index
+                    df_resource = df_resource.merge(df_output_gen, how='left', left_index=True, right_index=True)
+            else:
+                df_output = df_output.rename(columns={0:f'{resource_dict[filename]}-{year}'})
+
+                #merge into the resource
+                df_output.index = df_index
+                df_resource = df_resource.merge(df_output, how='left', left_index=True, right_index=True)
 
     #remove year from column name
     df_resource.columns = [i.split('-')[0] for i in df_resource.columns]
@@ -720,11 +734,21 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
             df_output = df_output / farm['system_capacity']
 
             #name the column based on resource name
-            df_output = df_output.rename(columns={0:f'{resource_dict[filename]}-{year}'})
+            # check if the resource name is a list, meaning the profile belongs to several resources
+            if isinstance(resource_dict[filename], list):
+                # merge each resource
+                for gen in resource_dict[filename]:
+                    df_output_gen = df_output.copy().rename(columns={0:f'{gen}-{year}'})
 
-            #merge into the resource
-            df_output.index = df_index
-            df_resource = df_resource.merge(df_output, how='left', left_index=True, right_index=True)
+                    #merge into the resource
+                    df_output_gen.index = df_index
+                    df_resource = df_resource.merge(df_output_gen, how='left', left_index=True, right_index=True)
+            else:
+                df_output = df_output.rename(columns={0:f'{resource_dict[filename]}-{year}'})
+
+                #merge into the resource
+                df_output.index = df_index
+                df_resource = df_resource.merge(df_output, how='left', left_index=True, right_index=True)
 
     #remove year from column name
     df_resource.columns = [i.split('-')[0] for i in df_resource.columns]
@@ -797,11 +821,21 @@ def simulate_csp_generation(nrel_api_key, nrel_api_email, resource_dict, config_
             df_output = df_output / (systemDesign['P_ref'] * 1000)
 
             #name the column based on resource name
-            df_output = df_output.rename(columns={0:f'{resource_dict[filename]}-{year}'})
+            # check if the resource name is a list, meaning the profile belongs to several resources
+            if isinstance(resource_dict[filename], list):
+                # merge each resource
+                for gen in resource_dict[filename]:
+                    df_output_gen = df_output.copy().rename(columns={0:f'{gen}-{year}'})
 
-            #merge into the resource
-            df_output.index = df_index
-            df_resource = df_resource.merge(df_output, how='left', left_index=True, right_index=True)
+                    #merge into the resource
+                    df_output_gen.index = df_index
+                    df_resource = df_resource.merge(df_output_gen, how='left', left_index=True, right_index=True)
+            else:
+                df_output = df_output.rename(columns={0:f'{resource_dict[filename]}-{year}'})
+
+                #merge into the resource
+                df_output.index = df_index
+                df_resource = df_resource.merge(df_output, how='left', left_index=True, right_index=True)
 
     #remove year from column name
     df_resource.columns = [i.split('-')[0] for i in df_resource.columns]
