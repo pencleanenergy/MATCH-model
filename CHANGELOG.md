@@ -1,3 +1,12 @@
+-------------------------------------------------------------------------------
+Commmit 2021.10.08 (Version 0.8.0)
+-------------------------------------------------------------------------------
+
+ - Fixes bug in solve_scenarios.py that was not recognizing when all scenarios were done solving
+ - Implements a new sensitivity report in summary_report.py that simulates how the selected portfolio will perform based on weather data from individual years. In order to avoid having to re-run the model, we simplify the storage dispatch assumptions by lumping all storage assets together and using a greedy charging algorithm.
+ - Sets a default value of 1 GW as the maximum capacity limit for each project, if not specified. This prevents the problem from being unbounded as a result of negative generator costs.
+ - Fixed an issue where the current formulation was requiring BuildGen == predetermined_build_cap, rather than BuildGen >= predetermined_build_cap
+ - Changed the "Big M" of constraint `Enforce_Min_Build_Upper` from 100 GW to `gen_capacity_limit_mw`, which is set at a default of 1 GW
 
 -------------------------------------------------------------------------------
 Commmit 2021.10.06 (Version 0.7.1)

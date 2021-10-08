@@ -306,7 +306,26 @@ def generate_inputs(model_workspace):
                     #add the data to the dataframe
                     df_vcf = df_vcf.merge(wind_vcf, how='left', left_index=True, right_index=True)
 
-            
+        for vcf_year in resource_years:
+            if os.path.exists(model_workspace / gen_set / f'{vcf_year}_variable_capacity_factors.csv'):
+                pass
+            else:
+                # split the data for the single resource year into a new df
+                df_vcf_year = df_vcf.copy()[[col for col in df_vcf.columns if str(vcf_year) in col]]
+
+                #remove year from column name
+                df_vcf_year.columns = [i.split('~')[0] for i in vcf_year.columns]
+
+                # export the data to a csv in the set folder
+                df_vcf_year.to_csv(model_workspace / gen_set / f'{vcf_year}_variable_capacity_factors.csv')
+        
+        
+        #remove year from column name
+        df_vcf.columns = [i.split('~')[0] for i in df_vcf.columns]
+
+        # average all of the resource years together for each resource
+        df_vcf = df_vcf.groupby(df_vcf.columns, axis=1).mean()
+        
         #replace all negative capacity factors with 0
         df_vcf[df_vcf < 0] = 0
 
@@ -344,6 +363,11 @@ def generate_inputs(model_workspace):
 
             # summary_report.ipynb
             shutil.copy('reporting/summary_report.ipynb', input_dir)
+
+            # generator set name
+            set_name = open(input_dir / 'gen_set.txt', 'w+')
+            set_name.write(gen_set)
+            set_name.close()
 
             df_periods.to_csv(input_dir / 'periods.csv', index=False)
             df_timeseries.to_csv(input_dir / 'timeseries.csv', index=False)
@@ -657,23 +681,23 @@ def simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, confi
             if isinstance(resource_dict[filename], list):
                 # merge each resource
                 for gen in resource_dict[filename]:
-                    df_output_gen = df_output.copy().rename(columns={0:f'{gen}-{year}'})
+                    df_output_gen = df_output.copy().rename(columns={0:f'{gen}~{year}'})
 
                     #merge into the resource
                     df_output_gen.index = df_index
                     df_resource = df_resource.merge(df_output_gen, how='left', left_index=True, right_index=True)
             else:
-                df_output = df_output.rename(columns={0:f'{resource_dict[filename]}-{year}'})
+                df_output = df_output.rename(columns={0:f'{resource_dict[filename]}~{year}'})
 
                 #merge into the resource
                 df_output.index = df_index
                 df_resource = df_resource.merge(df_output, how='left', left_index=True, right_index=True)
 
     #remove year from column name
-    df_resource.columns = [i.split('-')[0] for i in df_resource.columns]
+    #df_resource.columns = [i.split('~')[0] for i in df_resource.columns]
 
     #groupby column name
-    df_resource = df_resource.groupby(df_resource.columns, axis=1).mean()
+    #df_resource = df_resource.groupby(df_resource.columns, axis=1).mean()
 
     return df_resource
 
@@ -738,23 +762,23 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
             if isinstance(resource_dict[filename], list):
                 # merge each resource
                 for gen in resource_dict[filename]:
-                    df_output_gen = df_output.copy().rename(columns={0:f'{gen}-{year}'})
+                    df_output_gen = df_output.copy().rename(columns={0:f'{gen}~{year}'})
 
                     #merge into the resource
                     df_output_gen.index = df_index
                     df_resource = df_resource.merge(df_output_gen, how='left', left_index=True, right_index=True)
             else:
-                df_output = df_output.rename(columns={0:f'{resource_dict[filename]}-{year}'})
+                df_output = df_output.rename(columns={0:f'{resource_dict[filename]}~{year}'})
 
                 #merge into the resource
                 df_output.index = df_index
                 df_resource = df_resource.merge(df_output, how='left', left_index=True, right_index=True)
 
     #remove year from column name
-    df_resource.columns = [i.split('-')[0] for i in df_resource.columns]
+    #df_resource.columns = [i.split('~')[0] for i in df_resource.columns]
 
     #groupby column name
-    df_resource = df_resource.groupby(df_resource.columns, axis=1).mean()
+    #df_resource = df_resource.groupby(df_resource.columns, axis=1).mean()
 
     return df_resource
 
@@ -825,22 +849,22 @@ def simulate_csp_generation(nrel_api_key, nrel_api_email, resource_dict, config_
             if isinstance(resource_dict[filename], list):
                 # merge each resource
                 for gen in resource_dict[filename]:
-                    df_output_gen = df_output.copy().rename(columns={0:f'{gen}-{year}'})
+                    df_output_gen = df_output.copy().rename(columns={0:f'{gen}~{year}'})
 
                     #merge into the resource
                     df_output_gen.index = df_index
                     df_resource = df_resource.merge(df_output_gen, how='left', left_index=True, right_index=True)
             else:
-                df_output = df_output.rename(columns={0:f'{resource_dict[filename]}-{year}'})
+                df_output = df_output.rename(columns={0:f'{resource_dict[filename]}~{year}'})
 
                 #merge into the resource
                 df_output.index = df_index
                 df_resource = df_resource.merge(df_output, how='left', left_index=True, right_index=True)
 
     #remove year from column name
-    df_resource.columns = [i.split('-')[0] for i in df_resource.columns]
+    #df_resource.columns = [i.split('~')[0] for i in df_resource.columns]
 
     #groupby column name
-    df_resource = df_resource.groupby(df_resource.columns, axis=1).mean()
+    #df_resource = df_resource.groupby(df_resource.columns, axis=1).mean()
 
     return df_resource

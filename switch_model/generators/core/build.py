@@ -75,12 +75,6 @@ def define_components(mod):
 
     GENS_BY_TECHNOLOGY
 
-    CAPACITY_LIMITED_GENS is the subset of GENERATION_PROJECTS that are
-    capacity limited. Most of these will be generator types that are resource
-    limited like wind, solar or geothermal, but this can be specified for any
-    generation project. Some existing or proposed generation projects may have
-    upper bounds on increasing capacity or replacing capacity as it is retired
-    based on permits or local air quality regulations.
 
     gen_capacity_limit_mw[g] is defined for generation technologies that are
     resource limited and do not compete for land area. This describes the
@@ -287,9 +281,8 @@ def define_components(mod):
         initialize=GENS_BY_TECHNOLOGY_init
     )
 
-    mod.CAPACITY_LIMITED_GENS = Set(within=mod.GENERATION_PROJECTS)
     mod.gen_capacity_limit_mw = Param(
-        mod.CAPACITY_LIMITED_GENS, within=NonNegativeReals)
+        mod.GENERATION_PROJECTS, within=NonNegativeReals, default=1000)
     mod.DISCRETELY_SIZED_GENS = Set(within=mod.GENERATION_PROJECTS)
     mod.gen_unit_size = Param(
         mod.DISCRETELY_SIZED_GENS, within=PositiveReals)
@@ -340,13 +333,9 @@ def define_components(mod):
     def bounds_BuildGen(model, g, bld_yr):
         if((g, bld_yr) in model.PREDETERMINED_GEN_BLD_YRS):
             return (model.gen_predetermined_cap[g, bld_yr],
-                    model.gen_predetermined_cap[g, bld_yr])
-        elif(g in model.CAPACITY_LIMITED_GENS):
-            # This does not replace Max_Build_Potential because
-            # Max_Build_Potential applies across all build years.
-            return (0, model.gen_capacity_limit_mw[g])
+                    model.gen_capacity_limit_mw[g])
         else:
-            return (0, None)
+            return (0, model.gen_capacity_limit_mw[g])
     mod.BuildGen = Var(
         mod.GEN_BLD_YRS,
         within=NonNegativeReals,
@@ -386,7 +375,7 @@ def define_components(mod):
             for bld_yr in m.BLD_YRS_FOR_GEN_PERIOD[g, period]))
 
     mod.Max_Build_Potential = Constraint(
-        mod.CAPACITY_LIMITED_GENS, mod.PERIODS,
+        mod.GENERATION_PROJECTS, mod.PERIODS,
         rule=lambda m, g, p: (
             m.gen_capacity_limit_mw[g] >= m.GenCapacity[g, p]))
 
@@ -408,17 +397,11 @@ def define_components(mod):
             <= m.BuildGen[g, p]))
 
     # Define a constant for enforcing binary constraints on project capacity
-    # The value of 100 GW should be larger than any expected build size. For
-    # perspective, the world's largest electric power plant (Three Gorges Dam)
-    # is 22.5 GW. I tried using 1 TW, but CBC had numerical stability problems
-    # with that value and chose a suboptimal solution for the
-    # discrete_and_min_build example which is installing capacity of 3-5 MW.
-    mod._gen_max_cap_for_binary_constraints = 10**5
     mod.Enforce_Min_Build_Upper = Constraint(
         mod.NEW_GEN_WITH_MIN_BUILD_YEARS,
         rule=lambda m, g, p: (
             m.BuildGen[g, p] <= m.BuildMinGenCap[g, p] *
-                mod._gen_max_cap_for_binary_constraints))
+                mod.gen_capacity_limit_mw[g]))
 
 
     # Mutually-exclusive project variants
@@ -555,9 +538,6 @@ def load_inputs(mod, switch_data, inputs_dir):
     # Construct sets of capacity-limited, ccs-capable and unit-size-specified
     # projects. These sets include projects for which these parameters have
     # a value
-    if 'gen_capacity_limit_mw' in switch_data.data():
-        switch_data.data()['CAPACITY_LIMITED_GENS'] = {
-            None: list(switch_data.data(name='gen_capacity_limit_mw').keys())}
     if 'gen_unit_size' in switch_data.data():
         switch_data.data()['DISCRETELY_SIZED_GENS'] = {
             None: list(switch_data.data(name='gen_unit_size').keys())}

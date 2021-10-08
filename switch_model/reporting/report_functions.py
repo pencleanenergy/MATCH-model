@@ -5,6 +5,8 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import math
+import os
 
 """
 This module contains a collection of functions that are called from the summary_report.ipynb, used for reporting final outputs
@@ -941,7 +943,7 @@ def calculate_load_shadow_price(results, timestamps):
 
     return dual_plot
 
-def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio):
+def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table):
     """
     Creates a csv file output of key metrics to compare with other scenarios
     """
@@ -956,6 +958,8 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
 
     summary['Portfolio Cost per MWh'] = cost_table.loc[cost_table['Cost Category'] == 'Total', 'Cost Per MWh'].item()
 
+    for year in list(sensitivity_table['Weather Year']):
+        summary[f'Sensitivity Performance Year {year}'] = sensitivity_table.loc[sensitivity_table['Weather Year'] == year, 'Time-Coincident %'].item()
 
     #Portfolio Mix
     portfolio_summary = portfolio[['MW','Status','Technology']].groupby(['Status','Technology']).sum().reset_index()
@@ -970,3 +974,82 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
     summary.columns = [f'{scenario_name}']
 
     return summary
+
+def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_info, load_balance, storage_builds):
+    """
+    """
+    set_folder = Path.cwd() / f'../../{gen_set}/'
+    weather_years = [filename for filename in os.listdir(set_folder) if '.csv' in filename]
+
+    # get dataframe of all generators that were built
+    built_gens = gen_cap.copy()[gen_cap['GenCapacity'] > 0]
+
+    # separate out the storage generators
+    built_gens = built_gens[built_gens['gen_energy_source'] != 'Electricity']
+
+    sensitivity_table = pd.DataFrame(columns=['Weather Year', 'Time-Coincident %'])
+
+    for weather_year in weather_years:
+        year = weather_year.split('_')[0]
+
+        # load weather year data
+        vcf_for_year = pd.read_csv(set_folder / weather_year)
+
+        # create a blank dataframe
+        balance = pd.DataFrame(index=range(8760))
+        generation = pd.DataFrame(index=range(8760))
+
+        # for each generator
+        for gen in list(built_gens['generation_project']):
+            built_capacity = built_gens.loc[built_gens['generation_project'] == gen, 'GenCapacity'].item()
+            try:
+                vcf = vcf_for_year[gen]
+                generation[gen] = built_capacity * vcf
+            except KeyError:
+                generation[gen] = dispatch.copy().loc[dispatch['generation_project'] == gen,['DispatchGen_MW','ExcessGen_MW','CurtailGen_MW']].reset_index(drop=True).sum(axis=1)
+
+        # sum to get total generation
+        balance['generation'] = generation.sum(axis=1)
+
+        # add load
+        balance['load'] = load_balance['zone_demand_mw']
+
+        # add blank columns for storage dynamics
+        balance['charge'] = 0
+        balance['discharge'] = 0
+        balance['soc'] = 0
+        balance['grid_power'] = 0
+
+        built_storage = storage_builds.copy()[storage_builds['OnlinePowerCapacityMW'] > 0]
+
+        # get storage parameters
+        storage_power = built_storage['OnlinePowerCapacityMW'].sum()
+        storage_energy = built_storage['OnlineEnergyCapacityMWh'].sum()
+        # calculate an energy capacity weighted average of RTE
+        rte_calc = built_storage.copy().merge(generation_projects_info[['GENERATION_PROJECT','storage_roundtrip_efficiency']], how='left', left_on='generation_project', right_on='GENERATION_PROJECT')
+        rte_calc['product'] = rte_calc['OnlineEnergyCapacityMWh'] * rte_calc['storage_roundtrip_efficiency']
+        storage_rte = rte_calc['product'].sum() / rte_calc['OnlineEnergyCapacityMWh'].sum()
+        conversion_loss = math.sqrt(storage_rte)
+        initial_soc = storage_energy / 2
+        # greedy storage charging algorithm
+        for t in range(len(balance)):
+            generation_t = balance.loc[t,'generation']
+            load_t = balance.loc[t,'load']
+            if t == 0:
+                balance.loc[t,'charge'] = 0 if (generation_t < load_t) else min((generation_t - load_t), storage_power, ((storage_energy - initial_soc)/conversion_loss) )
+                balance.loc[t,'discharge'] = 0 if (generation_t > load_t) else min((load_t - generation_t), storage_power, (initial_soc*conversion_loss) )
+                balance.loc[t,'soc'] = initial_soc + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']*conversion_loss
+            else:
+                soc_prev = balance.loc[t - 1,'soc']
+                balance.loc[t,'charge'] = 0 if (generation_t < load_t) else min((generation_t - load_t), storage_power, ((storage_energy - soc_prev)/conversion_loss) )
+                balance.loc[t,'discharge'] = 0 if (generation_t > load_t) else min((load_t - generation_t), storage_power, (soc_prev*conversion_loss) )
+                balance.loc[t,'soc'] = soc_prev + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']/conversion_loss
+            balance.loc[t,'grid_power'] = 0 if ((generation_t + balance.loc[t,'discharge']) > load_t) else (load_t - (generation_t + balance.loc[t,'discharge']))
+            
+
+        tc_performance = (1 - (balance.grid_power.sum() / balance.load.sum())) * 100
+                
+        print(f'Time-coincident performance using year {year} weather data: {tc_performance.round(2)}%')
+        sensitivity_table = sensitivity_table.append({'Weather Year':year, 'Time-Coincident %':tc_performance}, ignore_index=True)
+
+    return sensitivity_table

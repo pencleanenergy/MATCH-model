@@ -166,34 +166,40 @@ def main(args=None):
         mark_completed(scenario_name)
 
     if len(running_scenarios) == 0:
-        # run the comparison reports for all of the scenarios once run
-        print('Generating scenario comparison reports.')
+        # check that all scenarios have been run and outputs completed
         scenarios = os.listdir('outputs')
-
-        i = 0
+        all_done = []
         for s in scenarios:
             summary_file = f'outputs/{s}/scenario_summary.csv'
-            #buildgen_file = f'outputs/{s}/BuildGen.csv'
-
-            if i == 0:
-                df = pd.read_csv(summary_file, index_col=0)
-                #df_build = pd.read_csv(buildgen_file, usecols=['GEN_BLD_YRS_1','BuildGen'])
-                #df_build = df_build.rename(columns={'GEN_BLD_YRS_1':'generation_project','BuildGen':s})
-                i += 1
+            if os.path.exists(summary_file):
+                all_done.append(True)
             else:
-                df2 = pd.read_csv(summary_file, index_col=0)
-                if len(df2) > len(df):
-                    df = df.merge(df2, how='right', left_index=True, right_index=True)
+                all_done.append(False)
+
+        # if all of the scenarios are done
+        if all(all_done):
+            # run the comparison reports for all of the scenarios once run
+            print('Generating scenario comparison reports.')
+
+            i = 0
+            for s in scenarios:
+                summary_file = f'outputs/{s}/scenario_summary.csv'
+
+
+                if i == 0:
+                    df = pd.read_csv(summary_file, index_col=0)
+
+                    i += 1
                 else:
-                    df = df.merge(df2, how='left', left_index=True, right_index=True)
+                    df2 = pd.read_csv(summary_file, index_col=0)
+                    if len(df2) > len(df):
+                        df = df.merge(df2, how='right', left_index=True, right_index=True)
+                    else:
+                        df = df.merge(df2, how='left', left_index=True, right_index=True)
 
-                #df_build2 = pd.read_csv(buildgen_file, usecols=['GEN_BLD_YRS_1','BuildGen'])
-                #df_build2 = df_build2.rename(columns={'GEN_BLD_YRS_1':'generation_project','BuildGen':s})
-                #df_build = df_build.merge(df_build2, how='outer', on='generation_project')
+            df.to_csv('outputs/scenario_comparison.csv', header=False)
 
-        df.to_csv('outputs/scenario_comparison.csv', header=False)
-        #df_build = df_build.fillna('N/A')
-        #df_build.to_csv('outputs/portfolio_comparison.csv', index=False)
+
 
     
 
