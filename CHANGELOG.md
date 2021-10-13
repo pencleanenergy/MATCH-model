@@ -1,4 +1,20 @@
 -------------------------------------------------------------------------------
+Commmit 2021.10.12 (Version 0.9.0)
+-------------------------------------------------------------------------------
+
+Defines `ExcessGen` as a (slack) variable rather than an expression.
+
+Changed the big-M constraint on storage charging from 1,000 MW to 2,000 MW, as the world's largest battery is 1.2 GW.
+
+Fixed a bug in the hybrid storage discharge constraint
+
+Adds a month-hour average dispatch plot to the summary report.
+
+Adds an avoided emissions calcualtion to summary report (closes #27). We set this up to use the levelized long run marginal emission factor from NREL's Cambium model.
+
+Fixes a bug in the summary report.
+
+-------------------------------------------------------------------------------
 Commmit 2021.10.08 (Version 0.8.0)
 -------------------------------------------------------------------------------
 

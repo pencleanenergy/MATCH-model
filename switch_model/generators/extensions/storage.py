@@ -263,17 +263,18 @@ def define_components(mod):
         mod.STORAGE_GEN_TPS,
         within=Binary)
 
-    # forces ChargeBinary to be 1 when ChargeStorage > 0, using a "Big M" of 1000
+    # forces ChargeBinary to be 1 when ChargeStorage > 0, using a "Big M" of 2000
+    # the world's largest battery is currently 1.2GW
     mod.One_When_Charging = Constraint(
         mod.STORAGE_GEN_TPS,
-        rule=lambda m,g,t: m.ChargeStorage[g,t] <= m.ChargeBinary[g,t] * 1000)
+        rule=lambda m,g,t: m.ChargeStorage[g,t] <= m.ChargeBinary[g,t] * 2000)
 
     mod.Prevent_Simultaneous_Charge_Discharge = Constraint(
         mod.STORAGE_GEN_TPS,
-        rule=lambda m,g,t: m.DischargeStorage[g,t] <= (1 - m.ChargeBinary[g,t]) * 1000)
+        rule=lambda m,g,t: m.DischargeStorage[g,t] <= (1 - m.ChargeBinary[g,t]) * 2000)
 
 
-    mod.Enforce_Storage_Dispatch_Upper_Limit = Constraint(
+    mod.Enforce_Storage_Discharge_Upper_Limit = Constraint(
         mod.STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
             m.DischargeStorage[g, t] <= m.GenCapacityInTP[g, t]))
@@ -322,9 +323,9 @@ def define_components(mod):
     # nameplate capacity. For example, a 100MW solar + 50MW storage hybrid project should only be allowed to dispatch 
     # a combined total of 100MW in any timepoint.
     # TODO: This will need to be updated if dispatchable generators can be hybrids
-    mod.Hybrid_Dispatch_Limit = Constraint(
+    mod.Hybrid_Discharge_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.DispatchGen[m.storage_hybrid_generation_project[g], t] + m.ExcessGen[m.storage_hybrid_generation_project[g], t] - m.ChargeStorage[g,t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
+        rule=lambda m, g, t: m.DischargeStorage[g,t] + m.DispatchGen[m.storage_hybrid_generation_project[g], t] + m.ExcessGen[m.storage_hybrid_generation_project[g], t] <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g],t])
 
     #STATE OF CHARGE
     ################

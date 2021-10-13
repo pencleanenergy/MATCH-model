@@ -197,6 +197,8 @@ def generate_inputs(model_workspace):
     # grid_emissions.csv
     xl_grid_emissions = pd.read_excel(io=model_inputs, sheet_name='grid_emissions', skiprows=2).dropna(axis=1, how='all')
 
+    # marginal_emissions.csv
+    xl_marginal_emissions = pd.read_excel(io=model_inputs, sheet_name='marginal_emissions', skiprows=2).dropna(axis=1, how='all')
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
     vcf_sets = xl_scenarios[xl_scenarios['Input Type'].isin(['Resource year(s)', 'Generator Set'])].drop(columns=['Input Type','Parameter','Description']).transpose().reset_index()
@@ -443,6 +445,11 @@ def generate_inputs(model_workspace):
             grid_emissions = grid_emissions.melt(id_vars=['timepoint'], var_name='load_zone', value_name='grid_emission_factor')
             grid_emissions = grid_emissions[['load_zone','timepoint','grid_emission_factor']]
             grid_emissions.to_csv(input_dir / 'grid_emissions.csv', index=False)
+
+            # marginal_emissions.csv
+            marginal_emissions = xl_marginal_emissions.reset_index(drop=True).drop(columns=['Datetime'])
+            marginal_emissions['timepoint'] = marginal_emissions.index + 1
+            marginal_emissions.to_csv(input_dir / 'marginal_emissions.csv', index=False)
 
             # gen_build_years.csv
             gen_build_years = set_gens.copy()[['GENERATION_PROJECT']]

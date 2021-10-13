@@ -282,52 +282,22 @@ def define_components(mod):
         mod.VARIABLE_GENS, mod.PERIODS,
         rule=lambda m, g, p: sum(m.CurtailGen[g,t] for t in m.TPS_IN_PERIOD[p]) <= (m.gen_curtailment_limit[g] * m.GenCapacity[g, p]))
 
-    # DISPATCH UPPER LIMITS
-    #######################
-
-    def DispatchUpperLimit_expr(m, g, t):
-        if g in m.VARIABLE_GENS:
-            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
-                    m.variable_capacity_factor[g, t])
-        elif g in m.BASELOAD_GENS:
-            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
-                    m.baseload_capacity_factor[g, t])
-        else:
-            return m.GenCapacityInTP[g, t] * m.gen_availability[g]
-    mod.DispatchUpperLimit = Expression(
-        mod.NON_STORAGE_GEN_TPS,
-        rule=DispatchUpperLimit_expr)
-
-    def EnforceDispatchUpperLimit_rule(m,g,t):
-        if g in m.VARIABLE_GENS:
-            return (m.DispatchGen[g, t] + m.CurtailGen[g,t] <= m.DispatchUpperLimit[g, t]) 
-        elif g in m.BASELOAD_GENS:
-            return (m.DispatchGen[g, t] == m.DispatchUpperLimit[g, t]) 
-        else: 
-            return (m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t])
-    mod.Enforce_Dispatch_Upper_Limit = Constraint(
-        mod.NON_STORAGE_GEN_TPS,
-        rule=EnforceDispatchUpperLimit_rule)
-
     # EXCESS GENERATION
     ###################
-    mod.ExcessGen = Expression(
-        mod.VARIABLE_GEN_TPS, #for each variable generator in each period
-        rule=lambda m, g, t: m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] - m.CurtailGen[g,t] if g in m.VARIABLE_GENS else 0 #calculate a value according to the rule 
-    )
+    mod.ExcessGen = Var(
+        mod.VARIABLE_GEN_TPS,
+        within=NonNegativeReals)
 
     mod.TotalGen = Expression(
         mod.NON_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: (m.DispatchGen[g, t] + m.ExcessGen[g,t]) if m.gen_is_variable[g] else m.DispatchGen[g, t]
-    )
+        rule=lambda m, g, t: (m.DispatchGen[g, t] + m.ExcessGen[g,t]) if m.gen_is_variable[g] else m.DispatchGen[g, t])
 
     mod.ZoneTotalExcessGen = Expression(
         mod.ZONE_TIMEPOINTS,
         rule=lambda m, z, t: \
             sum(m.ExcessGen[g, t]
                 for g in m.GENS_IN_ZONE[z]
-                if (g, t) in m.VARIABLE_GEN_TPS),
-    )
+                if (g, t) in m.VARIABLE_GEN_TPS))
     
     #calculate the total excess energy for each variable generator in each period
     def Calculate_Annual_Excess_Energy_By_Gen(m, g, p):
@@ -357,6 +327,32 @@ def define_components(mod):
         #add to objective function
         mod.Cost_Components_Per_Period.append('ExcessRECValue')
 
+    # DISPATCH UPPER LIMITS
+    #######################
+
+    def DispatchUpperLimit_expr(m, g, t):
+        if g in m.VARIABLE_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.variable_capacity_factor[g, t])
+        elif g in m.BASELOAD_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.baseload_capacity_factor[g, t])
+        else:
+            return m.GenCapacityInTP[g, t] * m.gen_availability[g]
+    mod.DispatchUpperLimit = Expression(
+        mod.NON_STORAGE_GEN_TPS,
+        rule=DispatchUpperLimit_expr)
+
+    def EnforceDispatchUpperLimit_rule(m,g,t):
+        if g in m.VARIABLE_GENS:
+            return (m.DispatchGen[g, t] + m.CurtailGen[g,t] + m.ExcessGen[g,t] == m.DispatchUpperLimit[g, t]) # define ExcessGen as a slack variable
+        elif g in m.BASELOAD_GENS:
+            return (m.DispatchGen[g, t] == m.DispatchUpperLimit[g, t]) 
+        else: 
+            return (m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t])
+    mod.Enforce_Dispatch_Upper_Limit = Constraint(
+        mod.NON_STORAGE_GEN_TPS,
+        rule=EnforceDispatchUpperLimit_rule)
 
 def load_inputs(mod, switch_data, inputs_dir):
     """
