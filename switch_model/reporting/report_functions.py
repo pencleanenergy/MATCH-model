@@ -15,6 +15,11 @@ This module contains a collection of functions that are called from the summary_
 def format_currency(x):
     """
     Formats a number as currency in the format '$ 0.00'
+
+    Inputs:
+        x: float number
+    Returns:
+        formatted: formatted number as a string
     """ 
     try:
         formatted = '$ {:,.2f}'.format(x)
@@ -27,6 +32,11 @@ def format_percent(x):
     Formats a number as percentage in the format '99.99%'
 
     The input number must be a percentage on a 0-100 scale
+
+    Inputs:
+        x: float number 
+    Returns:
+        formatted: formatted number as a string
     """ 
     try:
         formatted = '{:,.2f}%'.format(x)
@@ -37,6 +47,11 @@ def format_percent(x):
 def hybrid_pair_dict(generation_projects_info):
     """
     Creates a dictionary matching the name of the storage portion of a hybrid project to the generator portion
+
+    Inputs:
+        generation_projects_info: a dataframe containing generator parameters loaded from inputs/generation_project_info.csv
+    Returns:
+        hybrid_pair: a dictionary matching the names of generators (keys) to paired storage project names (values)
     """
     hybrid_pair = generation_projects_info[['GENERATION_PROJECT','storage_hybrid_generation_project']]
     hybrid_pair = hybrid_pair[hybrid_pair['storage_hybrid_generation_project'] != "."]
@@ -50,6 +65,11 @@ def annual_renewable_percentage(load_balance):
     The renewable percentage is net generation / load, where net generation is total generation less storage losses
     
     NOTE: this will need to be modified to calculate net load if DSR is used
+
+    Inputs:
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+    Returns:
+        percent: float number representing the annual renewable percentage on the 100-point scale
     """
 
     if 'ZoneTotalStorageCharge' in load_balance.columns:
@@ -71,6 +91,11 @@ def hourly_renewable_percentage(load_balance):
     we can calculate the time-coincident renewable percentage as the inverse of the system power percentage
 
     NOTE: this will need to be modified to calculate net load if DSR is used
+
+    Inputs:
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+    Returns:
+        percent: float number representing the time-coincident renewable percentage on the 100-point scale
     """
 
     system_power = load_balance.SystemPower.sum()
@@ -82,6 +107,14 @@ def hourly_renewable_percentage(load_balance):
 
 def build_hourly_emissions_heatmap(grid_emissions, emissions, emissions_unit):
     """
+    Creates a heatmap showing delivered emissions intensity of each hour of the year
+
+    Inputs:
+        grid_emissions: a dataframe containing hourly grid emissions factors, loaded from inputs/grid_emissions.csv
+        emissions: a dataframe containing hourly output emissions from dispatched generation and grid power, loaded from outputs/emissions.csv
+        emissions_unit: a string identifying the unit of measure used for emission rates, loaded from inputs/ghg_emissions_unit.txt
+    Returns:
+        emissions_heatmap: a plotly image plot representing a heatmap of hourly emissions intensity of delivered electricity
     """
     # get the maximum grid emissions factor
     grid_max_ef = grid_emissions['grid_emission_factor'].max()
@@ -108,6 +141,12 @@ def build_hourly_emissions_heatmap(grid_emissions, emissions, emissions_unit):
 def generator_portfolio(gen_cap, gen_build_predetermined):
     """
     Calculates the generator portfolio mix to be used as an input for a suburst chart
+
+    Inputs:
+        gen_cap: a dataframe containing data on built generator capacity loaded from outputs/gen_cap.csv
+        gen_build_predetermined: a dataframe containing predetermined build capacity data for generators, loaded from inputs/gen_build_predetermined.csv
+    Returns:
+        capacity: a dataframe summarizing the built capacity of each generator, formatted for a plotly sunburst plot
     """
     # only keep generators that were built
     capacity = gen_cap.copy()
@@ -161,6 +200,14 @@ def generator_portfolio(gen_cap, gen_build_predetermined):
 def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
     """
     Calculates the cost components for each generator
+
+    Inputs:
+        costs_by_gen: a dataframe containing hourly contract, pnode, and delivery costs for each generator, loaded from outputs/costs_by_gen.csv
+        storage_dispatch: a dataframe containing hourly charge, discharge, state of charge, and nodal cost data for storage assets, loaded from outputs/storage_dispatch.csv
+        hybrid_pair: a dictionary matching the names of generators (keys) to paired storage project names (values), created from the hybrid_pair_dict() function
+        gen_cap: a dataframe containing data on built generator capacity loaded from outputs/gen_cap.csv
+    Returns:
+        gen_costs: a dataframe summarizing all of the cost components for each built generator
     """
     gen_costs = costs_by_gen.copy()
 
@@ -225,6 +272,13 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
     Calculates the mix of delivered energy.
     First, calculate the percentage of energy from system power
     Then, assign the remaineder the mix of dispatchgen
+
+    Inputs:
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+        dispatch: a dataframe containing hourly generator dispatch data contained in outputs/dispatch.csv
+        generation_projects_info: a dataframe containing generator parameters loaded from inputs/generation_project_info.csv
+    Returns:
+        dispatch_mix: a dataframe containing the total MWh of generation delivered to meet load or charge storage
     """
 
     # calculate the percent of energy from grid power
@@ -264,7 +318,7 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
 
     return dispatch_mix
 
-def hourly_cost_of_power(system_power, costs_by_tp, ra_open, gen_cap, storage_dispatch, fixed_costs, rec_value, load_balance):
+def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage_dispatch, fixed_costs, rec_value, load_balance):
     """
     Calculates the cost of power for each hour of the year
 
@@ -273,6 +327,18 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_open, gen_cap, storage_di
     Sellable costs include: excess RA, RECs
 
     We will need to calculate costs for dispatched energy, and for all generated energy
+
+    Inputs:
+        system_power: a dataframe containing hourly system power and hedge costs, loaded from outputs/system_power.csv
+        costs_by_tp: a dataframe containing hourly generation and load costs by timepoint, loaded from outputs/costs_by_tp.csv
+        ra_summary: a dataframe containing resource adequacy summary data by requirement and month, loaded from outputs/RA_summary.csv
+        gen_cap: a dataframe containing data on built generator capacity loaded from outputs/gen_cap.csv
+        storage_dispatch: a dataframe containing hourly charge, discharge, state of charge, and nodal cost data for storage assets, loaded from outputs/storage_dispatch.csv
+        fixed_costs: a dataframe containing a list of fixed annual costs, loaded from inputs/fixed_costs.csv
+        rec_value: a float value representing the REC market resell value, loaded from inputs/rec_value.csv
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+    Returns:
+        hourly_costs: a dataframe with all cost components broken out by hour, including fixed costs
     """
 
     # start with system power hedge cost and build from there 
@@ -286,6 +352,8 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_open, gen_cap, storage_di
 
     # add generator timepoint costs next
     hourly_costs = hourly_costs.merge(costs_by_tp, how='left', on='timestamp')
+
+    ra_open = ra_summary.copy()
 
     # set the excess RA value as a negative cost
     ra_open['Excess_RA_Value'] = - ra_open['Excess_RA_Value']
@@ -350,6 +418,13 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_open, gen_cap, storage_di
 
 def build_hourly_cost_plot(hourly_costs, load_balance):
     """
+    Configures a plot summarizing average hourly costs in each quarter of the year
+
+    Inputs:
+        hourly_costs: a dataframe with all cost components broken out by hour, including fixed costs, calculated from the hourly_cost_of_power() function
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+    Returns:
+        hourly_cost_plot: a plotly stacked bar plot with quarter-hour averages of hourly costs
     """
     costs = hourly_costs.copy()
     load = load_balance.copy().set_index(pd.to_datetime(load_balance['timestamp'])).drop(columns=['timestamp'])
@@ -381,9 +456,16 @@ def build_hourly_cost_plot(hourly_costs, load_balance):
 
     return hourly_cost_plot
 
-def construct_cost_and_resale_tables(hourly_costs, load_balance, ra_summary):
+def construct_cost_and_resale_tables(hourly_costs, load_balance):
     """
     Constructs tables that break down costs by component
+
+    Inputs:
+        hourly_costs: a dataframe with all cost components broken out by hour, including fixed costs, calculated from the hourly_cost_of_power() function
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+    Returns:
+        cost_table: a dataframe summarizing delivered costs by total and cost per MWh
+        resale_table: a dataframe summarizing the value of any sellable excess RA or RECs
     """
     # calculate total cost 
     cost_table = hourly_costs.sum(axis=0).reset_index().rename(columns={'index':'Cost Component',0:'Annual Real Cost'})
@@ -430,6 +512,12 @@ def construct_cost_and_resale_tables(hourly_costs, load_balance, ra_summary):
 
 def build_ra_open_position_plot(ra_summary):
     """
+    Description
+
+    Inputs:
+        ra_summary: a dataframe containing resource adequacy summary data by requirement and month, loaded from outputs/RA_summary.csv
+    Returns:
+        monthly_ra_open_fig: a plotly bar chart showing the net monthly RA position for system and flex RA
     """
     ra_open = ra_summary.copy()
     #where RA Position is negative, it indicates an open position
@@ -449,6 +537,20 @@ def build_ra_open_position_plot(ra_summary):
 
 def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, load_balance, system_power, technology_color_map):
     """
+    Description
+
+    Inputs:
+        generation_projects_info: a dataframe containing generator parameters loaded from inputs/generation_project_info.csv
+        dispatch: a dataframe containing hourly generator dispatch data contained in outputs/dispatch.csv
+        storage_dispatch: a dataframe containing hourly charge, discharge, state of charge, and nodal cost data for storage assets, loaded from outputs/storage_dispatch.csv
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+        system_power: a dataframe containing hourly system power and hedge costs, loaded from outputs/system_power.csv
+        technology_color_map: a dictionary that maps generation technologies to colors for use in plots
+    Returns:
+        dispatch_by_tech: a dataframe with hourly generator dispatch grouped by generator technology
+        load_line: a dataframe with hourly load data matched to a datetime
+        storage_charge: a dataframe with hourly storage charging data formatted for the dispatch plot
+        dispatch_fig: a plotly area chart showing hourly load, generation, and storage dispatch for all 8760 hours
     """
     # get the list of technologies
     generator_technology_dict = generation_projects_info[['GENERATION_PROJECT','gen_tech']]
@@ -537,6 +639,13 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
 def build_nodal_prices_plot(nodal_prices, timestamps, generation_projects_info):
     """
     Builds a timeseries plot of all nodal prices used in the model
+
+    Inputs:
+        nodal_prices: a dataframe with hourly wholesale prices at each node, loaded from inputs/nodal_prices.csv
+        timestamps: a dataframe that maps timepoints to datetimes, loaded from inputs/timepoints.csv
+        generation_projects_info: a dataframe containing generator parameters loaded from inputs/generation_project_info.csv
+    Returns:
+        nodal_fig: a plotly line chart showing wholesale prices at each node for all 8760 hours
     """
     # merge the timestamp data
     nodal_data = nodal_prices.copy().merge(timestamps, how='left', left_on='timepoint', right_on='timepoint_id')
@@ -570,6 +679,14 @@ def build_nodal_prices_plot(nodal_prices, timestamps, generation_projects_info):
 
 def build_state_of_charge_plot(storage_dispatch, storage_builds, generation_projects_info):
     """
+    Description
+    
+    Inputs:
+        storage_dispatch: a dataframe containing hourly charge, discharge, state of charge, and nodal cost data for storage assets, loaded from outputs/storage_dispatch.csv
+        storage_builds: a dataframe containing data on built storage power and energy capacity loaded from outputs/storage_builds.csv
+        generation_projects_info: a dataframe containing generator parameters loaded from inputs/generation_project_info.csv
+    Returns:
+        soc_fig: a plotly line plot showing the aggregated hourly state of charge for all hybrid storage and all standalone storage
     """
     soc = storage_dispatch.copy()[['generation_project','timestamp','StateOfCharge']]
 
@@ -625,7 +742,15 @@ def build_state_of_charge_plot(storage_dispatch, storage_builds, generation_proj
 
 def build_month_hour_dispatch_plot(dispatch_by_tech, load_line, storage_charge, technology_color_map):
     """
-    Under construction
+    Creates a month-hour average version of the dispatch plot created by build_dispatch_plot()
+
+    Inputs:
+        dispatch_by_tech: a dataframe with hourly generator dispatch grouped by generator technology, created by the function build_dispatch_plot()
+        load_line: a dataframe with hourly load data matched to a datetime, created by the function build_dispatch_plot()
+        storage_charge: a dataframe with hourly storage charging data formatted for the dispatch plot, created by the function build_dispatch_plot()
+        technology_color_map: a dictionary that maps generation technologies to colors for use in plots
+    Returns:
+        mh_fig: a plotly area plot showing the month-hour average dispatch, load, and storage dispatch
     """
 
     mh_dispatch = dispatch_by_tech.copy()
@@ -697,6 +822,12 @@ def build_month_hour_dispatch_plot(dispatch_by_tech, load_line, storage_charge, 
 
 def build_open_position_plot(load_balance):
     """
+    Builds a plot showing the average open position and excess generation for each month-hour
+
+    Inputs:
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+    Returns:
+        mh_mismatch_fig: a plotly area chart showing the net generation position, both with and without storage dispatch
     """
     #merge mismatch data
     mismatch = load_balance.copy()
@@ -730,6 +861,16 @@ def build_open_position_plot(load_balance):
     return mh_mismatch_fig
 
 def construct_storage_stats_table(storage_cycle_count, storage_builds, storage_dispatch):
+    """
+    Calculates key stats for all built storage assets, including annual average state of charge, cycle limits, and total number of cycles
+
+    Inputs:
+        storage_cycle_count: a dataframe containing storage cycle count data, loaded from outputs/storage_cycle_count.csv
+        storage_builds: a dataframe containing data on built storage power and energy capacity loaded from outputs/storage_builds.csv
+        storage_dispatch: a dataframe containing hourly charge, discharge, state of charge, and nodal cost data for storage assets, loaded from outputs/storage_dispatch.csv
+    Returns:
+        cycles: a dataframe summarizing annual storage cycles and average state of charge for each storage asset
+    """
 
     cycles = storage_cycle_count.copy()[['generation_project','storage_max_annual_cycles','Battery_Cycle_Count']]
     cycles = cycles.round(decimals=2)
@@ -758,50 +899,22 @@ def construct_storage_stats_table(storage_cycle_count, storage_builds, storage_d
 
     return cycles
 
-def export_scenario_summary():
-    """
-    """
-    summary = pd.DataFrame(columns=['Scenario Name'], data=['test'])
-
-    summary['Scenario Name'] = scenario_name
-
-    #Goal Data
-    summary['Time-coincident Delivered %'] = tc_percent_renewable
-    summary['Time-coincident Generation %'] = tc_no_storage_percent_renewable
-    summary['Annual Volumetric Renewable %'] = annual_percent_renewable
-
-    unformatted_cost = unformatted_cost.rename(columns={'Annual Real Cost': ' (Annual)',	'Delivered Cost per MWh': ' (per MWh)'}).melt(id_vars=['Cost Component'], var_name='type', value_name=0)
-    unformatted_cost['col_name'] = unformatted_cost['Cost Component'] + unformatted_cost['type']
-
-
-    summary = pd.concat([summary, unformatted_cost[['col_name',0]].set_index('col_name').T], axis=1)
-
-    #Portfolio Mix
-    portfolio_summary = portfolio[['MW','Status','Technology']].groupby(['Status','Technology']).sum().reset_index()
-    portfolio_summary['Description'] = portfolio_summary['Status'] + " " + portfolio_summary['Technology']
-    portfolio_summary = portfolio_summary.drop(columns=['Status','Technology'])
-    portfolio_summary = portfolio_summary.set_index('Description').transpose().reset_index(drop=True).add_prefix('MW Capacity from ')
-
-    summary = pd.concat([summary, portfolio_summary], axis=1)
-
-    #Load
-    summary['Customer Load GWh'] = load['zone_demand_mw'].sum(axis=0) / 1000
-    try:
-        summary['Total Load with Storage GWh'] = (load['zone_demand_mw'].sum(axis=0) + storage_charge['ChargeMW'].sum(axis=0)) / 1000
-    except (KeyError, NameError):
-        summary['Total Load with Storage GWh'] = summary['Customer Load GWh']
-
-    #Generation Mix
-    generation_summary = generation_mix.set_index('Source').transpose().reset_index(drop=True).add_prefix('GWh Generation from ')
-    summary = pd.concat([summary, generation_summary], axis=1)
-
-    summary = summary.transpose()
-    summary.columns = [f'{scenario_name}']
-
-    summary.to_csv(data_dir / 'scenario_summary.csv')
 
 def calculate_BuildGen_reduced_costs(results, generation_projects_info, variable_capacity_factors, baseload_capacity_factors, dispatch):
     """
+    Calculates the reduced costs of all modeled generators and splits the results into separate tables for interpretation
+
+    Inputs:
+        results: raw model results, loaded from outputs/results.pickle
+        generation_projects_info: a dataframe containing generator parameters loaded from inputs/generation_project_info.csv
+        variable_capacity_factors: a dataframe containing hourly capacity factors for each variable generator, loaded from inputs/variable_capacity_factors.csv
+        baseload_capacity_factors: a dataframe containing hourly capacity factors for each baseload generator, loaded from inputs/baseload_capacity_factors.csv
+        dispatch: a dataframe containing hourly generator dispatch data contained in outputs/dispatch.csv
+    Returns:
+        pos_rc_lower: a dataframe containing reduced costs for all generators that were not selected (BuildGen = 0 with reduced cost > 0)
+        pos_rc_upper: a dataframe containing reduced costs for all generators that were forced to be built but otherwise would not have been selected (BuildGen > 0 with reduced cost > 0)
+        neg_rc: a dataframe containing reduced costs for all generators that were built at maximum capacity but constrained (BuildGen = gen_max_capacity_limit with reduced cost < 0)
+        alternate_optima: a dataframe containing reduced costs for any generators that represent an alternate optimal point (BuildGen = 0 and reduced cost = 0)
     """
     # load results into dataframe and reset index
     rc = pd.DataFrame.from_dict(results.solution.Variable, orient='index')
@@ -880,6 +993,13 @@ def calculate_BuildGen_reduced_costs(results, generation_projects_info, variable
 
 def calculate_load_shadow_price(results, timestamps):
     """
+    Using the dual values from the load balance constraint, identifies the shadow price of load
+
+    Inputs:
+        results: raw model results, loaded from outputs/results.pickle
+        timestamps: a dataframe that maps timepoints to datetimes, loaded from inputs/timepoints.csv
+    Returns:
+        dual_plot: a plotly plot showing the month-hour average of all positive shadow prices
     """
     # load the duals into a dataframe and reset the index
     duals = pd.DataFrame.from_dict(results.solution.Constraint, orient='index')
@@ -908,7 +1028,6 @@ def calculate_load_shadow_price(results, timestamps):
     #duals = duals[['Constraint', 'load_zone','timepoint','Dual']]
 
     # replace all negative values with zero since interpretation is complicated by the fact that the nodal revenue of excess generation is not part of the objective function
-
     duals.loc[duals['Dual'] < 0, 'Dual'] = 0
 
     # Calculate the month-hour average
@@ -936,7 +1055,30 @@ def calculate_load_shadow_price(results, timestamps):
 
 def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, avoided_emissions, emissions, emissions_unit):
     """
-    Creates a csv file output of key metrics to compare with other scenarios
+    Creates a csv file output of key metrics from the summary report to compare with other scenarios.
+
+    These metrics include:
+        - Scenario Name
+        - Time-coincident %
+        - Annual volumetric %
+        - Delivered Cost per MWh
+        - Sensitivity performance results
+        - Portfolio mix by generation technology
+        - Annual Emissions Footprint
+        - Annual average delivered emission factor
+        - Avoided emissions impact
+
+    Inputs:
+        scenario_name: string identifying the name of the scenario, loaded from the output file name
+        cost_table:a dataframe summarizing delivered costs by total and cost per MWh, calculated by the construct_cost_and_resale_tables() function
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+        portfolio: a dataframe summarizing the built portfolio, created as an output of the generator_portfolio() function
+        sensitivity_table: a dataframe summarizing the time-coincident % performance in each weather year tested, calculated by the run_sensitivity_analysis() function
+        avoided_emissions: a dataframe containing the total annual avoided emissions from additional generators under each Cambium case, calculated byt the calculate_avoided_emissions() function
+        emissions: a dataframe containing hourly output emissions from dispatched generation and grid power, loaded from outputs/emissions.csv
+        emissions_unit: a string identifying the unit of measure used for emission rates, loaded from inputs/ghg_emissions_unit.txt
+    Returns:
+        summary: a dataframe containing key metrics from this scenario
     """
 
     summary = pd.DataFrame(columns=['Scenario Name'], data=['test'])
@@ -976,19 +1118,42 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
 
 def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_info, load_balance, storage_builds):
     """
+    Assesses the portfolio's time-coincident performance based on variable generation in different weather years, utilizing a simplified greedy storage algorithm to dispatch storage assets.
+
+    Inputs:
+        gen_set: a string identifying the name of the generator set used for this scenario, loaded from inputs/gen_set.txt
+        gen_cap: a dataframe containing data on built generator capacity loaded from outputs/gen_cap.csv
+        dispatch: a dataframe containing hourly generator dispatch data loaded from outputs/dispatch.csv
+        generation_projects_info: a dataframe containing generator parameters loaded from inputs/generation_project_info.csv
+        load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+        storage_builds: a dataframe containing data on built storage power and energy capacity loaded from outputs/storage_builds.csv
+    Returns:
+        sensitivity_table: a dataframe summarizing the time-coincident % performance in each weather year tested
     """
+    # specify the path to the folder than contains the SAM weather data
     set_folder = Path.cwd() / f'../../{gen_set}/'
+
+    # get a list of all weather year file names in this folder
     weather_years = [filename for filename in os.listdir(set_folder) if '.csv' in filename]
 
     # get dataframe of all generators that were built
     built_gens = gen_cap.copy()[gen_cap['GenCapacity'] > 0]
 
-    # separate out the storage generators
+    # remove storage generators from the list of built generators
     built_gens = built_gens[built_gens['gen_energy_source'] != 'Electricity']
 
+    # create a blank dataframe to hold the results
     sensitivity_table = pd.DataFrame(columns=['Weather Year', 'Time-Coincident %'])
 
+    # get a list of all hybrid generators
+    hybrid_gens = list(generation_projects_info.loc[((generation_projects_info['gen_is_hybrid'] == 1) & (generation_projects_info['gen_is_storage'] == 0)), 'GENERATION_PROJECT'])
+
+    # get a list of all hybrid storage projects
+    hybrid_storage = list(generation_projects_info.loc[((generation_projects_info['gen_is_hybrid'] == 1) & (generation_projects_info['gen_is_storage'] == 1)), 'GENERATION_PROJECT'])
+    
+    # for each weather year
     for weather_year in weather_years:
+        # get the year number from the file name
         year = weather_year.split('_')[0]
 
         # load weather year data
@@ -1000,50 +1165,136 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
 
         # for each generator
         for gen in list(built_gens['generation_project']):
+            # get the built MW capacity
             built_capacity = built_gens.loc[built_gens['generation_project'] == gen, 'GenCapacity'].item()
             try:
+                # if the generator is represented in the SAM weather data, calculate the new dispatch profile
                 vcf = vcf_for_year[gen]
                 generation[gen] = built_capacity * vcf
             except KeyError:
+                # otherwise, if the generator had a manually-inputted capacity factor, get the dispatch profile from the model outputs
                 generation[gen] = dispatch.copy().loc[dispatch['generation_project'] == gen,['DispatchGen_MW','ExcessGen_MW','CurtailGen_MW']].reset_index(drop=True).sum(axis=1)
 
-        # sum to get total generation
-        balance['generation'] = generation.sum(axis=1)
+        # sum to get total generation from hybrid generators and all other generators
+        balance['hybrid_generation'] = generation[[gen for gen in generation.columns if gen in hybrid_gens]].sum(axis=1)
+        balance['generation'] = generation[[gen for gen in generation.columns if gen not in hybrid_gens]].sum(axis=1)
 
         # add load
         balance['load'] = load_balance['zone_demand_mw']
 
-        # add blank columns for storage dynamics
+        # add a placeholder column for grid power
+        balance['grid_power'] = 0
+        # add placeholder columns for hybrid storage dynamics
+        balance['hybrid_charge'] = 0
+        balance['hybrid_discharge'] = 0
+        balance['hybrid_soc'] = 0
+        # add placeholder columns for storage dynamics
         balance['charge'] = 0
         balance['discharge'] = 0
         balance['soc'] = 0
-        balance['grid_power'] = 0
 
+        # filter the storage data to only include storage assets that were built
         built_storage = storage_builds.copy()[storage_builds['OnlinePowerCapacityMW'] > 0]
 
-        # get storage parameters
-        storage_power = built_storage['OnlinePowerCapacityMW'].sum()
-        storage_energy = built_storage['OnlineEnergyCapacityMWh'].sum()
-        # calculate an energy capacity weighted average of RTE
+        # get storage parameters for hybrid and standalone storage
+        hybrid_storage_power = built_storage.loc[built_storage['generation_project'].isin(hybrid_storage),'OnlinePowerCapacityMW'].sum()
+        hybrid_storage_energy = built_storage.loc[built_storage['generation_project'].isin(hybrid_storage),'OnlineEnergyCapacityMWh'].sum()
+        storage_power = built_storage.loc[~built_storage['generation_project'].isin(hybrid_storage),'OnlinePowerCapacityMW'].sum()
+        storage_energy = built_storage.loc[~built_storage['generation_project'].isin(hybrid_storage),'OnlineEnergyCapacityMWh'].sum()
+
+        # get the hybrid interconnection limit based on nameplate capacity of the generator portion
+        hybrid_interconnect_limit = built_gens.loc[built_gens['generation_project'].isin(hybrid_gens), 'GenCapacity'].sum()
+
+        # calculate an energy capacity weighted average of RTE for all storage
         rte_calc = built_storage.copy().merge(generation_projects_info[['GENERATION_PROJECT','storage_roundtrip_efficiency']], how='left', left_on='generation_project', right_on='GENERATION_PROJECT')
         rte_calc['product'] = rte_calc['OnlineEnergyCapacityMWh'] * rte_calc['storage_roundtrip_efficiency'].astype(float)
-        storage_rte = rte_calc['product'].sum() / rte_calc['OnlineEnergyCapacityMWh'].sum()
-        conversion_loss = math.sqrt(storage_rte)
-        initial_soc = storage_energy / 2
+
+        # if there are any hybrid storage assets
+        if hybrid_storage_energy > 0:
+            # calculate the RTE
+            hybrid_storage_rte = rte_calc.loc[rte_calc['generation_project'].isin(hybrid_storage), 'product'].sum() / hybrid_storage_energy
+            # calculate the one-way conversion loss from RTE
+            hybrid_conversion_loss = math.sqrt(hybrid_storage_rte)
+            # set the initial state of change as 50% of the total energy capacity
+            hybrid_initial_soc = hybrid_storage_energy / 2
+
+        # if there are any standalone storage assets
+        if storage_energy > 0:
+            # calculate the RTE
+            storage_rte = rte_calc.loc[~rte_calc['generation_project'].isin(hybrid_storage), 'product'].sum() / storage_energy
+            # calculate the one-way conversion loss from RTE
+            conversion_loss = math.sqrt(storage_rte)
+            # set the initial state of change as 50% of the total energy capacity
+            initial_soc = storage_energy / 2
+
         # greedy storage charging algorithm
         for t in range(len(balance)):
+            # get the generation and load for the current timepoint
+            hybrid_generation_t = balance.loc[t,'hybrid_generation']
             generation_t = balance.loc[t,'generation']
+            total_generation_t = hybrid_generation_t + generation_t
             load_t = balance.loc[t,'load']
+
+            # for the first timepoint, use the initial values
             if t == 0:
-                balance.loc[t,'charge'] = 0 if (generation_t < load_t) else min((generation_t - load_t), storage_power, ((storage_energy - initial_soc)/conversion_loss) )
-                balance.loc[t,'discharge'] = 0 if (generation_t > load_t) else min((load_t - generation_t), storage_power, (initial_soc*conversion_loss) )
-                balance.loc[t,'soc'] = initial_soc + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']*conversion_loss
+                # first dispatch hybrid batteries
+                if hybrid_storage_energy > 0:
+                    # charge or discharge the battery based on the current load balance
+                    balance.loc[t,'hybrid_charge'] = 0 if (total_generation_t < load_t) else min((total_generation_t - load_t), # total excess generation
+                                                                                                hybrid_generation_t, # total hybrid generation
+                                                                                                hybrid_storage_power, # power limit
+                                                                                                ((hybrid_storage_energy - hybrid_initial_soc)/hybrid_conversion_loss) ) # available energy capacity
+                    balance.loc[t,'hybrid_discharge'] = 0 if (total_generation_t > load_t) else min((load_t - total_generation_t), # total open position
+                                                                                                    hybrid_interconnect_limit - hybrid_generation_t, # available interconnect capacity
+                                                                                                    hybrid_storage_power, # power limit
+                                                                                                    (hybrid_initial_soc*hybrid_conversion_loss) ) # available energy capacity
+                    # calculate the ending state of charge after charging/discharging
+                    balance.loc[t,'hybrid_soc'] = hybrid_initial_soc + balance.loc[t,'hybrid_charge']*hybrid_conversion_loss - balance.loc[t,'hybrid_discharge']/hybrid_conversion_loss
+                # then dispatch standalone batteries
+                if storage_energy > 0:
+                    generation_net_hybrid_t = total_generation_t + balance.loc[t,'hybrid_discharge'] - balance.loc[t,'hybrid_charge']
+                    # charge or discharge the battery based on the current load balance
+                    balance.loc[t,'charge'] = 0 if (generation_net_hybrid_t < load_t) else min((generation_net_hybrid_t - load_t), 
+                                                                                            storage_power, 
+                                                                                            ((storage_energy - initial_soc)/conversion_loss) )
+                    balance.loc[t,'discharge'] = 0 if (generation_net_hybrid_t > load_t) else min((load_t - generation_net_hybrid_t), 
+                                                                                                storage_power, 
+                                                                                                (initial_soc*conversion_loss) )
+                    # calculate the ending state of charge after charging/discharging
+                    balance.loc[t,'soc'] = initial_soc + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']/conversion_loss
+            
+            # for all other timepoints, use the previous timepoint value
             else:
-                soc_prev = balance.loc[t - 1,'soc']
-                balance.loc[t,'charge'] = 0 if (generation_t < load_t) else min((generation_t - load_t), storage_power, ((storage_energy - soc_prev)/conversion_loss) )
-                balance.loc[t,'discharge'] = 0 if (generation_t > load_t) else min((load_t - generation_t), storage_power, (soc_prev*conversion_loss) )
-                balance.loc[t,'soc'] = soc_prev + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']/conversion_loss
-            balance.loc[t,'grid_power'] = 0 if ((generation_t + balance.loc[t,'discharge']) > load_t) else (load_t - (generation_t + balance.loc[t,'discharge']))
+                # first dispatch hybrid batteries
+                if hybrid_storage_energy > 0:
+                    hybrid_soc_prev = balance.loc[t - 1,'hybrid_soc']
+                    # charge or discharge the battery based on the current load balance
+                    balance.loc[t,'hybrid_charge'] = 0 if (total_generation_t < load_t) else min((total_generation_t - load_t), # total excess generation
+                                                                                                hybrid_generation_t, # total hybrid generation
+                                                                                                hybrid_storage_power, # power limit
+                                                                                                ((hybrid_storage_energy - hybrid_soc_prev)/hybrid_conversion_loss) ) # available energy capacity
+                    balance.loc[t,'hybrid_discharge'] = 0 if (total_generation_t > load_t) else min((load_t - total_generation_t), # total open position
+                                                                                                    hybrid_interconnect_limit - hybrid_generation_t, # available interconnect capacity
+                                                                                                    hybrid_storage_power, # power limit
+                                                                                                    (hybrid_soc_prev*hybrid_conversion_loss) ) # available energy capacity
+                    # calculate the ending state of charge after charging/discharging
+                    balance.loc[t,'hybrid_soc'] = hybrid_soc_prev + balance.loc[t,'hybrid_charge']*hybrid_conversion_loss - balance.loc[t,'hybrid_discharge']/hybrid_conversion_loss
+                # then dispatch standalone batteries
+                if storage_energy > 0:
+                    soc_prev = balance.loc[t - 1,'soc']
+                    generation_net_hybrid_t = total_generation_t + balance.loc[t,'hybrid_discharge'] - balance.loc[t,'hybrid_charge']
+                    # charge or discharge the battery based on the current load balance
+                    balance.loc[t,'charge'] = 0 if (generation_net_hybrid_t < load_t) else min((generation_net_hybrid_t - load_t), 
+                                                                                            storage_power, 
+                                                                                            ((storage_energy - soc_prev)/conversion_loss) )
+                    balance.loc[t,'discharge'] = 0 if (generation_net_hybrid_t > load_t) else min((load_t - generation_net_hybrid_t), 
+                                                                                                storage_power, 
+                                                                                                (soc_prev*conversion_loss) )
+                    # calculate the ending state of charge after charging/discharging
+                    balance.loc[t,'soc'] = soc_prev + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']/conversion_loss
+            
+            # after dispatching the battery, fill any remaining open position with grid power
+            balance.loc[t,'grid_power'] = 0 if ((total_generation_t + balance.loc[t,'hybrid_discharge'] + balance.loc[t,'discharge']) >= load_t) else (load_t - (total_generation_t + balance.loc[t,'hybrid_discharge'] + balance.loc[t,'discharge']))
             
 
         tc_performance = (1 - (balance.grid_power.sum() / balance.load.sum())) * 100
@@ -1055,6 +1306,15 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
 
 def calculate_avoided_emissions(portfolio, dispatch, marginal_emissions):
     """
+    Estimates the avoided emissions resulting from additional generators added to the portfolio by the model,
+    using marginal emission rates from NREL's Cambium model. 
+
+    Inputs:
+        portfolio: a dataframe summarizing the built portfolio, created as an output of the generator_portfolio() function
+        dispatch: a dataframe containing hourly generator dispatch data contained in outputs/dispatch.csv
+        marginal_emissions: a dataframe containing marginal emission rate input data contained in inputs/marginal_emissions.csv
+    Returns:
+        avoided_emissions: a dataframe containing the total annual avoided emissions from additional generators under each Cambium case (low/mid/high)
     """
     # get a list of all of the additional gens
     additional_gens = list(portfolio.loc[portfolio['Status'] == 'Additional','generation_project'])

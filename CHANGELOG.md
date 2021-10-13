@@ -1,4 +1,12 @@
 -------------------------------------------------------------------------------
+Commmit 2021.10.13 (Version 0.9.1)
+-------------------------------------------------------------------------------
+
+Adds documentation to each function in `report_functions.py`
+
+Updates the sensitivity calculation to separately dispatch hybrid storage and standalone storage.
+
+-------------------------------------------------------------------------------
 Commmit 2021.10.12 (Version 0.9.0)
 -------------------------------------------------------------------------------
 
