@@ -1,4 +1,4 @@
-name: switch_247
+name: match_model
 channels:
   - nrel
   - conda-forge

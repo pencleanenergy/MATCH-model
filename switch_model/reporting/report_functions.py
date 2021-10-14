@@ -1,4 +1,4 @@
-# Copyright (c) 2021 *****************. All rights reserved.
+# Copyright (c) 2021 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 from pathlib import Path
@@ -121,6 +121,7 @@ def build_hourly_emissions_heatmap(grid_emissions, emissions, emissions_unit):
 
     # rearrange data in a grid
     emissions_heatmap_data = emissions.copy()[['timestamp','Delivered Emission Factor']]
+    max_ef = max(grid_max_ef, emissions_heatmap_data['Delivered Emission Factor'].max())
     emissions_heatmap_data.index = pd.to_datetime(emissions_heatmap_data['timestamp']) 
     emissions_heatmap_data['Date'] = emissions_heatmap_data.index.date
     emissions_heatmap_data['Hour of Day'] = emissions_heatmap_data.index.hour
@@ -131,7 +132,7 @@ def build_hourly_emissions_heatmap(grid_emissions, emissions, emissions_unit):
             x=emissions_heatmap_data.columns, 
             y=emissions_heatmap_data.index, 
             color_continuous_scale='rdylgn_r', 
-            range_color=[0,grid_max_ef], 
+            range_color=[0,max_ef], 
             title=f'Hourly Emisission Intensity of Delivered Energy ({emissions_unit})').update_yaxes(dtick=3)
     
     return emissions_heatmap
@@ -1170,7 +1171,7 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
             try:
                 # if the generator is represented in the SAM weather data, calculate the new dispatch profile
                 vcf = vcf_for_year[gen]
-                generation[gen] = built_capacity * vcf
+                generation[gen] = built_capacity * vcf * generation_projects_info.loc[generation_projects_info['GENERATION_PROJECT'] == gen, 'solar_age_degredation'].item()
             except KeyError:
                 # otherwise, if the generator had a manually-inputted capacity factor, get the dispatch profile from the model outputs
                 generation[gen] = dispatch.copy().loc[dispatch['generation_project'] == gen,['DispatchGen_MW','ExcessGen_MW','CurtailGen_MW']].reset_index(drop=True).sum(axis=1)

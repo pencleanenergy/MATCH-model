@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Copyright (c) 2015-2019 The Switch Authors. All rights reserved.
+# Modifications Copyright (c) 2021 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 from __future__ import print_function
 
@@ -89,7 +90,7 @@ def main(args=None, return_model=False, return_instance=False):
 
         if model.options.verbose:
             print("\n=======================================================================")
-            print("Switch 24x7 {}".format(switch_model.__version__))
+            print("MATCH {}".format(switch_model.__version__))
             print("=======================================================================")
             print("Arguments:")
             print(", ".join(k+"="+repr(v) for k, v in model.options.__dict__.items() if v))

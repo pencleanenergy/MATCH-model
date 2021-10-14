@@ -1,4 +1,25 @@
 -------------------------------------------------------------------------------
+Commmit 2021.10.14 (Version 0.10.0)
+-------------------------------------------------------------------------------
+Takes solar panel degredation due to age into account. User may specify a new parameter `solar_cod_year` for each solar pv project that is used to calculate a degredation factor based on the number of years between the model year and the COD year, based on an annual degredation rate of 0.5%. (Closes #48)
+
+Fixed bug where midterm_RA_requirement tab was missing from the `model_inputs.xlsx` spreadsheet.
+
+Updates default values in `model_inputs.xlsx`
+
+Fixed a bug when generating single-year generation profiles in `generate_input_files.py`
+
+Changed the names of certain parameters to make it clearer what types of generators they apply to:
+  - Changed  `gen_curtailment_limit` to `variable_gen_curtailment_limit`
+  - changed `gen_scheduled_outage_rate` to `baseload_gen_scheduled_outage_rate`
+
+Updated the excess generation limit constraint in `renewable_target` to be based on the percentage of load, rather than the percentage of dispatched generation.
+
+Updated the Authors documentation.
+
+Started using working name "MATCH" instead of "SWITCH" for the model.
+
+-------------------------------------------------------------------------------
 Commmit 2021.10.13 (Version 0.9.1)
 -------------------------------------------------------------------------------
 

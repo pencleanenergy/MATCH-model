@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2019 The Switch Authors. All rights reserved.
-# Modifications copyright (c) 2021 *****************. All rights reserved.
+# Modifications copyright (c) 2021 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 """
 This file should only include the version. Do not import any packages or
@@ -9,4 +9,4 @@ installed.
 
 NOTE: This software was forked from Switch version 2.0.5
 """
-__version__='0.9.1'
+__version__='0.10.0'

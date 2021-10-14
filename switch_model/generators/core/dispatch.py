@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2019 The Switch Authors. All rights reserved.
-# Modifications copyright (c) 2021 *****************. All rights reserved.
+# Modifications copyright (c) 2021 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
@@ -62,7 +62,7 @@ def define_components(mod):
     duration of the timepoint in hours to determine the energy produced
     by a project in a timepoint.
 
-    gen_forced_outage_rate[g] and gen_scheduled_outage_rate[g]
+    gen_forced_outage_rate[g] and baseload_gen_scheduled_outage_rate[g]
     describe the forces and scheduled outage rates for each project.
     These parameters can be specified for individual projects via an
     input file (see load_inputs() documentation), or generically for all
@@ -217,7 +217,9 @@ def define_components(mod):
         if m.gen_is_baseload[g]:
             return (
                 (1 - m.gen_forced_outage_rate[g]) *
-                (1 - m.gen_scheduled_outage_rate[g]))
+                (1 - m.baseload_gen_scheduled_outage_rate[g]))
+        elif m.gen_tech[g] == 'Solar_PV':
+            return (1 - m.gen_forced_outage_rate[g]) * m.solar_age_degredation[g]
         else:
             return (1 - m.gen_forced_outage_rate[g])
     mod.gen_availability = Param(
@@ -280,7 +282,7 @@ def define_components(mod):
     #limit curtailment to below the cap
     mod.Maximum_Annual_Curtailment = Constraint(
         mod.VARIABLE_GENS, mod.PERIODS,
-        rule=lambda m, g, p: sum(m.CurtailGen[g,t] for t in m.TPS_IN_PERIOD[p]) <= (m.gen_curtailment_limit[g] * m.GenCapacity[g, p]))
+        rule=lambda m, g, p: sum(m.CurtailGen[g,t] for t in m.TPS_IN_PERIOD[p]) <= (m.variable_gen_curtailment_limit[g] * m.GenCapacity[g, p]))
 
     # EXCESS GENERATION
     ###################

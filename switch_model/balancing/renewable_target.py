@@ -1,4 +1,4 @@
-# Copyright (c) 2021 *****************. All rights reserved.
+# Copyright (c) 2021 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
@@ -171,12 +171,12 @@ def define_components(mod):
     if mod.options.excess_generation_limit_type == "annual":
         mod.Enforce_Annual_Excess_Generation_Limit = Constraint(
             mod.LOAD_ZONES, mod.PERIODS,
-            rule = lambda m, z, p: sum(m.ZoneTotalExcessGen[z,t] for t in m.TPS_IN_PERIOD[p]) <= sum(m.ZoneTotalGeneratorDispatch[z,t] for t in m.TPS_IN_PERIOD[p]) * m.excess_generation_limit[p]
+            rule = lambda m, z, p: sum(m.ZoneTotalExcessGen[z,t] for t in m.TPS_IN_PERIOD[p]) <= sum(m.zone_demand_mw[z,t] for t in m.TPS_IN_PERIOD[p]) * m.excess_generation_limit[p]
         )
     elif mod.options.excess_generation_limit_type == "hourly":
         mod.Enforce_Hourly_Excess_Generation_Limit = Constraint(
             mod.LOAD_ZONES, mod.TIMEPOINTS,
-            rule = lambda m, z, t: m.ZoneTotalExcessGen[z,t] <= m.ZoneTotalGeneratorDispatch[z,t] * m.excess_generation_limit[m.tp_period[t]]
+            rule = lambda m, z, t: m.ZoneTotalExcessGen[z,t] <= m.zone_demand_mw[z,t] * m.excess_generation_limit[m.tp_period[t]]
         )
 
         

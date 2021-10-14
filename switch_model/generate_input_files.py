@@ -1,4 +1,4 @@
-# Copyright (c) 2021 *****************. All rights reserved.
+# Copyright (c) 2021 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
@@ -316,7 +316,7 @@ def generate_inputs(model_workspace):
                 df_vcf_year = df_vcf.copy()[[col for col in df_vcf.columns if str(vcf_year) in col]]
 
                 #remove year from column name
-                df_vcf_year.columns = [i.split('~')[0] for i in vcf_year.columns]
+                df_vcf_year.columns = [i.split('~')[0] for i in df_vcf_year.columns]
 
                 # export the data to a csv in the set folder
                 df_vcf_year.to_csv(model_workspace / gen_set / f'{vcf_year}_variable_capacity_factors.csv')
@@ -389,7 +389,7 @@ def generate_inputs(model_workspace):
             else:
                 target_option = ''
             
-            if excess_generation_limit_type != 'None':
+            if excess_generation_limit_type not in ['None','.']:
                 excess_option = f' --excess_generation_limit_type {excess_generation_limit_type}'
             else:
                 excess_option = ''
@@ -476,10 +476,11 @@ def generate_inputs(model_workspace):
                         'gen_is_baseload',
                         'gen_is_storage',	
                         'gen_is_hybrid',
-                        'gen_capacity_limit_mw',		
-                        'gen_scheduled_outage_rate',	
+                        'gen_capacity_limit_mw',
+                        'solar_cod_year',		
+                        'baseload_gen_scheduled_outage_rate',	
                         'gen_forced_outage_rate',
-                        'gen_curtailment_limit',	
+                        'variable_gen_curtailment_limit',	
                         'gen_emission_factor',
                         'storage_roundtrip_efficiency',	
                         'storage_charge_to_discharge_ratio',	
@@ -509,6 +510,11 @@ def generate_inputs(model_workspace):
             overbuild_risk = generation_projects_info.copy()[['GENERATION_PROJECT',	'gen_pricing_node','ppa_energy_cost','ppa_penalty']]
             overbuild_risk.to_csv(output_dir / 'overbuild_projects.csv', index=False)
             generation_projects_info = generation_projects_info.drop(columns=['ppa_penalty'])
+
+            # calculate the solar degredation discount for the model year, assuming a 0.5% annual degredation rate
+            generation_projects_info['solar_age_degredation'] = 1
+            generation_projects_info.loc[generation_projects_info['solar_cod_year'] != '.', 'solar_age_degredation'] = (1-0.005)**(year - generation_projects_info.loc[generation_projects_info['solar_cod_year'] != '.', 'solar_cod_year'])
+            
 
             generation_projects_info.to_csv(input_dir / 'generation_projects_info.csv', index=False)
 

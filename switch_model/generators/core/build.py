@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2019 The Switch Authors. All rights reserved.
-# Modifications copyright (c) 2021 *****************. All rights reserved.
+# Modifications copyright (c) 2021 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 """
 Defines generation projects build-outs.
@@ -55,7 +55,7 @@ def define_components(mod):
 
     gen_is_cogen
 
-    gen_scheduled_outage_rate
+    baseload_gen_scheduled_outage_rate
 
     gen_forced_outage_rate
 
@@ -223,13 +223,15 @@ def define_components(mod):
     mod.gen_is_baseload = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_is_storage = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_is_hybrid = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
-    mod.gen_scheduled_outage_rate = Param(mod.GENERATION_PROJECTS,
+    mod.solar_age_degredation = Param(mod.GENERATION_PROJECTS,
+        within=PercentFraction, default=1)
+    mod.baseload_gen_scheduled_outage_rate = Param(mod.GENERATION_PROJECTS,
         within=PercentFraction, default=0)
     mod.gen_forced_outage_rate = Param(mod.GENERATION_PROJECTS,
         within=PercentFraction, default=0)
     mod.min_data_check('GENERATION_PROJECTS', 'gen_tech', 'gen_energy_source',
         'gen_load_zone', 'gen_is_variable')
-
+    
     # Generation Project subsets
     mod.STORAGE_GENS = Set(
         initialize=mod.GENERATION_PROJECTS, 
@@ -243,6 +245,8 @@ def define_components(mod):
     mod.BASELOAD_GENS = Set(
         initialize=mod.GENERATION_PROJECTS,
         filter=lambda m, g: m.gen_is_baseload[g])
+
+    
 
 
 
@@ -470,7 +474,7 @@ def define_components(mod):
 
     # Curtialment Limits
     #define the input parameter for the annual number of hours of curtialment/excess gen allowed
-    mod.gen_curtailment_limit = Param(mod.VARIABLE_GENS, within=NonNegativeReals, default=0)
+    mod.variable_gen_curtailment_limit = Param(mod.VARIABLE_GENS, within=NonNegativeReals, default=0)
 
     # Derived annual costs
     mod.GenCapacityCost = Expression(
@@ -505,7 +509,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         gen_max_age, gen_is_variable, gen_is_baseload,
         gen_full_load_heat_rate, gen_variable_om, gen_connect_cost_per_mw
     Optional columns are:
-        gen_scheduled_outage_rate, gen_forced_outage_rate,
+        baseload_gen_scheduled_outage_rate, gen_forced_outage_rate,
         gen_capacity_limit_mw, gen_unit_size,  gen_min_build_capacity, gen_is_cogen
 
     The following file lists existing builds of projects, and is
@@ -524,17 +528,17 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'generation_projects_info.csv'),
         auto_select=True,
-        optional_params=['gen_is_baseload', 'gen_scheduled_outage_rate',
+        optional_params=['gen_is_baseload', 'baseload_gen_scheduled_outage_rate',
         'gen_forced_outage_rate', 'gen_capacity_limit_mw', 'gen_unit_size',
         'gen_min_build_capacity',  'gen_variant_group'],
         index=mod.GENERATION_PROJECTS,
         param=[mod.gen_tech, mod.gen_energy_source,
                mod.gen_load_zone, mod.gen_is_variable, mod.gen_is_storage,
-               mod.gen_is_baseload, mod.gen_is_hybrid, mod.gen_scheduled_outage_rate,
-               mod.gen_forced_outage_rate, mod.gen_curtailment_limit, mod.gen_capacity_limit_mw,
+               mod.gen_is_baseload, mod.gen_is_hybrid, mod.baseload_gen_scheduled_outage_rate,
+               mod.gen_forced_outage_rate, mod.variable_gen_curtailment_limit, mod.gen_capacity_limit_mw,
                mod.gen_unit_size, mod.ppa_energy_cost, mod.gen_min_build_capacity,
                mod.ppa_capacity_cost, 
-               mod.gen_variant_group, mod.gen_pricing_node])
+               mod.gen_variant_group, mod.gen_pricing_node, mod.solar_age_degredation])
     # Construct sets of capacity-limited, ccs-capable and unit-size-specified
     # projects. These sets include projects for which these parameters have
     # a value

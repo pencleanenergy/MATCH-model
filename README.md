@@ -1,5 +1,5 @@
-This contains "Switch 24x7", a time-coincident renewable energy portfolio
-planning model that is based on version 2 of the Switch electricity planning model.
+This contains "MATCH", a time-coincident renewable energy portfolio
+planning model that is derived from version 2 of the Switch electricity planning model.
 
 To generate documentation, go to the doc folder and run ./make_doc.sh.
 This will build html documentation files from python doc strings which
@@ -8,7 +8,7 @@ components they define, and what input files they expect.
 
 # INSTALLATION
 
-See "INSTALL.md" for instructions on how to download and install switch 24x7 on your machine. 
+See "INSTALL.md" for instructions on how to download and install MATCH on your machine. 
 
 # DIRECTORY STRUCTURE
 ```
@@ -123,7 +123,7 @@ If you plan on contributing edits to the codebase that will be merged into the m
 	- Greg will then review the edit and merge it into the master branch, which will then delete the feature branch.
 
 # TESTING
-NOTE: The run_tests.py module has not been tested with SWITCH247  
+NOTE: The run_tests.py module has not been tested with MATCH
 To test the entire codebase, run this command from the root directory:
 
 	python run_tests.py
