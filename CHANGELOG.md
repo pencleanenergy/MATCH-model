@@ -1,4 +1,9 @@
 -------------------------------------------------------------------------------
+Commmit 2021.10.14 (Version 0.10.1)
+-------------------------------------------------------------------------------
+Fix a bug in the summary report that displayed the wrong avoided emissions number.
+
+-------------------------------------------------------------------------------
 Commmit 2021.10.14 (Version 0.10.0)
 -------------------------------------------------------------------------------
 Takes solar panel degredation due to age into account. User may specify a new parameter `solar_cod_year` for each solar pv project that is used to calculate a degredation factor based on the number of years between the model year and the COD year, based on an annual degredation rate of 0.5%. (Closes #48)
