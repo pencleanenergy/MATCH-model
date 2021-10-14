@@ -728,6 +728,10 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
     system_model_wind.Turbine.assign(turbine)
     system_model_wind.Farm.assign(farm)
 
+    # calculate the powercurve if not specified
+    if not turbine.has_key('wind_turbine_powercurve_powerout'):
+        system_model_wind.Turbine.calculate_powercurve()
+
     lon_lats = list(resource_dict.keys())
 
     #this is the df that will hold all of the data for all years

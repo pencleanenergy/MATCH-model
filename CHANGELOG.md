@@ -3,6 +3,8 @@ Commmit 2021.10.14 (Version 0.10.1)
 -------------------------------------------------------------------------------
 Fix a bug in the summary report that displayed the wrong avoided emissions number.
 
+Adds the capability for PySAM to calculte a wind powercurve based on turbine inputs if the power curve is not specified.
+
 -------------------------------------------------------------------------------
 Commmit 2021.10.14 (Version 0.10.0)
 -------------------------------------------------------------------------------
