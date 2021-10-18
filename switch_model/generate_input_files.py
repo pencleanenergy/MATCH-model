@@ -4,7 +4,7 @@
 """
 This takes data from an input excel file and formats into individual csv files for inputs
 """
-#%%
+
 import ast
 import pandas as pd 
 import numpy as np
@@ -634,7 +634,7 @@ def generate_inputs(model_workspace):
 def simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, config_dict, resource_years, input_dir, tz_offset):
     
     #initiate the default PV setup
-    system_model_PV = pv.default('PVWattsSingleOwner')
+    system_model_PV = pv.default('PVWattsNone')
 
     # specify non-default system design factors
     systemDesign = config_dict['SystemDesign']
@@ -716,8 +716,8 @@ def simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, confi
 
 def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config_dict, resource_years, input_dir, tz_offset):
     
-    #initiate the default wind power setup
-    system_model_wind = wind.default('WindPowerSingleOwner')
+    #initiate the default wind power model
+    system_model_wind = wind.default('WindPowerNone')
 
     # specify non-default system design factors
     turbine = config_dict['Turbine']
@@ -728,9 +728,40 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
     system_model_wind.Turbine.assign(turbine)
     system_model_wind.Farm.assign(farm)
 
-    # calculate the powercurve if not specified
-    if not turbine.has_key('wind_turbine_powercurve_powerout'):
-        system_model_wind.Turbine.calculate_powercurve()
+    def default_powercurve_value(dict, key):
+        """
+        Checks if user provided value, otherwise returns default value
+        """
+        try:
+            return dict[key]
+        except KeyError:
+            if key == 'elevation':
+                return 0
+            elif key == 'max_cp':
+                return 0.45
+            elif key == 'max_tip_speed':
+                return 80
+            elif key == 'max_tip_sp_ratio':
+                return 8
+            elif key == 'drive_train':
+                return 0
+            else:
+                class MissingData(Exception):
+                    pass
+                raise  MissingData(f"missing required input for power curve: {key}")
+
+    # calculate the powercurve if power curve parameters are specified
+    if config_dict.has_key('Powercurve'):
+        powercurve = config_dict['Powercurve']
+        system_model_wind.Turbine.calculate_powercurve(elevation=default_powercurve_value(powercurve, 'elevation'),
+                                                       turbine_size=default_powercurve_value(powercurve, 'turbine_size'),
+                                                       rotor_diameter=default_powercurve_value(powercurve, 'rotor_diameter'),
+                                                       max_cp=default_powercurve_value(powercurve, 'max_cp'),
+                                                       max_tip_speed=default_powercurve_value(powercurve, 'max_tip_speed'),
+                                                       max_tip_sp_ratio=default_powercurve_value(powercurve, 'max_tip_sp_ratio'),
+                                                       cut_in=default_powercurve_value(powercurve, 'cut_in'),
+                                                       cut_out=default_powercurve_value(powercurve, 'cut_out'),
+                                                       drive_train=default_powercurve_value(powercurve, 'drive_train'))
 
     lon_lats = list(resource_dict.keys())
 
