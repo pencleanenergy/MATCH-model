@@ -751,7 +751,7 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
                 raise  MissingData(f"missing required input for power curve: {key}")
 
     # calculate the powercurve if power curve parameters are specified
-    if config_dict.has_key('Powercurve'):
+    if 'Powercurve' in config_dict:
         powercurve = config_dict['Powercurve']
         system_model_wind.Turbine.calculate_powercurve(elevation=default_powercurve_value(powercurve, 'elevation'),
                                                        turbine_size=default_powercurve_value(powercurve, 'turbine_size'),
