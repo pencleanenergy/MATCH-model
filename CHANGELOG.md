@@ -1,4 +1,9 @@
 -------------------------------------------------------------------------------
+Commmit 2021.10.19 (Version 0.10.3)
+-------------------------------------------------------------------------------
+Adds a new report function that calculates the percent of generation from each project that was dispatched, excess, or curtailed.
+
+-------------------------------------------------------------------------------
 Commmit 2021.10.18 (Version 0.10.2)
 -------------------------------------------------------------------------------
 Adds additional capabilities for the model to simulate solar and wind projects using PySAM:

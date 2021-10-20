@@ -267,6 +267,35 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
 
     return gen_costs
 
+def calculate_generator_utilization(dispatch):
+    """
+    Calculates the percent of generation from each generator that was dispatched, excess, or curtailed
+
+    Inputs:
+        dispatch: a dataframe containing hourly generator dispatch data contained in outputs/dispatch.csv
+    Returns:
+        utilization: a dataframe displaying the percent of each generator's generation utilized for each purpose
+    """
+    
+    # calculate total annual generation in each category
+    utilization = dispatch.copy().groupby('generation_project').sum()
+
+    # sum all rows
+    utilization['Total'] = utilization.sum(axis=1)
+
+    # drop rows with zero generation
+    utilization = utilization[utilization['Total'] >  0]
+
+    # calculate the percentages
+    utilization = utilization[['DispatchGen_MW','ExcessGen_MW','CurtailGen_MW']].div(utilization['Total'], axis=0) * 100
+
+    utilization = utilization.sort_values(by='DispatchGen_MW', ascending=False)
+
+    # rename columns
+    utilization = utilization.rename(columns={'DispatchGen_MW':'Dispatched %','ExcessGen_MW':'Excess %','CurtailGen_MW':'Curtailed %'})
+
+    return utilization
+
 
 def power_content_label(load_balance, dispatch, generation_projects_info):
     """
