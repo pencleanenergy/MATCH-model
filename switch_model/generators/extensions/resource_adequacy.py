@@ -106,7 +106,12 @@ def define_components(mod):
         mod.PERIODS, mod.ENERGY_SOURCES, mod.MONTHS,
         within=NonNegativeReals)
 
-    mod.midterm_reliability_requirement = Param(
+    mod.midterm_firm_requirement = Param(
+        mod.PERIODS,
+        within=NonNegativeReals,
+        default=0)
+
+    mod.midterm_ldes_requirement = Param(
         mod.PERIODS,
         within=NonNegativeReals,
         default=0)
@@ -259,11 +264,27 @@ def define_components(mod):
     def MidtermReliability_Rule(m,p):
         if not any(m.GenCapacity[g,p] for g in m.BASELOAD_GENS):
             return Constraint.Skip
-        return sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS) >= m.midterm_reliability_requirement[p]
+        return sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS) >= m.midterm_firm_requirement[p]
 
     mod.MidtermReliabilityRequirement_Constraint = Constraint(
         mod.PERIODS,
         rule=MidtermReliability_Rule)
+
+    # another part of the rule is a certain amount of long-duration energy storage is required in the portfolio
+    # long-duration energy storage is defined as storage with an EPR >= 8 hours
+    mod.LONG_DURATION_STORAGE = Set(
+        initialize=mod.STORAGE_GENS,
+        filter=lambda m, g: m.storage_energy_to_power_ratio[g] >= 8)
+
+    mod.LDESCapacity = Expression(
+        mod.PERIODS,
+        rule=lambda m, p: sum(m.GenCapacity[g,p] for g in m.LONG_DURATION_STORAGE)
+    )
+
+    mod.MidtermLDESRequirement_Constraint = Constraint(
+        mod.PERIODS,
+        rule= lambda m,p: m.LDESCapacity[p] >= m.midterm_ldes_requirement[p]
+    )
 
 
 
@@ -310,7 +331,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'midterm_reliability_requirement.csv'),
         auto_select=True,
         index=mod.PERIODS,
-        param=[mod.midterm_reliability_requirement])
+        param=[mod.midterm_firm_requirement, mod.midterm_ldes_requirement])
 
 
 

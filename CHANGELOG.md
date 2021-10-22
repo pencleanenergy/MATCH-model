@@ -1,4 +1,19 @@
 -------------------------------------------------------------------------------
+Commmit 2021.10.22 (Version 0.11.0)
+-------------------------------------------------------------------------------
+Updates functionality of PySAM simulations in `generate_input_files`:
+ - Changes "Category" header to "Group" to align with terminology used in PySAM documentation
+ - Allows users to manually specify losses for windpower projects
+ - Changed the name of the "SAM_Function"s to align with PySAM function names: 'pv' became 'Pvwattsv7' and 'wind' became 'windpower'
+ - Updated inputs for generic utility PV, onshore wind, and offshore wind in `model_inputs.xlsx`
+
+Adds a new midterm reliability requirement constraint that requires a certain amount of long-duration energy storage (LDES), in the portfolio: (Closes #50)
+ - Changes the `midterm_reliability_requirement` parameter to `midterm_firm_requirement`
+ - Adds a new parameter `midterm_ldes_requirement`, which is the number of MW of LDES required in the portfolio
+ - Specifies a new set LONG_DURATION_STORAGE, which is the subset of STORAGE_GENS which have a `storage_energy_to_power_ratio` >= 8 hours
+ - Adds/updates these parameters in the `model_inputs.xlsx spreadsheet`
+
+-------------------------------------------------------------------------------
 Commmit 2021.10.19 (Version 0.10.3)
 -------------------------------------------------------------------------------
 Adds a new report function that calculates the percent of generation from each project that was dispatched, excess, or curtailed.

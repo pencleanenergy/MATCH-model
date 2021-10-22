@@ -269,9 +269,9 @@ def generate_inputs(model_workspace):
 
                 #create a dictionary for the parameter values
                 config_dict = {}
-                for category in resource_template['Category'].unique():
-                    #create a dict of parameters for this category
-                    parameters = resource_template.loc[resource_template['Category'] == category, ['Parameter','Value']]
+                for group in resource_template['Group'].unique():
+                    #create a dict of parameters for this group
+                    parameters = resource_template.loc[resource_template['Group'] == group, ['Parameter','Value']]
                     parameter_dict = {}
                     for index, row in parameters.iterrows():
                         try:
@@ -280,14 +280,14 @@ def generate_inputs(model_workspace):
                             parameter_dict[row.Parameter] = row.Value
                     #dict(zip(parameters.Parameter, ast.literal_eval(parameters.Value)))
 
-                    config_dict[category] = parameter_dict
+                    config_dict[group] = parameter_dict
 
                 #get the name of the PySAM function
                 sam_function = resource_template.iloc[0,0]
 
                 pysam_dir = model_workspace / gen_set
 
-                if sam_function == 'pv':
+                if sam_function == 'Pvwattsv7':
                     #run PySAM to simulate the solar outputs
                     solar_vcf = simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, config_dict, resource_years, pysam_dir, tz_offset)
                     
@@ -301,12 +301,16 @@ def generate_inputs(model_workspace):
                     #add the data to the dataframe
                     df_vcf = df_vcf.merge(csp_vcf, how='left', left_index=True, right_index=True)
 
-                elif sam_function == 'wind':
+                elif sam_function == 'windpower':
                     #run PySAM to simulate the solar outputs
                     wind_vcf = simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config_dict, resource_years, pysam_dir, tz_offset)
                     
                     #add the data to the dataframe
                     df_vcf = df_vcf.merge(wind_vcf, how='left', left_index=True, right_index=True)
+                else:
+                    class UnrecognizedSAMModule(Exception):
+                        pass
+                    raise  UnrecognizedSAMModule(f" The {sam_function} SAM module is not configured to work with MATCH. Must be either 'windpower' or 'Pvwattsv7'")
 
         for vcf_year in resource_years:
             if os.path.exists(model_workspace / gen_set / f'{vcf_year}_variable_capacity_factors.csv'):
@@ -723,6 +727,10 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
     turbine = config_dict['Turbine']
     farm = config_dict['Farm']
     resource = config_dict['Resource']
+    
+    if 'Losses' in config_dict:
+        losses = config_dict['Losses']
+        system_model_wind.Losses.assign(losses)
 
     #assign the non-default system design specs to the model
     system_model_wind.Turbine.assign(turbine)

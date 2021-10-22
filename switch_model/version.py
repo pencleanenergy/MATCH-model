@@ -3,10 +3,10 @@
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 """
 This file should only include the version. Do not import any packages or
-modules here because this file needs to be executed before Switch is
+modules here because this file needs to be executed before MATCH is
 installed and executed in environments that don't have any dependencies
 installed.
 
-NOTE: This software was forked from Switch version 2.0.5
+NOTE: MATCH was originally forked from Switch version 2.0.5
 """
-__version__='0.10.3'
+__version__='0.11.0'
