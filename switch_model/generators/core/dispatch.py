@@ -15,11 +15,6 @@ import os, collections
 from pyomo.environ import *
 from switch_model.reporting import write_table
 import pandas as pd
-try:
-    from ggplot import *
-    can_plot = True
-except:
-    can_plot = False
 
 dependencies = 'switch_model.timescales', 'switch_model.balancing.load_zones',\
     'switch_model.financials', 'switch_model.generators.core.build'

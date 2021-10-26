@@ -312,18 +312,18 @@ def generate_inputs(model_workspace):
                         pass
                     raise  UnrecognizedSAMModule(f" The {sam_function} SAM module is not configured to work with MATCH. Must be either 'windpower' or 'Pvwattsv7'")
 
-        for vcf_year in resource_years:
-            if os.path.exists(model_workspace / gen_set / f'{vcf_year}_variable_capacity_factors.csv'):
-                pass
-            else:
-                # split the data for the single resource year into a new df
-                df_vcf_year = df_vcf.copy()[[col for col in df_vcf.columns if str(vcf_year) in col]]
+            for vcf_year in resource_years:
+                if os.path.exists(model_workspace / gen_set / f'{vcf_year}_variable_capacity_factors.csv'):
+                    pass
+                else:
+                    # split the data for the single resource year into a new df
+                    df_vcf_year = df_vcf.copy()[[col for col in df_vcf.columns if str(vcf_year) in col]]
 
-                #remove year from column name
-                df_vcf_year.columns = [i.split('~')[0] for i in df_vcf_year.columns]
+                    #remove year from column name
+                    df_vcf_year.columns = [i.split('~')[0] for i in df_vcf_year.columns]
 
-                # export the data to a csv in the set folder
-                df_vcf_year.to_csv(model_workspace / gen_set / f'{vcf_year}_variable_capacity_factors.csv')
+                    # export the data to a csv in the set folder
+                    df_vcf_year.to_csv(model_workspace / gen_set / f'{vcf_year}_variable_capacity_factors.csv')
         
         
         #remove year from column name
