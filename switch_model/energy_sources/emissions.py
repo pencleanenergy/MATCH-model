@@ -17,11 +17,11 @@ def define_components(mod):
     ghg_emission_factor[g] is a parameter specifying the emission rate per MWh of generation from each generator
     """
     # Sets
-    mod.CCS_EQUIPPED_GENS = Set(within=mod.GENERATION_PROJECTS)
+    mod.CCS_EQUIPPED_GENS = Set(within=mod.NON_STORAGE_GENS)
     
     # Parameters
 
-    mod.gen_emission_factor = Param(mod.GENERATION_PROJECTS)
+    mod.gen_emission_factor = Param(mod.NON_STORAGE_GENS)
 
     mod.grid_emission_factor = Param(mod.ZONE_TIMEPOINTS)
 
@@ -80,8 +80,7 @@ def load_inputs(mod, switch_data, inputs_dir):
 
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'grid_emissions.csv'),
-        auto_select=True,
-        index=mod.ZONE_TIMEPOINTS,
+        select=('load_zone','timepoint','grid_emission_factor'),
         param=[mod.grid_emission_factor])
 
 def post_solve(instance, outdir):

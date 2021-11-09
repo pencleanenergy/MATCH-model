@@ -264,7 +264,7 @@ def define_components(mod):
     def MidtermReliability_Rule(m,p):
         if not any(m.GenCapacity[g,p] for g in m.BASELOAD_GENS):
             return Constraint.Skip
-        return sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS) >= m.midterm_firm_requirement[p]
+        return sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS if m.gen_is_ra_eligible[g]) >= m.midterm_firm_requirement[p]
 
     mod.MidtermReliabilityRequirement_Constraint = Constraint(
         mod.PERIODS,
@@ -278,7 +278,7 @@ def define_components(mod):
 
     mod.LDESCapacity = Expression(
         mod.PERIODS,
-        rule=lambda m, p: sum(m.GenCapacity[g,p] for g in m.LONG_DURATION_STORAGE)
+        rule=lambda m, p: sum(m.GenCapacity[g,p] for g in m.LONG_DURATION_STORAGE if m.gen_is_ra_eligible[g])
     )
 
     mod.MidtermLDESRequirement_Constraint = Constraint(
@@ -313,24 +313,20 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_requirement.csv'),
         select=('period','tp_month', 'ra_requirement', 'ra_cost', 'ra_resell_value'),
-        index=[mod.PERIODS, mod.MONTHS],
         optional_params=['ra_resell_value'],
         param=[mod.ra_requirement, mod.ra_cost, mod.ra_resell_value])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'flexible_ra_requirement.csv'),
         select=('period','tp_month', 'flexible_ra_requirement','flexible_ra_cost','flexible_ra_resell_value'),
-        index=[mod.PERIODS, mod.MONTHS],
         optional_params=['flexible_ra_resell_value'],
         param=[mod.flexible_ra_requirement, mod.flexible_ra_cost, mod.flexible_ra_resell_value])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'ra_capacity_value.csv'),
         select=('period','gen_energy_source', 'tp_month','elcc','ra_production_factor'),
-        index=[mod.PERIODS, mod.ENERGY_SOURCES, mod.MONTHS],
         param=[mod.elcc, mod.ra_production_factor])
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'midterm_reliability_requirement.csv'),
-        auto_select=True,
-        index=mod.PERIODS,
+        select=('period','midterm_firm_requirement','midterm_ldes_requirement'),
         param=[mod.midterm_firm_requirement, mod.midterm_ldes_requirement])
 
 

@@ -1,4 +1,47 @@
 -------------------------------------------------------------------------------
+Commmit 2021.11.02 (Version 0.12.0)
+-------------------------------------------------------------------------------
+Fixed an issue where hedge contract market revenue was excluded from the objective function, making system power very expensive to use compared to PPAs. Added a new expression `HedgeContractMarketRevenueInTP` to track this, and changed the name of `SystemPowerHedgeCost` to `HedgeContractCostInTP`
+
+Updates to `model_inputs` and `generate_input_files.py`:
+
+In `model_inputs.xlsx`:
+ - re-arranged columns in the generation tab to group by module
+ - added a header row to explain groupings
+ - split the `generation` tab into two separate tabs, `generators` and `storage`, to make inputs clearer
+ - removes the option to select required modules in the scenarios tab, these are now included without user intervention
+ - removes the load shift tab until the demand response implementation is fixed
+ - adds a dropdown tab that allows for validation of inputs in other tabs
+
+In `generate_input_files.py`:
+ - Make sure that nodes that are only indexed for hedges are included in `pricing_nodes.csv`
+ - skip 3 rows when reading the generation tab
+ - Instead of creating `inputs_version.txt` at the beginning of the input generation process, wait until the end when all inputs have been successfully generated. This allows us to check for this file when generating inputs, so that if it does not exist, we know to re-run the model input process.
+ - fixed bug where index columns for the loads.csv file were capitalized instead of lowercase
+ - round all nodal prices and contract costs to the nearest cent ($0.01)
+ - fixed issue where `gen_min_build_capacity` parameter was not being added to `generation_projects_info.csv`
+ - removed duplicate and unnecessary columns from being copied to `generation_projects_info.csv`
+ - code to re-combine the new generators and storage tabs into teh same `generation_projects_info` file
+ - adds the list of optional modules to the list of required modules
+ - Adds additional data checks to ensure all nodes specified in the generation tab have associated price data, and that all generators that use manual capacity factors have these data specified
+ - Checks that parameters that only apply to certain types of generators are not specified for generators to which they do not apply
+
+In `report_functions.py` / `summary_report.ipynb`:
+ - Use gen_tech instead of gen_energy_source to identify storage
+ - Use `gen_is_hybrid` rather than generator name to identify hybrid
+ - Specifies the dollar year for all costs, and discounts future value to present value where necessary
+ - Allows the notebook to run if certain optional modules were not used
+ - Fixed bug where capacity costs for non-storage generators were not being reported
+
+Other fixes:
+ - fixed bug in `Build.py` where a parameter was being incorrectly referenced in the `Enforce_Min_Build_Upper` constraint
+ - Require a generator to be RA eligible to qualify for the midterm requirement
+ - Fixed an issue where the set `ZONE_TIMEPOINTS` was being defined multiple times, leading to potential conflicts
+ - when loading inputs, I was previously over-using the `index=` definition, which was setting these values multiple times. Instead, just use autoselect
+ - removed subsetting from the renewable target options
+ 
+
+-------------------------------------------------------------------------------
 Commmit 2021.10.26 (Version 0.11.1)
 -------------------------------------------------------------------------------
 Bug fixes

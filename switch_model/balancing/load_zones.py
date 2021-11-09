@@ -148,8 +148,7 @@ def load_inputs(mod, switch_data, inputs_dir):
         set=mod.LOAD_ZONES)
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'loads.csv'),
-        auto_select=True,
-        index=mod.ZONE_TIMEPOINTS,
+        autoselect=True,
         param=[mod.zone_demand_mw])
 
 

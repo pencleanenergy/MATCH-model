@@ -12,6 +12,19 @@ import os
 This module contains a collection of functions that are called from the summary_report.ipynb, used for reporting final outputs
 """
 
+def fv_to_pv(financials, year):
+    """
+    Calculates a factor to discount future values in the model year to present value in the base year.
+
+    Inputs:
+        financials: dataframe loaded from inputs/financials.csv
+        year: the model year, as an integer (YYYY)
+
+    Outputs:
+        future value to present value conversion factor 
+    """
+    return (1+financials.loc[0,'discount_rate'])**-(year-financials.loc[0,'base_financial_year'])
+
 def format_currency(x):
     """
     Formats a number as currency in the format '$ 0.00'
@@ -139,7 +152,7 @@ def build_hourly_emissions_heatmap(grid_emissions, emissions, emissions_unit):
 
 
 
-def generator_portfolio(gen_cap, gen_build_predetermined):
+def generator_portfolio(gen_cap, gen_build_predetermined, generation_projects_info):
     """
     Calculates the generator portfolio mix to be used as an input for a suburst chart
 
@@ -179,7 +192,10 @@ def generator_portfolio(gen_cap, gen_build_predetermined):
             pass
 
     # if there are any hybrid projects, add hybrid to the gen tech
-    capacity.loc[capacity.generation_project.str.contains('HYBRID'), 'gen_tech'] = 'Hybrid ' + capacity.loc[capacity.generation_project.str.contains('HYBRID'), 'gen_tech'].astype(str)
+    # merge gen is hybrid indicator
+    capacity = capacity.merge(generation_projects_info[['GENERATION_PROJECT','gen_is_hybrid']], how='left', left_on='generation_project', right_on='GENERATION_PROJECT').drop(columns=['GENERATION_PROJECT'])
+    capacity.loc[capacity.gen_is_hybrid == 1, 'gen_tech'] = 'Hybrid ' + capacity.loc[capacity.gen_is_hybrid == 1, 'gen_tech'].astype(str)
+    capacity = capacity.drop(columns=['gen_is_hybrid'])
 
     # replace underscores in the gen tech name with spaces
     capacity.gen_tech = capacity.gen_tech.str.replace('_',' ')
@@ -200,7 +216,7 @@ def generator_portfolio(gen_cap, gen_build_predetermined):
 
 def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
     """
-    Calculates the cost components for each generator
+    Calculates the cost components for each generator in real $
 
     Inputs:
         costs_by_gen: a dataframe containing hourly contract, pnode, and delivery costs for each generator, loaded from outputs/costs_by_gen.csv
@@ -232,7 +248,16 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
     storage_costs = storage_costs[storage_costs.DischargeMW > 0]
 
     # merge the two dfs together
-    gen_costs = gen_costs.merge(storage_costs, how='outer', on='generation_project').fillna(0)
+    gen_costs = gen_costs.merge(storage_costs, how='outer', on='generation_project')
+
+    # add capacity costs for any non-storage generators
+    gen_cap_cost = gen_cap.copy()[['generation_project','PPA_Capacity_Cost']].rename(columns={'PPA_Capacity_Cost':'Gen_Capacity_Cost'})
+    gen_costs = gen_costs.merge(gen_cap_cost, how='left', on='generation_project')
+    gen_costs['PPA_Capacity_Cost'] = gen_costs['PPA_Capacity_Cost'].fillna(gen_costs['Gen_Capacity_Cost'])
+    gen_costs = gen_costs.drop(columns=['Gen_Capacity_Cost'])
+
+    # fill any missing values with zero
+    gen_costs = gen_costs.fillna(0)
 
     # combine Delivery Cost columns
     gen_costs['Delivery_Cost'] = gen_costs['Delivery_Cost'] + gen_costs['StorageDispatchDeliveryCost']
@@ -350,7 +375,7 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
 
 def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage_dispatch, fixed_costs, rec_value, load_balance):
     """
-    Calculates the cost of power for each hour of the year
+    Calculates the cost of power for each hour of the year in real $
 
     Hourly costs include: energy contract costs, nodal costs/revenues, hedge costs, DLAP cost
     Annual costs include: capacity contract costs, RA costs, fixed costs
@@ -383,20 +408,22 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
     # add generator timepoint costs next
     hourly_costs = hourly_costs.merge(costs_by_tp, how='left', on='timestamp')
 
-    ra_open = ra_summary.copy()
+    # if the RA data exists
+    if len(ra_summary) > 0:
+        ra_open = ra_summary.copy()
 
-    # set the excess RA value as a negative cost
-    ra_open['Excess_RA_Value'] = - ra_open['Excess_RA_Value']
+        # set the excess RA value as a negative cost
+        ra_open['Excess_RA_Value'] = - ra_open['Excess_RA_Value']
 
-    # calculate annual ra costs
-    ra_open = ra_open[['RA_Open_Position_Cost','Excess_RA_Value']].sum()
+        # calculate annual ra costs
+        ra_open = ra_open[['RA_Open_Position_Cost','Excess_RA_Value']].sum()
 
-    # divide these costs by the number of timepoints
-    ra_open = ra_open / len(hourly_costs.index)
+        # divide these costs by the number of timepoints
+        ra_open = ra_open / len(hourly_costs.index)
 
-    # add the RA costs to the hourly costs
-    hourly_costs['ra_open_position_cost'] = ra_open['RA_Open_Position_Cost']
-    hourly_costs['excess_ra_value'] = ra_open['Excess_RA_Value']
+        # add the RA costs to the hourly costs
+        hourly_costs['ra_open_position_cost'] = ra_open['RA_Open_Position_Cost']
+        hourly_costs['excess_ra_value'] = ra_open['Excess_RA_Value']
 
     # calculate annual capacity costs
     gen_cap = gen_cap[['PPA_Capacity_Cost']].sum()
@@ -446,13 +473,14 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
 
     return hourly_costs
 
-def build_hourly_cost_plot(hourly_costs, load_balance):
+def build_hourly_cost_plot(hourly_costs, load_balance, year):
     """
     Configures a plot summarizing average hourly costs in each quarter of the year
 
     Inputs:
         hourly_costs: a dataframe with all cost components broken out by hour, including fixed costs, calculated from the hourly_cost_of_power() function
         load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+        year: the model year as an integer (YYYY)
     Returns:
         hourly_cost_plot: a plotly stacked bar plot with quarter-hour averages of hourly costs
     """
@@ -478,7 +506,7 @@ def build_hourly_cost_plot(hourly_costs, load_balance):
     costs = costs.reset_index().rename(columns={0:'cost'})
 
     # build the cost plot
-    hourly_cost_plot = px.bar(costs, x='hour',y=cost_columns,facet_col='quarter').update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
+    hourly_cost_plot = px.bar(costs, x='hour',y=cost_columns,facet_col='quarter', title=f'Hourly Average Cost of Power ({year}$)').update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
     hourly_cost_plot.add_scatter(x=costs.loc[costs['quarter'] == 1, 'hour'], y=costs.loc[costs['quarter'] == 1, 'Total Cost'], row=1, col=1, line=dict(color='black', width=4), name='Q1 Total')
     hourly_cost_plot.add_scatter(x=costs.loc[costs['quarter'] == 2, 'hour'], y=costs.loc[costs['quarter'] == 2, 'Total Cost'], row=1, col=2, line=dict(color='black', width=4), name='Q2 Total')
     hourly_cost_plot.add_scatter(x=costs.loc[costs['quarter'] == 3, 'hour'], y=costs.loc[costs['quarter'] == 3, 'Total Cost'], row=1, col=3, line=dict(color='black', width=4), name='Q3 Total')
@@ -486,13 +514,15 @@ def build_hourly_cost_plot(hourly_costs, load_balance):
 
     return hourly_cost_plot
 
-def construct_cost_and_resale_tables(hourly_costs, load_balance):
+def construct_cost_and_resale_tables(hourly_costs, load_balance, financials, year):
     """
     Constructs tables that break down costs by component
 
     Inputs:
         hourly_costs: a dataframe with all cost components broken out by hour, including fixed costs, calculated from the hourly_cost_of_power() function
         load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
+        financials: dataframe loaded from inputs/financials.csv
+        year: the model year, as an integer (YYYY)
     Returns:
         cost_table: a dataframe summarizing delivered costs by total and cost per MWh
         resale_table: a dataframe summarizing the value of any sellable excess RA or RECs
@@ -517,6 +547,17 @@ def construct_cost_and_resale_tables(hourly_costs, load_balance):
     # remove resale data from cost table
     cost_table = cost_table[~cost_table['Cost Component'].isin(resale_components)]
 
+    # get financial parameters
+    to_pv = fv_to_pv(financials, year)
+    base_year = financials.loc[0,'base_financial_year']
+
+    # rename the columns
+    resale_table = resale_table.rename(columns={'Annual Real Cost':f'Annual Cost ({year}$)','Cost Per MWh':f'Cost Per MWh ({year}$)'})
+
+    # add columns for present value
+    resale_table[f'Annual Cost ({base_year}$)'] = resale_table[f'Annual Cost ({year}$)'] * to_pv
+    resale_table[f'Cost Per MWh ({base_year}$)'] = resale_table[f'Cost Per MWh ({year}$)'] * to_pv
+
     # create a column that categorizes all of the costs
     cost_category_dict = {'Hedge Contract Cost':'Contract', 
                         'Dispatched Generation PPA Cost':'Contract',
@@ -537,6 +578,13 @@ def construct_cost_and_resale_tables(hourly_costs, load_balance):
 
     # add a total column
     cost_table = cost_table.append({'Cost Category':'Total','Cost Component':'Total', 'Annual Real Cost':cost_table['Annual Real Cost'].sum(), 'Cost Per MWh': cost_table['Cost Per MWh'].sum()}, ignore_index=True)
+
+    # rename the columns
+    cost_table = cost_table.rename(columns={'Annual Real Cost':f'Annual Cost ({year}$)','Cost Per MWh':f'Cost Per MWh ({year}$)'})
+
+    # add columns for present value
+    cost_table[f'Annual Cost ({base_year}$)'] = cost_table[f'Annual Cost ({year}$)'] * to_pv
+    cost_table[f'Cost Per MWh ({base_year}$)'] = cost_table[f'Cost Per MWh ({year}$)'] * to_pv
 
     return cost_table, resale_table
 
@@ -666,7 +714,7 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
 
     return dispatch_by_tech, load_line, storage_charge, dispatch_fig
 
-def build_nodal_prices_plot(nodal_prices, timestamps, generation_projects_info):
+def build_nodal_prices_plot(nodal_prices, timestamps, generation_projects_info, year):
     """
     Builds a timeseries plot of all nodal prices used in the model
 
@@ -674,6 +722,7 @@ def build_nodal_prices_plot(nodal_prices, timestamps, generation_projects_info):
         nodal_prices: a dataframe with hourly wholesale prices at each node, loaded from inputs/nodal_prices.csv
         timestamps: a dataframe that maps timepoints to datetimes, loaded from inputs/timepoints.csv
         generation_projects_info: a dataframe containing generator parameters loaded from inputs/generation_project_info.csv
+        year: the model year as an integer (YYYY)
     Returns:
         nodal_fig: a plotly line chart showing wholesale prices at each node for all 8760 hours
     """
@@ -693,7 +742,7 @@ def build_nodal_prices_plot(nodal_prices, timestamps, generation_projects_info):
                         color='pricing_node', 
                         hover_data=nodal_data[['Generators']],
                         labels={'nodal_price':'$/MWh','timestamp':'Datetime','pricing_node':'Node'}, 
-                        title='Nodal Prices', 
+                        title=f'Nodal Prices ({year}$)', 
                         template='plotly_white').update_layout(hovermode="x").update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
     nodal_fig.update_xaxes(
         rangeslider_visible=True,
@@ -1021,13 +1070,14 @@ def calculate_BuildGen_reduced_costs(results, generation_projects_info, variable
 
     return pos_rc_lower, pos_rc_upper, neg_rc, alternate_optima
 
-def calculate_load_shadow_price(results, timestamps):
+def calculate_load_shadow_price(results, timestamps, year):
     """
     Using the dual values from the load balance constraint, identifies the shadow price of load
 
     Inputs:
         results: raw model results, loaded from outputs/results.pickle
         timestamps: a dataframe that maps timepoints to datetimes, loaded from inputs/timepoints.csv
+        year: the model year as an integer (YYYY)
     Returns:
         dual_plot: a plotly plot showing the month-hour average of all positive shadow prices
     """
@@ -1074,6 +1124,7 @@ def calculate_load_shadow_price(results, timestamps):
                         x='Hour', 
                         y='Dual', 
                         facet_col='Month', 
+                        title=f'Shadow Price of Energy Efficiency ({year}$)',
                         facet_col_wrap=6,
                         labels={'Dual':'Shadow Price ($/MW)'})
 
@@ -1170,7 +1221,7 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
     built_gens = gen_cap.copy()[gen_cap['GenCapacity'] > 0]
 
     # remove storage generators from the list of built generators
-    built_gens = built_gens[built_gens['gen_energy_source'] != 'Electricity']
+    built_gens = built_gens[built_gens['gen_tech'] != 'Storage']
 
     # create a blank dataframe to hold the results
     sensitivity_table = pd.DataFrame(columns=['Weather Year', 'Time-Coincident %'])

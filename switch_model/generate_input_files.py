@@ -4,7 +4,6 @@
 """
 This takes data from an input excel file and formats into individual csv files for inputs
 """
-
 import ast
 import pandas as pd 
 import numpy as np
@@ -22,18 +21,20 @@ import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
 def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
+    xl_gen_validated = xl_gen.copy()
+    
     # add a column for ppa penalty
-    xl_gen['ppa_penalty'] = 0
+    xl_gen_validated['ppa_penalty'] = 0
 
     # remove any generation projects that are not variable or baseload
-    gens_to_check = xl_gen.copy().loc[(xl_gen['gen_is_variable'] == 1) | (xl_gen['gen_is_baseload'] == 1),:]
+    gens_to_check = xl_gen_validated.copy().loc[(xl_gen_validated['gen_is_variable'] == 1) | (xl_gen_validated['gen_is_baseload'] == 1),:]
     # create a list of unique generators 
     gens_to_check = list(gens_to_check['GENERATION_PROJECT'].unique())
     
     # for each generator
     for gen in gens_to_check:
-        ppa_price = xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].values[0]
-        node = xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
+        ppa_price = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].values[0]
+        node = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
         nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
         profile = df_vcf.copy()[[gen]].reset_index(drop=True)
 
@@ -53,25 +54,13 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
             print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MWh')
             print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MWh')
             print(f'Adding ${ppa_penalty} penalty to PPA cost')
-            xl_gen.loc[xl_gen['GENERATION_PROJECT'] == gen, 'ppa_penalty'] = ppa_penalty
+            xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_penalty'] = ppa_penalty
 
-    return xl_gen
+    return xl_gen_validated
 
         
 
 def generate_inputs(model_workspace):
-
-    # Get the version number. Strategy #3 from https://packaging.python.org/single_source_version/
-    version_path = os.path.join(os.path.dirname(__file__), 'version.py')
-    version = {}
-    with open(version_path) as f:
-        exec(f.read(), version)
-    version = version['__version__']
-
-    #inputs_version.txt
-    inputs_version = open(model_workspace / 'inputs_version.txt', 'w+')
-    inputs_version.write(version)
-    inputs_version.close()
 
     model_inputs = model_workspace / 'model_inputs.xlsx'
 
@@ -153,11 +142,30 @@ def generate_inputs(model_workspace):
 
     # Read data from the excel file
 
-    xl_gen = pd.read_excel(io=model_inputs, sheet_name='generation', skiprows=2).dropna(axis=1, how='all')
+    xl_gen = pd.read_excel(io=model_inputs, sheet_name='generators', skiprows=3).dropna(axis=1, how='all')
     if xl_gen.isnull().values.any():
         raise ValueError("The generation tab contains a missing value. Please fix")
+    # add default values
+    xl_gen['gen_is_storage'] = 0
+    # ensure that baseload_gen_scheduled_outage_rate is '.' for non baseload gens
+    xl_gen.loc[xl_gen['gen_is_baseload'] == 0, 'baseload_gen_scheduled_outage_rate'] = '.'
+    # ensure that variable_gen_curtailment_limit is '.' for non variable gens
+    xl_gen.loc[xl_gen['gen_is_variable'] == 0, 'variable_gen_curtailment_limit'] = '.'
+
+
+    xl_storage = pd.read_excel(io=model_inputs, sheet_name='storage', skiprows=3).dropna(axis=1, how='all')
+    # add defaults for storage
+    xl_storage['gen_tech'] = 'Storage'
+    xl_storage['gen_is_storage'] = 1
+    xl_storage['gen_is_variable'] = 0
+    xl_storage['gen_is_baseload'] = 0
+
+    # concat xl_gen and xl_storage, and fill missing values with '.'
+    xl_gen = pd.concat([xl_gen,xl_storage], sort=False, ignore_index=True).fillna('.')
 
     xl_load = pd.read_excel(io=model_inputs, sheet_name='load', header=[1,2], index_col=0).dropna(axis=1, how='all')
+    if xl_load.isnull().values.any():
+        raise ValueError("Nodal prices contain a missing value. Please check")
 
     # ra_requirement.csv
     xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements').dropna(axis=1, how='all')
@@ -178,12 +186,20 @@ def generate_inputs(model_workspace):
     ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','elcc','ra_production_factor']]
 
     xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
+    if xl_nodal_prices.isnull().values.any():
+        raise ValueError("Nodal prices contain a missing value. Please check")
+    # check that a nodal price exists for each node specified with an MCF in the generation tab
+    nodes_to_check = list(xl_gen['gen_pricing_node'].unique())
+    for node in nodes_to_check:
+        if node not in list(xl_nodal_prices.columns):
+            raise ValueError(f"The nodal price timeseries for {node} is missing. Please add.")
+        else:
+            pass
 
     xl_hedge_contract_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_contract_cost', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
 
     xl_hedge_settlement_node = pd.read_excel(io=model_inputs, sheet_name='hedge_settlement_node', index_col='load_zone').dropna(axis=1, how='all')
-
-    xl_shift = pd.read_excel(io=model_inputs, sheet_name='load_shift', header=[0,1], index_col=0).dropna(axis=1, how='all')
+    hedge_node_list = list(xl_hedge_settlement_node.hedge_settlement_node.unique())
 
     # midterm_reliability_requirement.csv
     xl_midterm_ra = pd.read_excel(io=model_inputs, sheet_name='midterm_RA_requirement').dropna(axis=1, how='all')
@@ -231,6 +247,13 @@ def generate_inputs(model_workspace):
             manual_vcf = pd.read_excel(io=model_inputs, sheet_name='manual_capacity_factors', index_col='Datetime', skiprows=1).dropna(axis=1, how='all').reset_index(drop=True)
             if manual_vcf.isnull().values.any():
                 raise ValueError("The manual_capacity_factor tab contains a missing value. Please fix")
+            # check that a capacity factor exists for each generator specified with an MCF in the generation tab
+            manual_gens = list(set_gens.loc[set_gens['capacity_factor_input'] == 'manual','GENERATION_PROJECT'])
+            for gen in manual_gens:
+                if gen not in list(manual_vcf.columns):
+                    raise ValueError(f"The manual capacity factor timeseries for {gen} is missing. Please add.")
+                else:
+                    pass
             #only keep columns for the current scenario
             manual_vcf = manual_vcf.loc[:, manual_vcf.columns.isin(set_gen_list)]
             manual_vcf['timepoint'] = manual_vcf.index + 1
@@ -349,7 +372,17 @@ def generate_inputs(model_workspace):
             output_dir = model_workspace / f'outputs/{scenario}'
 
             # modules.txt
-            module_list = list(xl_scenarios.loc[(xl_scenarios['Input Type'] == 'Module') & (xl_scenarios[scenario] == 1), 'Parameter'])
+            required_module_list = ['switch_model',
+                                    'switch_model.timescales',
+                                    'switch_model.financials',
+                                    'switch_model.balancing.load_zones',
+                                    'switch_model.generators.core.build',
+                                    'switch_model.generators.core.dispatch',
+                                    'switch_model.balancing.renewable_target',
+                                    'switch_model.reporting.generate_report'
+]
+            module_list = list(xl_scenarios.loc[(xl_scenarios['Input Type'] == 'Optional Modules') & (xl_scenarios[scenario] == 1), 'Parameter'])
+            module_list = required_module_list + module_list
             modules = open(input_dir / 'modules.txt', 'w+')
             for module in module_list:
                 modules.write(module)
@@ -412,23 +445,18 @@ def generate_inputs(model_workspace):
             scenarios.write('\n')
             scenarios.close()
 
-            # subset days
-            subset_days = ast.literal_eval(xl_scenarios.loc[(xl_scenarios['Parameter'] == 'subset_days'), scenario].item())
-
             # timepoints.csv
             df_timepoints = pd.DataFrame(index=pd.date_range(start=f'01/01/{year} 00:00', end=f'12/31/{year} 23:00', freq='1H'))
             df_timepoints['timeseries'] = f'{year}_timeseries'
             df_timepoints['timestamp'] = df_timepoints.index.strftime('%m/%d/%Y %H:%M')
             df_timepoints['tp_month'] = df_timepoints.index.month
             df_timepoints['tp_day'] = df_timepoints.index.dayofyear
-            df_timepoints['tp_in_subset'] = 0
-            df_timepoints.loc[df_timepoints['tp_day'].isin(subset_days),'tp_in_subset'] = 1
             df_timepoints = df_timepoints.reset_index(drop=True)
             df_timepoints['timepoint_id'] = df_timepoints.index + 1
             df_timepoints[['timepoint_id','timestamp','timeseries']].to_csv(input_dir / 'timepoints.csv', index=False)
 
             # days.csv
-            df_timepoints[['timepoint_id','tp_day','tp_in_subset']].to_csv(input_dir / 'days.csv', index=False)
+            df_timepoints[['timepoint_id','tp_day']].to_csv(input_dir / 'days.csv', index=False)
 
             df_financials.to_csv(input_dir / 'financials.csv', index=False)
 
@@ -462,7 +490,8 @@ def generate_inputs(model_workspace):
 
             # gen_build_predetermined.csv
             gen_build_predetermined = set_gens[['GENERATION_PROJECT','gen_predetermined_cap']]
-            gen_build_predetermined = gen_build_predetermined[gen_build_predetermined['gen_predetermined_cap'] != '.']
+            gen_build_predetermined = gen_build_predetermined[(gen_build_predetermined['gen_predetermined_cap'] != '.')]
+            gen_build_predetermined = gen_build_predetermined[(gen_build_predetermined['gen_predetermined_cap'] > 0)]
             gen_build_predetermined['build_year'] = year
             if 'ignores_existing_contracts' in option_list:
                 gen_build_predetermined = gen_build_predetermined[0:0]
@@ -470,22 +499,22 @@ def generate_inputs(model_workspace):
             gen_build_predetermined.to_csv(input_dir / 'gen_build_predetermined.csv', index=False)
 
             # generation_projects_info.csv
-            gpi_columns = ['GENERATION_PROJECT',	
+            gpi_columns = ['GENERATION_PROJECT',
+                        'gen_load_zone',
                         'gen_tech',	
-                        'gen_energy_source',	
-                        'gen_load_zone',	
-                        'gen_is_ra_eligible',	
-                        'gen_variant_group',
-                        'gen_is_variable',	
-                        'gen_is_baseload',
-                        'gen_is_storage',	
-                        'gen_is_hybrid',
-                        'gen_capacity_limit_mw',
-                        'solar_cod_year',		
-                        'baseload_gen_scheduled_outage_rate',	
-                        'gen_forced_outage_rate',
-                        'variable_gen_curtailment_limit',	
                         'gen_emission_factor',
+                        'gen_is_variable',	
+                        'gen_is_hybrid',
+                        'gen_is_storage',
+                        'gen_is_baseload',
+                        'gen_variant_group',
+                        'gen_capacity_limit_mw',
+                        'gen_min_build_capacity',
+                        'ppa_energy_cost',
+                        'ppa_capacity_cost',
+                        'gen_pricing_node',
+                        'gen_is_ra_eligible',
+                        'gen_energy_source',
                         'storage_roundtrip_efficiency',	
                         'storage_charge_to_discharge_ratio',	
                         'storage_energy_to_power_ratio',	
@@ -493,11 +522,12 @@ def generate_inputs(model_workspace):
                         'storage_leakage_loss',	
                         'storage_hybrid_generation_project',	
                         'storage_hybrid_min_capacity_ratio',
-                        'storage_hybrid_max_capacity_ratio',
-                        'gen_pricing_node',
-                        'ppa_energy_cost',
-                        'ppa_penalty',	
-                        'ppa_capacity_cost']
+                        'storage_hybrid_max_capacity_ratio',	
+                        'solar_cod_year',		
+                        'baseload_gen_scheduled_outage_rate',	
+                        'gen_forced_outage_rate',
+                        'variable_gen_curtailment_limit',
+                        'ppa_penalty']
 
             generation_projects_info = set_gens[gpi_columns]
 
@@ -518,7 +548,7 @@ def generate_inputs(model_workspace):
             # calculate the solar degredation discount for the model year, assuming a 0.5% annual degredation rate
             generation_projects_info['solar_age_degredation'] = 1
             generation_projects_info.loc[generation_projects_info['solar_cod_year'] != '.', 'solar_age_degredation'] = (1-0.005)**(year - generation_projects_info.loc[generation_projects_info['solar_cod_year'] != '.', 'solar_cod_year'])
-            
+            generation_projects_info = generation_projects_info.drop(columns=['solar_cod_year'])
 
             generation_projects_info.to_csv(input_dir / 'generation_projects_info.csv', index=False)
 
@@ -540,9 +570,9 @@ def generate_inputs(model_workspace):
             loads.columns = loads.columns.droplevel()
 
             loads = loads.reset_index(drop=True)
-            loads['TIMEPOINT'] = loads.index + 1
-            loads = loads.melt(id_vars=['TIMEPOINT'], var_name='LOAD_ZONE', value_name='zone_demand_mw')
-            loads = loads[['LOAD_ZONE','TIMEPOINT','zone_demand_mw']]
+            loads['timepoint'] = loads.index + 1
+            loads = loads.melt(id_vars=['timepoint'], var_name='load_zone', value_name='zone_demand_mw')
+            loads = loads[['load_zone','timepoint','zone_demand_mw']]
             loads.to_csv(input_dir / 'loads.csv', index=False)
 
             # RA data
@@ -562,6 +592,8 @@ def generate_inputs(model_workspace):
             hedge_cost['timepoint'] = hedge_cost.index + 1
             hedge_cost = hedge_cost.melt(id_vars=['timepoint'], var_name='load_zone', value_name='hedge_contract_cost')
             hedge_cost = hedge_cost[['load_zone','timepoint','hedge_contract_cost']]
+            # round all prices to the nearest whole cent
+            hedge_cost['hedge_contract_cost'] = hedge_cost['hedge_contract_cost'].round(2)
             hedge_cost.to_csv(input_dir / 'hedge_contract_cost.csv', index=False)
 
             # hedge_settlement_node.csv
@@ -569,7 +601,7 @@ def generate_inputs(model_workspace):
 
             # pricing_nodes.csv
             node_list = list(set_gens.gen_pricing_node.unique())
-            node_list = node_list + load_list
+            node_list = node_list + load_list + hedge_node_list
             node_list = [i for i in node_list if i not in ['.',np.nan]]
             node_list = list(set(node_list)) # only keep unique values
             pricing_nodes = pd.DataFrame(data={'PRICING_NODE':node_list})
@@ -581,33 +613,12 @@ def generate_inputs(model_workspace):
             nodal_prices['timepoint'] = nodal_prices.index + 1
             nodal_prices = nodal_prices.melt(id_vars=['timepoint'], var_name='pricing_node', value_name='nodal_price')
             nodal_prices = nodal_prices[['pricing_node','timepoint','nodal_price']]
+            # round all nodal prices to the nearest whole cent
+            nodal_prices['nodal_price'] = nodal_prices['nodal_price'].round(2)
             # add system power / demand node prices to df
             # NOTE: removed because this was adding duplicate values if one of the generators is located at the load node
             #nodal_prices = pd.concat([nodal_prices, hedge_cost.rename(columns={'load_zone':'pricing_node','hedge_cost':'nodal_price'})], axis=0, ignore_index=True)
             nodal_prices.to_csv(input_dir / 'nodal_prices.csv', index=False)
-
-            # dr_data.csv
-            if scenario in list(xl_shift.columns.levels[0]):
-                i = 0
-                #iterate for each load zone
-                for load in load_list:
-                    if i == 0:
-                        dr_data = xl_shift.iloc[:, xl_shift.columns.get_level_values(0) == scenario]
-                        dr_data.columns = dr_data.columns.droplevel()
-                        dr_data['LOAD_ZONE'] = load
-                        dr_data = dr_data.reset_index(drop=True)
-                        dr_data['TIMEPOINT'] = dr_data.index + 1
-                        i += 1
-                    elif i > 0:
-                        dr_data_temp = xl_shift.iloc[:, xl_shift.columns.get_level_values(0) == scenario]
-                        dr_data_temp.columns = dr_data_temp.columns.droplevel()
-                        dr_data_temp['LOAD_ZONE'] = load
-                        dr_data_temp = dr_data_temp.reset_index(drop=True)
-                        dr_data_temp['TIMEPOINT'] = dr_data_temp.index + 1
-                        dr_data = dr_data.append(dr_data_temp, ignore_index=True)
-                #re-order columns
-                dr_data = dr_data[['LOAD_ZONE','TIMEPOINT','dr_shift_down_limit','dr_shift_up_limit']]        
-                dr_data.to_csv(input_dir / 'dr_data.csv', index=False)
 
             #variable_capacity_factors.csv
             df_vcf_scenario = df_vcf.copy()
@@ -632,6 +643,19 @@ def generate_inputs(model_workspace):
             # save data to csv
             df_vcf_scenario.to_csv(input_dir / 'variable_capacity_factors.csv', index=False)
             df_bcf_scenario.to_csv(input_dir / 'baseload_capacity_factors.csv', index=False)
+
+    # write the inputs version once all inputs have been successfully generated
+    # Get the version number. Strategy #3 from https://packaging.python.org/single_source_version/
+    version_path = os.path.join(os.path.dirname(__file__), 'version.py')
+    version = {}
+    with open(version_path) as f:
+        exec(f.read(), version)
+    version = version['__version__']
+
+    #inputs_version.txt
+    inputs_version = open(model_workspace / 'inputs_version.txt', 'w+')
+    inputs_version.write(version)
+    inputs_version.close()
 
 
 
@@ -763,13 +787,13 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
         powercurve = config_dict['Powercurve']
         system_model_wind.Turbine.calculate_powercurve(elevation=default_powercurve_value(powercurve, 'elevation'),
                                                        turbine_size=default_powercurve_value(powercurve, 'turbine_size'),
-                                                       rotor_diameter=default_powercurve_value(powercurve, 'rotor_diameter'),
+                                                       rotor_diameter=int(default_powercurve_value(powercurve, 'rotor_diameter')),
                                                        max_cp=default_powercurve_value(powercurve, 'max_cp'),
                                                        max_tip_speed=default_powercurve_value(powercurve, 'max_tip_speed'),
                                                        max_tip_sp_ratio=default_powercurve_value(powercurve, 'max_tip_sp_ratio'),
                                                        cut_in=default_powercurve_value(powercurve, 'cut_in'),
                                                        cut_out=default_powercurve_value(powercurve, 'cut_out'),
-                                                       drive_train=default_powercurve_value(powercurve, 'drive_train'))
+                                                       drive_train=int(default_powercurve_value(powercurve, 'drive_train')))
 
     lon_lats = list(resource_dict.keys())
 

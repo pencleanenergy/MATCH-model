@@ -52,6 +52,13 @@ def define_components(mod):
         rule=lambda m,t: sum(m.ExcessGenPnodeRevenue[g,t] for g in m.VARIABLE_GENS))
     #mod.Cost_Components_Per_TP.append('ExcessGenPnodeRevenueInTP')
 
+    # calculate hedge contract nodal revenue
+    mod.HedgeContractMarketRevenueInTP = Expression(
+        mod.TIMEPOINTS,
+        rule=lambda m, t: -1 * sum(m.SystemPower[z, t] * m.nodal_price[m.hedge_settlement_node[z],t] for z in m.LOAD_ZONES) 
+    )
+    mod.Cost_Components_Per_TP.append('HedgeContractMarketRevenueInTP')
+
     # TODO: Delete commented code
     # The delivery cost is the cost of offtaking the generated energy at the demand node
     mod.GenDeliveryCost = Expression(

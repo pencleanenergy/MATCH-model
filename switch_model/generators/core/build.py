@@ -223,12 +223,6 @@ def define_components(mod):
     mod.gen_is_baseload = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_is_storage = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
     mod.gen_is_hybrid = Param(mod.GENERATION_PROJECTS, within=Boolean, default=False)
-    mod.solar_age_degredation = Param(mod.GENERATION_PROJECTS,
-        within=PercentFraction, default=1)
-    mod.baseload_gen_scheduled_outage_rate = Param(mod.GENERATION_PROJECTS,
-        within=PercentFraction, default=0)
-    mod.gen_forced_outage_rate = Param(mod.GENERATION_PROJECTS,
-        within=PercentFraction, default=0)
     mod.min_data_check('GENERATION_PROJECTS', 'gen_tech', 'gen_energy_source',
         'gen_load_zone', 'gen_is_variable')
     
@@ -246,10 +240,12 @@ def define_components(mod):
         initialize=mod.GENERATION_PROJECTS,
         filter=lambda m, g: m.gen_is_baseload[g])
 
-    
-
-
-
+    mod.solar_age_degredation = Param(mod.NON_STORAGE_GENS,
+        within=PercentFraction, default=1)
+    mod.baseload_gen_scheduled_outage_rate = Param(mod.BASELOAD_GENS,
+        within=PercentFraction, default=0)
+    mod.gen_forced_outage_rate = Param(mod.NON_STORAGE_GENS,
+        within=PercentFraction, default=0)
 
     """Construct GENS_* indexed sets efficiently with a
     'construction dictionary' pattern: on the first call, make a single
@@ -405,7 +401,7 @@ def define_components(mod):
         mod.NEW_GEN_WITH_MIN_BUILD_YEARS,
         rule=lambda m, g, p: (
             m.BuildGen[g, p] <= m.BuildMinGenCap[g, p] *
-                mod.gen_capacity_limit_mw[g]))
+                m.gen_capacity_limit_mw[g]))
 
 
     # Mutually-exclusive project variants
@@ -528,18 +524,15 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'generation_projects_info.csv'),
         auto_select=True,
-        optional_params=['gen_is_baseload', 'baseload_gen_scheduled_outage_rate',
-        'gen_forced_outage_rate', 'gen_capacity_limit_mw', 'gen_unit_size',
-        'gen_min_build_capacity',  'gen_variant_group'],
+        optional_params=['gen_unit_size','gen_variant_group'],
         index=mod.GENERATION_PROJECTS,
-        param=[mod.gen_tech, mod.gen_energy_source,
-               mod.gen_load_zone, mod.gen_is_variable, mod.gen_is_storage,
-               mod.gen_is_baseload, mod.gen_is_hybrid, mod.baseload_gen_scheduled_outage_rate,
-               mod.gen_forced_outage_rate, mod.variable_gen_curtailment_limit, mod.gen_capacity_limit_mw,
-               mod.gen_unit_size, mod.ppa_energy_cost, mod.gen_min_build_capacity,
-               mod.ppa_capacity_cost, 
-               mod.gen_variant_group, mod.gen_pricing_node, mod.solar_age_degredation])
-    # Construct sets of capacity-limited, ccs-capable and unit-size-specified
+        param=[mod.gen_load_zone, mod.gen_tech, mod.gen_is_variable, mod.gen_is_hybrid,
+               mod.gen_is_storage, mod.gen_is_baseload, mod.gen_variant_group,
+               mod.gen_capacity_limit_mw, mod.gen_min_build_capacity, mod.ppa_energy_cost, 
+               mod.ppa_capacity_cost, mod.gen_pricing_node, mod.gen_energy_source,
+               mod.baseload_gen_scheduled_outage_rate, mod.gen_forced_outage_rate, mod.variable_gen_curtailment_limit, 
+               mod.gen_unit_size, mod.solar_age_degredation])
+    # Construct sets of unit-size-specified
     # projects. These sets include projects for which these parameters have
     # a value
     if 'gen_unit_size' in switch_data.data():

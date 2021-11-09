@@ -386,14 +386,12 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'nodal_prices.csv'),
         select=('pricing_node','timepoint','nodal_price'),
-        index=mod.NODE_TIMEPOINTS,
         param=[mod.nodal_price]
     )
 
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'rec_value.csv'),
-        auto_select=True,
-        index=mod.PERIODS,
+        select=('period','rec_resale_value'),
         param=[mod.rec_resale_value])
 
 

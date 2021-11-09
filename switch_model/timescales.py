@@ -84,7 +84,7 @@ def define_components(mod):
     attributes of timepoints.
 
     tp_weight[t]: The weight of a timepoint within an investment
-    period in units of hours per period.
+    period in units of hours per period. 
         = ts_duration_of_tp[ts] * ts_scale_to_period[ts]
 
     tp_weight_in_year[t]: The weight of a timepoint within a year

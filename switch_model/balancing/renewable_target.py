@@ -32,7 +32,7 @@ def define_components(mod):
     renewable_target[p] is a parameter that describes how much of load (as a percentage) must be served by GENERATION_PROJECTS.
     This assumes that all GENERATION_PROJECTS are renewable generators that count toward the goal.
 
-    hedge_cost[z,t] is a parameter that describes the cost of system/grid power ($/MWh) for each timepoint in each load zone. 
+    hedge_contract_cost[z,t] is a parameter that describes the cost of system/grid power ($/MWh) for each timepoint in each load zone. 
     This could describe wholesale prices of electricity at the demand node or your utility rate structure 
     (whereever you will be buying energy from if not procuring from one of the GENERATION_PROJECTS)
 
@@ -46,14 +46,6 @@ def define_components(mod):
     Enforce_Hourly_Renewable_Target[z,p] is a contraint that requires time coincident renewable generation from GENERATION_PROJECTS to 
     meet or exceed the renewable_target. It is defined by requiring the percentage of system power used to be less than 1 - the target.
 
-    tp_in_subset[t] is a parameter that defines whether a timepoint happens during a subset period, during which all load must be met with
-    time-coincident dispatch from GENERATION_PROJECTS.
-
-    SUBSET_TIMEPOINTS is the set of all timepoints in the subset period.
-
-    Enforce_Time_Coincidence_During_Subset[z,t] is a constraint that requires time-coincident dispatch from all generators in a zone to be 
-    greater or equal to the amount of load in each timepoint. This is useful if you only want to achieve time-coincident generation on a 
-    specific peak day or during a specific season.
 
     total_demand_in_period[p] is an expression that sums the annual energy demand across all load zones for each period
 
@@ -66,7 +58,7 @@ def define_components(mod):
 
     mod.renewable_target = Param(
         mod.PERIODS,
-        default=1,
+        default=0,
         within=PercentFraction)
 
     mod.excess_generation_limit = Param(
@@ -75,7 +67,7 @@ def define_components(mod):
 
     # if no hedge cost is specified, set the cost to a very small amount
     # This discourages use of system power 
-    mod.hedge_cost = Param(
+    mod.hedge_contract_cost = Param(
         mod.ZONE_TIMEPOINTS,
         within=Reals,
         default=0.0000001)
@@ -84,8 +76,6 @@ def define_components(mod):
         mod.LOAD_ZONES,
         within=Any
     )
-
-    mod.tp_in_subset = Param(mod.TIMEPOINTS, within=Boolean, default=False)
     
     #implementation of system power as a decision variable
     mod.SystemPower = Var(
@@ -96,11 +86,11 @@ def define_components(mod):
     mod.Zone_Power_Injections.append('SystemPower')
 
     #calculate the cost of using system power for the objective function
-    mod.SystemPowerHedgeCost = Expression(
+    mod.HedgeContractCostInTP = Expression(
         mod.TIMEPOINTS,
-        rule=lambda m, t: sum(m.SystemPower[z, t] * m.hedge_cost[z, t] for z in m.LOAD_ZONES) 
+        rule=lambda m, t: sum(m.SystemPower[z, t] * m.hedge_contract_cost[z, t] for z in m.LOAD_ZONES) 
     )
-    mod.Cost_Components_Per_TP.append('SystemPowerHedgeCost')
+    mod.Cost_Components_Per_TP.append('HedgeContractCostInTP')
     
     # add system power cost to objective function so that its cost can be balanced against generator cost
     # NOTE: (3/9/21) if system power cost is negative, it encourages use of system power when not needed. 
@@ -122,21 +112,7 @@ def define_components(mod):
                 m.AnnualSystemPower[z,p] <= ((1 - m.renewable_target[p]) * m.zone_total_demand_in_period_mwh[z,p]))
         )
 
-        # OPTIONAL: Force time coincidence on subset of days
-        ####################################################
-
-
-        # specify the timepoints that are in the subset days
-        mod.SUBSET_TIMEPOINTS = Set(
-            initialize=mod.TIMEPOINTS,
-            filter=lambda m, t: m.tp_in_subset[t]
-        )
-
-        # On the representative day(s), DispatchGen >= Load for each timepoint
-        mod.Enforce_Time_Coincidence_During_Subset = Constraint(
-            mod.LOAD_ZONES, mod.SUBSET_TIMEPOINTS,
-            rule = lambda m, z, t: m.ZoneTotalGeneratorDispatch[z,t] >= m.zone_demand_mw[z,t]
-        )
+        
     elif mod.options.goal_type == "annual":
 
         # Calculate the total demand in all zones
@@ -183,7 +159,7 @@ def define_components(mod):
 
 def load_inputs(mod, switch_data, inputs_dir):
     """
-    Import renewable target, system power data, and subset parameters
+    Import renewable target, system power data parameters
 
     renewable_target.csv
         period, renewable_target
@@ -191,8 +167,6 @@ def load_inputs(mod, switch_data, inputs_dir):
     hedge_cost.csv
         load_zone, timepoint, hedge_cost
 
-    days.csv
-        timepoint_id, tp_day, tp_in_subset
     """
 
     #load the renewable target
@@ -205,21 +179,13 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'hedge_contract_cost.csv'),
         select=('load_zone','timepoint','hedge_contract_cost'),
-        index=mod.ZONE_TIMEPOINTS,
-        param=[mod.hedge_cost])
+        param=[mod.hedge_contract_cost])
 
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'hedge_settlement_node.csv'),
         select=('load_zone','hedge_settlement_node'),
-        index=mod.LOAD_ZONES,
         param=[mod.hedge_settlement_node])
 
-    # load optional data specifying subset days
-    switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'days.csv'),
-        select=('timepoint_id','tp_in_subset'),
-        index=mod.TIMEPOINTS,
-        param=[mod.tp_in_subset])
 
 def post_solve(instance, outdir):
     """
