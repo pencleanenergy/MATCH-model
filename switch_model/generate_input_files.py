@@ -152,6 +152,11 @@ def generate_inputs(model_workspace):
     # ensure that variable_gen_curtailment_limit is '.' for non variable gens
     xl_gen.loc[xl_gen['gen_is_variable'] == 0, 'variable_gen_curtailment_limit'] = '.'
 
+    # calculate the solar degredation discount for the model year, assuming a 0.5% annual degredation rate
+    xl_gen['solar_age_degredation'] = 1
+    xl_gen.loc[xl_gen['solar_cod_year'] != '.', 'solar_age_degredation'] = (1-0.005)**(year - xl_gen.loc[xl_gen['solar_cod_year'] != '.', 'solar_cod_year'])
+    xl_gen = xl_gen.drop(columns=['solar_cod_year'])
+
 
     xl_storage = pd.read_excel(io=model_inputs, sheet_name='storage', skiprows=3).dropna(axis=1, how='all')
     # add defaults for storage
@@ -159,6 +164,7 @@ def generate_inputs(model_workspace):
     xl_storage['gen_is_storage'] = 1
     xl_storage['gen_is_variable'] = 0
     xl_storage['gen_is_baseload'] = 0
+    xl_storage['solar_age_degredation'] = 1
 
     # concat xl_gen and xl_storage, and fill missing values with '.'
     xl_gen = pd.concat([xl_gen,xl_storage], sort=False, ignore_index=True).fillna('.')
@@ -523,7 +529,7 @@ def generate_inputs(model_workspace):
                         'storage_hybrid_generation_project',	
                         'storage_hybrid_min_capacity_ratio',
                         'storage_hybrid_max_capacity_ratio',	
-                        'solar_cod_year',		
+                        'solar_age_degredation',		
                         'baseload_gen_scheduled_outage_rate',	
                         'gen_forced_outage_rate',
                         'variable_gen_curtailment_limit',
@@ -544,11 +550,6 @@ def generate_inputs(model_workspace):
             overbuild_risk = generation_projects_info.copy()[['GENERATION_PROJECT',	'gen_pricing_node','ppa_energy_cost','ppa_penalty']]
             overbuild_risk.to_csv(output_dir / 'overbuild_projects.csv', index=False)
             generation_projects_info = generation_projects_info.drop(columns=['ppa_penalty'])
-
-            # calculate the solar degredation discount for the model year, assuming a 0.5% annual degredation rate
-            generation_projects_info['solar_age_degredation'] = 1
-            generation_projects_info.loc[generation_projects_info['solar_cod_year'] != '.', 'solar_age_degredation'] = (1-0.005)**(year - generation_projects_info.loc[generation_projects_info['solar_cod_year'] != '.', 'solar_cod_year'])
-            generation_projects_info = generation_projects_info.drop(columns=['solar_cod_year'])
 
             generation_projects_info.to_csv(input_dir / 'generation_projects_info.csv', index=False)
 

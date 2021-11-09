@@ -218,7 +218,7 @@ def define_components(mod):
         else:
             return (1 - m.gen_forced_outage_rate[g])
     mod.gen_availability = Param(
-        mod.GENERATION_PROJECTS,
+        mod.NON_STORAGE_GENS,
         within=NonNegativeReals,
         initialize=init_gen_availability)
 

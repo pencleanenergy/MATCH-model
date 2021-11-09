@@ -92,10 +92,6 @@ def define_components(mod):
     )
     mod.Cost_Components_Per_TP.append('HedgeContractCostInTP')
     
-    # add system power cost to objective function so that its cost can be balanced against generator cost
-    # NOTE: (3/9/21) if system power cost is negative, it encourages use of system power when not needed. 
-    # To fix this, we should ignore the cost of system power in the objective function so that it is used only when needed
-
 
     if mod.options.goal_type == "hourly":
         
@@ -164,8 +160,8 @@ def load_inputs(mod, switch_data, inputs_dir):
     renewable_target.csv
         period, renewable_target
 
-    hedge_cost.csv
-        load_zone, timepoint, hedge_cost
+    hedge_contract_cost.csv
+        load_zone, timepoint, hedge_contract_cost
 
     """
 
@@ -198,9 +194,9 @@ def post_solve(instance, outdir):
         "timestamp": instance.tp_timestamp[t],
         "load_zone": z,
         "system_power_MW":value(instance.SystemPower[z,t]),
-        "hedge_contract_cost_per_MWh":instance.hedge_cost[z,t],
+        "hedge_contract_cost_per_MWh":instance.hedge_contract_cost[z,t],
         "hedge_contract_cost": value(
-            instance.SystemPower[z,t] * instance.hedge_cost[z,t] *
+            instance.SystemPower[z,t] * instance.hedge_contract_cost[z,t] *
             instance.tp_weight_in_year[t]),
         "hedge_market_revenue": value(instance.SystemPower[z,t] * - instance.nodal_price[instance.hedge_settlement_node[z],t]),
     } for z, t in instance.ZONE_TIMEPOINTS ]
