@@ -1,5 +1,14 @@
 -------------------------------------------------------------------------------
-Commmit 2021.11.02 (Version 0.12.0)
+Commmit 2021.11.02 (Version 0.12.1)
+-------------------------------------------------------------------------------
+Fixes bugs that raise errors if the optional storage module is not used
+
+Fixes issue that was creating 8784 timepoints in leap years instead of dropping the leap day
+
+Fixes a bug that was listing modules in the wrong order in modules.txt
+
+-------------------------------------------------------------------------------
+Commmit 2021.11.09 (Version 0.12.0)
 -------------------------------------------------------------------------------
 Fixed an issue where hedge contract market revenue was excluded from the objective function, making system power very expensive to use compared to PPAs. Added a new expression `HedgeContractMarketRevenueInTP` to track this, and changed the name of `SystemPowerHedgeCost` to `HedgeContractCostInTP`
 

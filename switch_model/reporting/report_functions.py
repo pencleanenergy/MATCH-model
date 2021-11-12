@@ -214,7 +214,7 @@ def generator_portfolio(gen_cap, gen_build_predetermined, generation_projects_in
 
     return capacity
 
-def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
+def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap, generation_projects_info, storage_exists):
     """
     Calculates the cost components for each generator in real $
 
@@ -234,38 +234,47 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
     gen_costs = gen_costs.groupby('generation_project').sum().reset_index()
 
     # rename columns
+    if storage_exists:
+        storage_costs = storage_dispatch.copy().drop(columns=['StateOfCharge'])
+        storage_costs = storage_costs.groupby('generation_project').sum().reset_index()
 
-    storage_costs = storage_dispatch.copy().drop(columns=['StateOfCharge'])
-    storage_costs = storage_costs.groupby('generation_project').sum().reset_index()
+        # add storage contract costs
+        storage_costs = storage_costs.merge(gen_cap[['generation_project','PPA_Capacity_Cost']], how='left', on='generation_project').fillna(0)
 
-    # add storage contract costs
-    storage_costs = storage_costs.merge(gen_cap[['generation_project','PPA_Capacity_Cost']], how='left', on='generation_project').fillna(0)
+        # replace hybrid storage names with the name of the paired generator
+        storage_costs['generation_project'] = storage_costs['generation_project'].replace(hybrid_pair)
 
-    # replace hybrid storage names with the name of the paired generator
-    storage_costs['generation_project'] = storage_costs['generation_project'].replace(hybrid_pair)
+        # drop rows where generation is 0
+        storage_costs = storage_costs[storage_costs.DischargeMW > 0]
 
-    # drop rows where generation is 0
-    storage_costs = storage_costs[storage_costs.DischargeMW > 0]
+        # merge the two dfs together
+        gen_costs = gen_costs.merge(storage_costs, how='outer', on='generation_project')
 
-    # merge the two dfs together
-    gen_costs = gen_costs.merge(storage_costs, how='outer', on='generation_project')
-
-    # add capacity costs for any non-storage generators
-    gen_cap_cost = gen_cap.copy()[['generation_project','PPA_Capacity_Cost']].rename(columns={'PPA_Capacity_Cost':'Gen_Capacity_Cost'})
-    gen_costs = gen_costs.merge(gen_cap_cost, how='left', on='generation_project')
-    gen_costs['PPA_Capacity_Cost'] = gen_costs['PPA_Capacity_Cost'].fillna(gen_costs['Gen_Capacity_Cost'])
-    gen_costs = gen_costs.drop(columns=['Gen_Capacity_Cost'])
+        # add capacity costs for any non-storage generators
+        gen_cap_cost = gen_cap.copy()[['generation_project','PPA_Capacity_Cost']].rename(columns={'PPA_Capacity_Cost':'Gen_Capacity_Cost'})
+        gen_costs = gen_costs.merge(gen_cap_cost, how='left', on='generation_project')
+        gen_costs['PPA_Capacity_Cost'] = gen_costs['PPA_Capacity_Cost'].fillna(gen_costs['Gen_Capacity_Cost'])
+        gen_costs = gen_costs.drop(columns=['Gen_Capacity_Cost'])
+    else:
+        # add capacity costs for any non-storage generators
+        gen_cap_cost = gen_cap.copy()[['generation_project','PPA_Capacity_Cost']]
+        gen_costs = gen_costs.merge(gen_cap_cost, how='left', on='generation_project').fillna(0)
+  
 
     # fill any missing values with zero
     gen_costs = gen_costs.fillna(0)
 
     # combine Delivery Cost columns
-    gen_costs['Delivery_Cost'] = gen_costs['Delivery_Cost'] + gen_costs['StorageDispatchDeliveryCost']
+    del_cost_columns = ['Delivery_Cost','StorageDispatchDeliveryCost']
+    gen_costs['Delivery_Cost'] = gen_costs[[col for col in gen_costs.columns if col in del_cost_columns]].sum(axis=1)
 
     # combine Generation and Discharge columns
-    gen_costs['Generation_MW'] = gen_costs['Generation_MW'] + gen_costs['DischargeMW']
+    generation_columns = ['Generation_MW','DischargeMW']
+    gen_costs['Generation_MW'] = gen_costs[[col for col in gen_costs.columns if col in generation_columns]].sum(axis=1)
     # for hybrid generators, subtract out the charging MW
-    gen_costs.loc[gen_costs['generation_project'].str.contains('HYBRID'), 'Generation_MW'] = gen_costs.loc[gen_costs['generation_project'].str.contains('HYBRID'), 'Generation_MW'] - gen_costs['ChargeMW']
+    if storage_exists:
+        hybrid_gens = list(generation_projects_info.loc[((generation_projects_info['gen_is_hybrid'] == 1) & (generation_projects_info['gen_is_storage'] == 0)), 'GENERATION_PROJECT'])
+        gen_costs.loc[gen_costs['generation_project'].isin(hybrid_gens), 'Generation_MW'] = gen_costs.loc[gen_costs['generation_project'].isin(hybrid_gens), 'Generation_MW'] - gen_costs['ChargeMW']
 
     # rename columns
     gen_costs = gen_costs.rename(columns={'Contract_Cost':'Energy Contract Cost',
@@ -280,15 +289,20 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap):
     gen_costs['Capacity Contract Cost'] = gen_costs['Capacity Contract Cost'] / gen_costs['Generation MWh']
     gen_costs['Pnode Revenue'] = gen_costs['Pnode Revenue'] / gen_costs['Generation MWh']
     gen_costs['Delivery Cost'] = gen_costs['Delivery Cost'] / gen_costs['Generation MWh']
-    gen_costs['Storage Arbitrage Revenue'] = gen_costs['Storage Arbitrage Revenue'] / gen_costs['Generation MWh']
-    gen_costs['Total Cost'] = gen_costs['Energy Contract Cost'] + gen_costs['Capacity Contract Cost'] + gen_costs['Pnode Revenue'] + gen_costs['Delivery Cost'] + gen_costs['Storage Arbitrage Revenue']
+    try:
+        gen_costs['Storage Arbitrage Revenue'] = gen_costs['Storage Arbitrage Revenue'] / gen_costs['Generation MWh']
+    except KeyError:
+        pass
+    cost_columns = ['Energy Contract Cost','Capacity Contract Cost','Pnode Revenue','Delivery Cost','Storage Arbitrage Revenue']
+    gen_costs['Total Cost'] = gen_costs[[col for col in gen_costs.columns if col in cost_columns]].sum(axis=1)
 
     gen_costs = gen_costs.sort_values(by='Total Cost', ascending=True)
 
     gen_costs = gen_costs.round(decimals=2)
 
     # only keep relevant columns
-    gen_costs = gen_costs[['generation_project', 'Energy Contract Cost', 'Capacity Contract Cost', 'Pnode Revenue', 'Delivery Cost','Storage Arbitrage Revenue','Total Cost']]
+    relevant_columns = ['generation_project', 'Energy Contract Cost', 'Capacity Contract Cost', 'Pnode Revenue', 'Delivery Cost','Storage Arbitrage Revenue','Total Cost']
+    gen_costs = gen_costs[[col for col in gen_costs.columns if col in relevant_columns]]
 
     return gen_costs
 
@@ -373,7 +387,7 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
 
     return dispatch_mix
 
-def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage_dispatch, fixed_costs, rec_value, load_balance):
+def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage_dispatch, fixed_costs, rec_value, load_balance, storage_exists):
     """
     Calculates the cost of power for each hour of the year in real $
 
@@ -434,12 +448,13 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
     # add the capacity costs to the hourly costs
     hourly_costs['Capacity Contract Cost'] = gen_cap['PPA_Capacity_Cost']
 
-    # add storage nodal costs
-    storage_cost = storage_dispatch[['timestamp','StorageDispatchPnodeCost']]
-    # sum for each timestamp
-    storage_cost = storage_cost.groupby('timestamp').sum()
-    # merge the data
-    hourly_costs = hourly_costs.merge(storage_cost, how='left', on='timestamp')
+    if storage_exists:
+        # add storage nodal costs
+        storage_cost = storage_dispatch[['timestamp','StorageDispatchPnodeCost']]
+        # sum for each timestamp
+        storage_cost = storage_cost.groupby('timestamp').sum()
+        # merge the data
+        hourly_costs = hourly_costs.merge(storage_cost, how='left', on='timestamp')
 
     # calculate the hourly value for annual fixed costs
     fixed_cost_component = fixed_costs.copy()
@@ -613,7 +628,7 @@ def build_ra_open_position_plot(ra_summary):
 
     return monthly_ra_open_fig
 
-def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, load_balance, system_power, technology_color_map):
+def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, load_balance, system_power, technology_color_map, storage_exists):
     """
     Description
 
@@ -657,13 +672,14 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
     # group the data by technology type
     dispatch_by_tech = dispatch_data.groupby(['Technology','timestamp']).sum().reset_index()
 
-    #append storage 
-    storage_discharge = storage_dispatch.copy()[['timestamp','DischargeMW']].rename(columns={'DischargeMW':'MWh'})
-    # group the data
-    storage_discharge = storage_discharge.groupby('timestamp').sum().reset_index()
-    # add a technology column
-    storage_discharge['Technology'] = 'Storage Discharge'
-    dispatch_by_tech = dispatch_by_tech.append(storage_discharge)
+    if storage_exists:
+        #append storage 
+        storage_discharge = storage_dispatch.copy()[['timestamp','DischargeMW']].rename(columns={'DischargeMW':'MWh'})
+        # group the data
+        storage_discharge = storage_discharge.groupby('timestamp').sum().reset_index()
+        # add a technology column
+        storage_discharge['Technology'] = 'Storage Discharge'
+        dispatch_by_tech = dispatch_by_tech.append(storage_discharge)
 
     # append grid energy
     grid_energy = system_power.copy()[['timestamp','system_power_MW']].groupby('timestamp').sum().reset_index().rename(columns={'system_power_MW':'MWh'})
@@ -679,12 +695,15 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
     load_line = load_balance.copy()[['timestamp','zone_demand_mw']]
     load_line['timestamp'] = pd.to_datetime(load_line['timestamp'])
 
-    # prepare storage charging data
-    storage_charge = storage_dispatch.copy()[['timestamp','ChargeMW']]
-    # group the data
-    storage_charge = storage_charge.groupby('timestamp').sum().reset_index()
-    storage_charge['timestamp'] = pd.to_datetime(storage_charge['timestamp'])
-    storage_charge['Load+Charge'] = load_line['zone_demand_mw'] + storage_charge['ChargeMW']
+    if storage_exists:
+        # prepare storage charging data
+        storage_charge = storage_dispatch.copy()[['timestamp','ChargeMW']]
+        # group the data
+        storage_charge = storage_charge.groupby('timestamp').sum().reset_index()
+        storage_charge['timestamp'] = pd.to_datetime(storage_charge['timestamp'])
+        storage_charge['Load+Charge'] = load_line['zone_demand_mw'] + storage_charge['ChargeMW']
+    else:
+        storage_charge = pd.DataFrame()
 
     # Build Figure
 
@@ -699,7 +718,8 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
     dispatch_fig.update_traces(line={'width':0})
     dispatch_fig.layout.template = 'plotly_white'
     # add load and storage charging lines
-    dispatch_fig.add_scatter(x=storage_charge.timestamp, y=storage_charge['Load+Charge'], text=storage_charge['ChargeMW'], line=dict(color='green', width=3), name='Storage Charge')
+    if storage_exists:
+        dispatch_fig.add_scatter(x=storage_charge.timestamp, y=storage_charge['Load+Charge'], text=storage_charge['ChargeMW'], line=dict(color='green', width=3), name='Storage Charge')
     dispatch_fig.add_scatter(x=load_line.timestamp, y=load_line.zone_demand_mw, line=dict(color='black', width=3), name='Demand')
 
     dispatch_fig.update_xaxes(
@@ -819,7 +839,7 @@ def build_state_of_charge_plot(storage_dispatch, storage_builds, generation_proj
 
     return soc_fig
 
-def build_month_hour_dispatch_plot(dispatch_by_tech, load_line, storage_charge, technology_color_map):
+def build_month_hour_dispatch_plot(dispatch_by_tech, load_line, storage_charge, technology_color_map, storage_exists):
     """
     Creates a month-hour average version of the dispatch plot created by build_dispatch_plot()
 
@@ -846,11 +866,12 @@ def build_month_hour_dispatch_plot(dispatch_by_tech, load_line, storage_charge, 
     mh_load_line.index = mh_load_line.index.rename(['Month','Hour'])
     mh_load_line = mh_load_line.reset_index()
 
-    mh_storage_charge = storage_charge.copy()
-    mh_storage_charge = mh_storage_charge.set_index('timestamp')
-    mh_storage_charge = mh_storage_charge.groupby([mh_storage_charge.index.month, mh_storage_charge.index.hour], axis=0).mean()
-    mh_storage_charge.index = mh_storage_charge.index.rename(['Month','Hour'])
-    mh_storage_charge = mh_storage_charge.reset_index()
+    if storage_exists:
+        mh_storage_charge = storage_charge.copy()
+        mh_storage_charge = mh_storage_charge.set_index('timestamp')
+        mh_storage_charge = mh_storage_charge.groupby([mh_storage_charge.index.month, mh_storage_charge.index.hour], axis=0).mean()
+        mh_storage_charge.index = mh_storage_charge.index.rename(['Month','Hour'])
+        mh_storage_charge = mh_storage_charge.reset_index()
 
 
     mh_fig = px.area(mh_dispatch, 
@@ -867,18 +888,19 @@ def build_month_hour_dispatch_plot(dispatch_by_tech, load_line, storage_charge, 
     mh_fig.layout.template = 'plotly_white'
     mh_fig.update_xaxes(dtick=3)
 
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 1, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 1, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=1, name='Storage Charge', showlegend=True, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 1, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 2, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 2, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=2, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 2, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 3, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 3, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=3, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 3, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 4, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 4, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=4, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 4, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 5, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 5, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=5, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 5, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 6, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 6, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=6, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 6, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 7, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 7, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=1, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 7, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 8, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 8, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=2, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 8, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 9, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 9, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=3, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 9, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 10, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 10, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=4, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 10, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 11, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 11, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=5, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 11, 'ChargeMW'])
-    mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 12, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 12, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=6, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 12, 'ChargeMW'])
+    if storage_exists:
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 1, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 1, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=1, name='Storage Charge', showlegend=True, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 1, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 2, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 2, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=2, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 2, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 3, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 3, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=3, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 3, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 4, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 4, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=4, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 4, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 5, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 5, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=5, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 5, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 6, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 6, 'Load+Charge'], line=dict(color='green', width=4), row=2, col=6, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 6, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 7, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 7, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=1, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 7, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 8, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 8, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=2, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 8, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 9, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 9, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=3, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 9, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 10, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 10, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=4, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 10, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 11, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 11, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=5, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 11, 'ChargeMW'])
+        mh_fig.add_scatter(x=mh_storage_charge.loc[mh_storage_charge['Month'] == 12, 'Hour'], y=mh_storage_charge.loc[mh_storage_charge['Month'] == 12, 'Load+Charge'], line=dict(color='green', width=4), row=1, col=6, name='Storage Charge', showlegend=False, text=mh_storage_charge.loc[mh_storage_charge['Month'] == 12, 'ChargeMW'])
 
     mh_fig.add_scatter(x=mh_load_line.loc[mh_load_line['Month'] == 1, 'Hour'], y=mh_load_line.loc[mh_load_line['Month'] == 1, 'zone_demand_mw'], line=dict(color='black', width=4), row=2, col=1, name='Demand', showlegend=True)
     mh_fig.add_scatter(x=mh_load_line.loc[mh_load_line['Month'] == 2, 'Hour'], y=mh_load_line.loc[mh_load_line['Month'] == 2, 'zone_demand_mw'], line=dict(color='black', width=4), row=2, col=2, name='Demand',showlegend=False)
@@ -899,7 +921,7 @@ def build_month_hour_dispatch_plot(dispatch_by_tech, load_line, storage_charge, 
 
     return mh_fig
 
-def build_open_position_plot(load_balance):
+def build_open_position_plot(load_balance, storage_exists):
     """
     Builds a plot showing the average open position and excess generation for each month-hour
 
@@ -913,7 +935,10 @@ def build_open_position_plot(load_balance):
     mismatch['timestamp'] = pd.to_datetime(mismatch['timestamp'])
 
     mismatch['Net generation'] = mismatch['ZoneTotalGeneratorDispatch'] + mismatch['ZoneTotalExcessGen'] - mismatch['zone_demand_mw']
-    mismatch['Net position with storage'] = mismatch['Net generation'] + mismatch['ZoneTotalStorageDischarge'] - mismatch['ZoneTotalStorageCharge']
+    if storage_exists:
+        mismatch['Net position with storage'] = mismatch['Net generation'] + mismatch['ZoneTotalStorageDischarge'] - mismatch['ZoneTotalStorageCharge']
+    else:
+        mismatch['Net position with storage'] = 0
 
     mismatch = mismatch.set_index('timestamp')
 
@@ -1134,7 +1159,7 @@ def calculate_load_shadow_price(results, timestamps, year):
 
     return dual_plot
 
-def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, avoided_emissions, emissions, emissions_unit):
+def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, avoided_emissions, emissions, emissions_unit, financials):
     """
     Creates a csv file output of key metrics from the summary report to compare with other scenarios.
 
@@ -1170,10 +1195,15 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
     summary['Time-coincident %'] = hourly_renewable_percentage(load_balance)
     summary['Annual Volumetric %'] = annual_renewable_percentage(load_balance)
 
-    summary['Portfolio Cost per MWh'] = cost_table.loc[cost_table['Cost Category'] == 'Total', 'Cost Per MWh'].item()
+    base_year = financials.loc[0,'base_financial_year']
 
-    for year in list(sensitivity_table['Weather Year']):
-        summary[f'Sensitivity Performance Year {year}'] = sensitivity_table.loc[sensitivity_table['Weather Year'] == year, 'Time-Coincident %'].item()
+    summary[f'Portfolio Cost per MWh ({base_year}$)'] = cost_table.loc[cost_table['Cost Category'] == 'Total', f'Cost Per MWh ({base_year}$)'].item()
+
+    if sensitivity_table == None:
+        pass
+    else:
+        for year in list(sensitivity_table['Weather Year']):
+            summary[f'Sensitivity Performance Year {year}'] = sensitivity_table.loc[sensitivity_table['Weather Year'] == year, 'Time-Coincident %'].item()
 
     #Portfolio Mix
     portfolio_summary = portfolio[['MW','Status','Technology']].groupby(['Status','Technology']).sum().reset_index()
@@ -1197,7 +1227,7 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
 
     return summary
 
-def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_info, load_balance, storage_builds):
+def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_info, load_balance, storage_builds, storage_exists):
     """
     Assesses the portfolio's time-coincident performance based on variable generation in different weather years, utilizing a simplified greedy storage algorithm to dispatch storage assets.
 
@@ -1214,8 +1244,11 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
     # specify the path to the folder than contains the SAM weather data
     set_folder = Path.cwd() / f'../../{gen_set}/'
 
-    # get a list of all weather year file names in this folder
-    weather_years = [filename for filename in os.listdir(set_folder) if '.csv' in filename]
+    try:
+        # get a list of all weather year file names in this folder
+        weather_years = [filename for filename in os.listdir(set_folder) if '.csv' in filename]
+    except FileNotFoundError:
+        return None
 
     # get dataframe of all generators that were built
     built_gens = gen_cap.copy()[gen_cap['GenCapacity'] > 0]
@@ -1274,109 +1307,113 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
         balance['discharge'] = 0
         balance['soc'] = 0
 
-        # filter the storage data to only include storage assets that were built
-        built_storage = storage_builds.copy()[storage_builds['OnlinePowerCapacityMW'] > 0]
+        if storage_exists:
+            # filter the storage data to only include storage assets that were built
+            built_storage = storage_builds.copy()[storage_builds['OnlinePowerCapacityMW'] > 0]
 
-        # get storage parameters for hybrid and standalone storage
-        hybrid_storage_power = built_storage.loc[built_storage['generation_project'].isin(hybrid_storage),'OnlinePowerCapacityMW'].sum()
-        hybrid_storage_energy = built_storage.loc[built_storage['generation_project'].isin(hybrid_storage),'OnlineEnergyCapacityMWh'].sum()
-        storage_power = built_storage.loc[~built_storage['generation_project'].isin(hybrid_storage),'OnlinePowerCapacityMW'].sum()
-        storage_energy = built_storage.loc[~built_storage['generation_project'].isin(hybrid_storage),'OnlineEnergyCapacityMWh'].sum()
+            # get storage parameters for hybrid and standalone storage
+            hybrid_storage_power = built_storage.loc[built_storage['generation_project'].isin(hybrid_storage),'OnlinePowerCapacityMW'].sum()
+            hybrid_storage_energy = built_storage.loc[built_storage['generation_project'].isin(hybrid_storage),'OnlineEnergyCapacityMWh'].sum()
+            storage_power = built_storage.loc[~built_storage['generation_project'].isin(hybrid_storage),'OnlinePowerCapacityMW'].sum()
+            storage_energy = built_storage.loc[~built_storage['generation_project'].isin(hybrid_storage),'OnlineEnergyCapacityMWh'].sum()
 
-        # get the hybrid interconnection limit based on nameplate capacity of the generator portion
-        hybrid_interconnect_limit = built_gens.loc[built_gens['generation_project'].isin(hybrid_gens), 'GenCapacity'].sum()
+            # get the hybrid interconnection limit based on nameplate capacity of the generator portion
+            hybrid_interconnect_limit = built_gens.loc[built_gens['generation_project'].isin(hybrid_gens), 'GenCapacity'].sum()
 
-        # calculate an energy capacity weighted average of RTE for all storage
-        rte_calc = built_storage.copy().merge(generation_projects_info[['GENERATION_PROJECT','storage_roundtrip_efficiency']], how='left', left_on='generation_project', right_on='GENERATION_PROJECT')
-        rte_calc['product'] = rte_calc['OnlineEnergyCapacityMWh'] * rte_calc['storage_roundtrip_efficiency'].astype(float)
+            # calculate an energy capacity weighted average of RTE for all storage
+            rte_calc = built_storage.copy().merge(generation_projects_info[['GENERATION_PROJECT','storage_roundtrip_efficiency']], how='left', left_on='generation_project', right_on='GENERATION_PROJECT')
+            rte_calc['product'] = rte_calc['OnlineEnergyCapacityMWh'] * rte_calc['storage_roundtrip_efficiency'].astype(float)
 
-        # if there are any hybrid storage assets
-        if hybrid_storage_energy > 0:
-            # calculate the RTE
-            hybrid_storage_rte = rte_calc.loc[rte_calc['generation_project'].isin(hybrid_storage), 'product'].sum() / hybrid_storage_energy
-            # calculate the one-way conversion loss from RTE
-            hybrid_conversion_loss = math.sqrt(hybrid_storage_rte)
-            # set the initial state of change as 50% of the total energy capacity
-            hybrid_initial_soc = hybrid_storage_energy / 2
+            # if there are any hybrid storage assets
+            if hybrid_storage_energy > 0:
+                # calculate the RTE
+                hybrid_storage_rte = rte_calc.loc[rte_calc['generation_project'].isin(hybrid_storage), 'product'].sum() / hybrid_storage_energy
+                # calculate the one-way conversion loss from RTE
+                hybrid_conversion_loss = math.sqrt(hybrid_storage_rte)
+                # set the initial state of change as 50% of the total energy capacity
+                hybrid_initial_soc = hybrid_storage_energy / 2
 
-        # if there are any standalone storage assets
-        if storage_energy > 0:
-            # calculate the RTE
-            storage_rte = rte_calc.loc[~rte_calc['generation_project'].isin(hybrid_storage), 'product'].sum() / storage_energy
-            # calculate the one-way conversion loss from RTE
-            conversion_loss = math.sqrt(storage_rte)
-            # set the initial state of change as 50% of the total energy capacity
-            initial_soc = storage_energy / 2
+            # if there are any standalone storage assets
+            if storage_energy > 0:
+                # calculate the RTE
+                storage_rte = rte_calc.loc[~rte_calc['generation_project'].isin(hybrid_storage), 'product'].sum() / storage_energy
+                # calculate the one-way conversion loss from RTE
+                conversion_loss = math.sqrt(storage_rte)
+                # set the initial state of change as 50% of the total energy capacity
+                initial_soc = storage_energy / 2
 
-        # greedy storage charging algorithm
-        for t in range(len(balance)):
-            # get the generation and load for the current timepoint
-            hybrid_generation_t = balance.loc[t,'hybrid_generation']
-            generation_t = balance.loc[t,'generation']
-            total_generation_t = hybrid_generation_t + generation_t
-            load_t = balance.loc[t,'load']
+            # greedy storage charging algorithm
+            for t in range(len(balance)):
+                # get the generation and load for the current timepoint
+                hybrid_generation_t = balance.loc[t,'hybrid_generation']
+                generation_t = balance.loc[t,'generation']
+                total_generation_t = hybrid_generation_t + generation_t
+                load_t = balance.loc[t,'load']
 
-            # for the first timepoint, use the initial values
-            if t == 0:
-                # first dispatch hybrid batteries
-                if hybrid_storage_energy > 0:
-                    # charge or discharge the battery based on the current load balance
-                    balance.loc[t,'hybrid_charge'] = 0 if (total_generation_t < load_t) else min((total_generation_t - load_t), # total excess generation
-                                                                                                hybrid_generation_t, # total hybrid generation
-                                                                                                hybrid_storage_power, # power limit
-                                                                                                ((hybrid_storage_energy - hybrid_initial_soc)/hybrid_conversion_loss) ) # available energy capacity
-                    balance.loc[t,'hybrid_discharge'] = 0 if (total_generation_t > load_t) else min((load_t - total_generation_t), # total open position
-                                                                                                    hybrid_interconnect_limit - hybrid_generation_t, # available interconnect capacity
+                # for the first timepoint, use the initial values
+                if t == 0:
+                    # first dispatch hybrid batteries
+                    if hybrid_storage_energy > 0:
+                        # charge or discharge the battery based on the current load balance
+                        balance.loc[t,'hybrid_charge'] = 0 if (total_generation_t < load_t) else min((total_generation_t - load_t), # total excess generation
+                                                                                                    hybrid_generation_t, # total hybrid generation
                                                                                                     hybrid_storage_power, # power limit
-                                                                                                    (hybrid_initial_soc*hybrid_conversion_loss) ) # available energy capacity
-                    # calculate the ending state of charge after charging/discharging
-                    balance.loc[t,'hybrid_soc'] = hybrid_initial_soc + balance.loc[t,'hybrid_charge']*hybrid_conversion_loss - balance.loc[t,'hybrid_discharge']/hybrid_conversion_loss
-                # then dispatch standalone batteries
-                if storage_energy > 0:
-                    generation_net_hybrid_t = total_generation_t + balance.loc[t,'hybrid_discharge'] - balance.loc[t,'hybrid_charge']
-                    # charge or discharge the battery based on the current load balance
-                    balance.loc[t,'charge'] = 0 if (generation_net_hybrid_t < load_t) else min((generation_net_hybrid_t - load_t), 
-                                                                                            storage_power, 
-                                                                                            ((storage_energy - initial_soc)/conversion_loss) )
-                    balance.loc[t,'discharge'] = 0 if (generation_net_hybrid_t > load_t) else min((load_t - generation_net_hybrid_t), 
+                                                                                                    ((hybrid_storage_energy - hybrid_initial_soc)/hybrid_conversion_loss) ) # available energy capacity
+                        balance.loc[t,'hybrid_discharge'] = 0 if (total_generation_t > load_t) else min((load_t - total_generation_t), # total open position
+                                                                                                        hybrid_interconnect_limit - hybrid_generation_t, # available interconnect capacity
+                                                                                                        hybrid_storage_power, # power limit
+                                                                                                        (hybrid_initial_soc*hybrid_conversion_loss) ) # available energy capacity
+                        # calculate the ending state of charge after charging/discharging
+                        balance.loc[t,'hybrid_soc'] = hybrid_initial_soc + balance.loc[t,'hybrid_charge']*hybrid_conversion_loss - balance.loc[t,'hybrid_discharge']/hybrid_conversion_loss
+                    # then dispatch standalone batteries
+                    if storage_energy > 0:
+                        generation_net_hybrid_t = total_generation_t + balance.loc[t,'hybrid_discharge'] - balance.loc[t,'hybrid_charge']
+                        # charge or discharge the battery based on the current load balance
+                        balance.loc[t,'charge'] = 0 if (generation_net_hybrid_t < load_t) else min((generation_net_hybrid_t - load_t), 
                                                                                                 storage_power, 
-                                                                                                (initial_soc*conversion_loss) )
-                    # calculate the ending state of charge after charging/discharging
-                    balance.loc[t,'soc'] = initial_soc + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']/conversion_loss
-            
-            # for all other timepoints, use the previous timepoint value
-            else:
-                # first dispatch hybrid batteries
-                if hybrid_storage_energy > 0:
-                    hybrid_soc_prev = balance.loc[t - 1,'hybrid_soc']
-                    # charge or discharge the battery based on the current load balance
-                    balance.loc[t,'hybrid_charge'] = 0 if (total_generation_t < load_t) else min((total_generation_t - load_t), # total excess generation
-                                                                                                hybrid_generation_t, # total hybrid generation
-                                                                                                hybrid_storage_power, # power limit
-                                                                                                ((hybrid_storage_energy - hybrid_soc_prev)/hybrid_conversion_loss) ) # available energy capacity
-                    balance.loc[t,'hybrid_discharge'] = 0 if (total_generation_t > load_t) else min((load_t - total_generation_t), # total open position
-                                                                                                    hybrid_interconnect_limit - hybrid_generation_t, # available interconnect capacity
+                                                                                                ((storage_energy - initial_soc)/conversion_loss) )
+                        balance.loc[t,'discharge'] = 0 if (generation_net_hybrid_t > load_t) else min((load_t - generation_net_hybrid_t), 
+                                                                                                    storage_power, 
+                                                                                                    (initial_soc*conversion_loss) )
+                        # calculate the ending state of charge after charging/discharging
+                        balance.loc[t,'soc'] = initial_soc + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']/conversion_loss
+                
+                # for all other timepoints, use the previous timepoint value
+                else:
+                    # first dispatch hybrid batteries
+                    if hybrid_storage_energy > 0:
+                        hybrid_soc_prev = balance.loc[t - 1,'hybrid_soc']
+                        # charge or discharge the battery based on the current load balance
+                        balance.loc[t,'hybrid_charge'] = 0 if (total_generation_t < load_t) else min((total_generation_t - load_t), # total excess generation
+                                                                                                    hybrid_generation_t, # total hybrid generation
                                                                                                     hybrid_storage_power, # power limit
-                                                                                                    (hybrid_soc_prev*hybrid_conversion_loss) ) # available energy capacity
-                    # calculate the ending state of charge after charging/discharging
-                    balance.loc[t,'hybrid_soc'] = hybrid_soc_prev + balance.loc[t,'hybrid_charge']*hybrid_conversion_loss - balance.loc[t,'hybrid_discharge']/hybrid_conversion_loss
-                # then dispatch standalone batteries
-                if storage_energy > 0:
-                    soc_prev = balance.loc[t - 1,'soc']
-                    generation_net_hybrid_t = total_generation_t + balance.loc[t,'hybrid_discharge'] - balance.loc[t,'hybrid_charge']
-                    # charge or discharge the battery based on the current load balance
-                    balance.loc[t,'charge'] = 0 if (generation_net_hybrid_t < load_t) else min((generation_net_hybrid_t - load_t), 
-                                                                                            storage_power, 
-                                                                                            ((storage_energy - soc_prev)/conversion_loss) )
-                    balance.loc[t,'discharge'] = 0 if (generation_net_hybrid_t > load_t) else min((load_t - generation_net_hybrid_t), 
+                                                                                                    ((hybrid_storage_energy - hybrid_soc_prev)/hybrid_conversion_loss) ) # available energy capacity
+                        balance.loc[t,'hybrid_discharge'] = 0 if (total_generation_t > load_t) else min((load_t - total_generation_t), # total open position
+                                                                                                        hybrid_interconnect_limit - hybrid_generation_t, # available interconnect capacity
+                                                                                                        hybrid_storage_power, # power limit
+                                                                                                        (hybrid_soc_prev*hybrid_conversion_loss) ) # available energy capacity
+                        # calculate the ending state of charge after charging/discharging
+                        balance.loc[t,'hybrid_soc'] = hybrid_soc_prev + balance.loc[t,'hybrid_charge']*hybrid_conversion_loss - balance.loc[t,'hybrid_discharge']/hybrid_conversion_loss
+                    # then dispatch standalone batteries
+                    if storage_energy > 0:
+                        soc_prev = balance.loc[t - 1,'soc']
+                        generation_net_hybrid_t = total_generation_t + balance.loc[t,'hybrid_discharge'] - balance.loc[t,'hybrid_charge']
+                        # charge or discharge the battery based on the current load balance
+                        balance.loc[t,'charge'] = 0 if (generation_net_hybrid_t < load_t) else min((generation_net_hybrid_t - load_t), 
                                                                                                 storage_power, 
-                                                                                                (soc_prev*conversion_loss) )
-                    # calculate the ending state of charge after charging/discharging
-                    balance.loc[t,'soc'] = soc_prev + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']/conversion_loss
-            
-            # after dispatching the battery, fill any remaining open position with grid power
-            balance.loc[t,'grid_power'] = 0 if ((total_generation_t + balance.loc[t,'hybrid_discharge'] + balance.loc[t,'discharge']) >= load_t) else (load_t - (total_generation_t + balance.loc[t,'hybrid_discharge'] + balance.loc[t,'discharge']))
-            
+                                                                                                ((storage_energy - soc_prev)/conversion_loss) )
+                        balance.loc[t,'discharge'] = 0 if (generation_net_hybrid_t > load_t) else min((load_t - generation_net_hybrid_t), 
+                                                                                                    storage_power, 
+                                                                                                    (soc_prev*conversion_loss) )
+                        # calculate the ending state of charge after charging/discharging
+                        balance.loc[t,'soc'] = soc_prev + balance.loc[t,'charge']*conversion_loss - balance.loc[t,'discharge']/conversion_loss
+                
+                # after dispatching the battery, fill any remaining open position with grid power
+                balance.loc[t,'grid_power'] = 0 if ((total_generation_t + balance.loc[t,'hybrid_discharge'] + balance.loc[t,'discharge']) >= load_t) else (load_t - (total_generation_t + balance.loc[t,'hybrid_discharge'] + balance.loc[t,'discharge']))
+        else:
+            for t in range(len(balance)):
+                # fill any remaining open position with grid power
+                balance.loc[t,'grid_power'] = 0 if ((total_generation_t) >= load_t) else (load_t - (total_generation_t))
 
         tc_performance = (1 - (balance.grid_power.sum() / balance.load.sum())) * 100
                 

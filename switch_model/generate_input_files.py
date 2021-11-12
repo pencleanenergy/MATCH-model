@@ -384,11 +384,9 @@ def generate_inputs(model_workspace):
                                     'switch_model.balancing.load_zones',
                                     'switch_model.generators.core.build',
                                     'switch_model.generators.core.dispatch',
-                                    'switch_model.balancing.renewable_target',
-                                    'switch_model.reporting.generate_report'
-]
+                                    'switch_model.balancing.renewable_target']
             module_list = list(xl_scenarios.loc[(xl_scenarios['Input Type'] == 'Optional Modules') & (xl_scenarios[scenario] == 1), 'Parameter'])
-            module_list = required_module_list + module_list
+            module_list = required_module_list + module_list + ['switch_model.reporting.generate_report']
             modules = open(input_dir / 'modules.txt', 'w+')
             for module in module_list:
                 modules.write(module)
@@ -453,6 +451,7 @@ def generate_inputs(model_workspace):
 
             # timepoints.csv
             df_timepoints = pd.DataFrame(index=pd.date_range(start=f'01/01/{year} 00:00', end=f'12/31/{year} 23:00', freq='1H'))
+            df_timepoints = df_timepoints[~((df_timepoints.index.month == 2) & (df_timepoints.index.day == 29))] # remove leap day if a leap year
             df_timepoints['timeseries'] = f'{year}_timeseries'
             df_timepoints['timestamp'] = df_timepoints.index.strftime('%m/%d/%Y %H:%M')
             df_timepoints['tp_month'] = df_timepoints.index.month
@@ -535,7 +534,7 @@ def generate_inputs(model_workspace):
                         'variable_gen_curtailment_limit',
                         'ppa_penalty']
 
-            generation_projects_info = set_gens[gpi_columns]
+            generation_projects_info = set_gens[[col for col in set_gens.columns if col in gpi_columns]]
 
             if 'is_price_agnostic' in option_list:
                 generation_projects_info['ppa_energy_cost'] = 10
