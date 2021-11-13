@@ -289,6 +289,10 @@ def define_components(mod):
         mod.NON_STORAGE_GEN_TPS,
         rule=lambda m, g, t: (m.DispatchGen[g, t] + m.ExcessGen[g,t]) if m.gen_is_variable[g] else m.DispatchGen[g, t])
 
+    mod.AnnualTotalGen = Expression(
+        mod.NON_STORAGE_GENS, mod.PERIODS,
+        rule=lambda m, g, p: sum(m.TotalGen[g,t] for t in m.TIMEPOINTS if m.tp_period[t] == p))
+
     mod.ZoneTotalExcessGen = Expression(
         mod.ZONE_TIMEPOINTS,
         rule=lambda m, z, t: \
@@ -305,8 +309,7 @@ def define_components(mod):
         return excess
     mod.AnnualExcessGen = Expression(
         mod.VARIABLE_GENS, mod.PERIODS, #for each variable generator in each period
-        rule=Calculate_Annual_Excess_Energy_By_Gen #calculate a value according to the rule 
-    )
+        rule=Calculate_Annual_Excess_Energy_By_Gen) #calculate a value according to the rule 
 
     mod.ExcessGenPPACostInTP = Expression(
         mod.TIMEPOINTS,
@@ -350,6 +353,24 @@ def define_components(mod):
     mod.Enforce_Dispatch_Upper_Limit = Constraint(
         mod.NON_STORAGE_GEN_TPS,
         rule=EnforceDispatchUpperLimit_rule)
+
+    # LIMIT EXCESSGEN FOR OVERBUILD GENERATORS
+    ##########################################
+    # For generators that have a net negative cost, add a constraint on the amount of excess generation
+    # so that they are not overbuilt
+
+    mod.gen_excessgen_limit = Param(
+        mod.VARIABLE_GENS,
+        within=NonNegativeReals,
+        default=float("inf"))
+
+    mod.Enforce_Overbuild_Limit = Constraint(
+        mod.VARIABLE_GENS, mod.PERIODS,
+        rule=lambda m, g, p: 
+        Constraint.Skip if m.gen_excessgen_limit[g] == float("inf") # no value specified
+        else
+        (m.AnnualExcessGen[g,p] <= m.gen_excessgen_limit[g] * m.AnnualTotalGen[g,p])
+    )
 
 def load_inputs(mod, switch_data, inputs_dir):
     """

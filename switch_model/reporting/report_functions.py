@@ -414,7 +414,7 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
     hourly_costs = system_power.copy().drop(columns=['load_zone','system_power_MW'])
 
     # if the hedge cost was set as the default value, remove the hedge cost
-    if hourly_costs['hedge_contract_cost_per_MWh'].mean() == 0.0000001:
+    if hourly_costs['hedge_contract_cost_per_MWh'].mean() == 0.001:
         hourly_costs['hedge_contract_cost'] = 0
 
     hourly_costs = hourly_costs.drop(columns=['hedge_contract_cost_per_MWh'])
@@ -1199,11 +1199,12 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
 
     summary[f'Portfolio Cost per MWh ({base_year}$)'] = cost_table.loc[cost_table['Cost Category'] == 'Total', f'Cost Per MWh ({base_year}$)'].item()
 
-    if sensitivity_table == None:
-        pass
-    else:
+    # if no sensitivity table was created, skip this
+    try:
         for year in list(sensitivity_table['Weather Year']):
             summary[f'Sensitivity Performance Year {year}'] = sensitivity_table.loc[sensitivity_table['Weather Year'] == year, 'Time-Coincident %'].item()
+    except AttributeError:
+        pass
 
     #Portfolio Mix
     portfolio_summary = portfolio[['MW','Status','Technology']].groupby(['Status','Technology']).sum().reset_index()
@@ -1280,11 +1281,11 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
         # for each generator
         for gen in list(built_gens['generation_project']):
             # get the built MW capacity
-            built_capacity = built_gens.loc[built_gens['generation_project'] == gen, 'GenCapacity'].item()
+            built_capacity = float(built_gens.loc[built_gens['generation_project'] == gen, 'GenCapacity'].item())
             try:
                 # if the generator is represented in the SAM weather data, calculate the new dispatch profile
                 vcf = vcf_for_year[gen]
-                generation[gen] = built_capacity * vcf * generation_projects_info.loc[generation_projects_info['GENERATION_PROJECT'] == gen, 'solar_age_degredation'].item()
+                generation[gen] = built_capacity * vcf * float(generation_projects_info.loc[generation_projects_info['GENERATION_PROJECT'] == gen, 'solar_age_degredation'].item())
             except KeyError:
                 # otherwise, if the generator had a manually-inputted capacity factor, get the dispatch profile from the model outputs
                 generation[gen] = dispatch.copy().loc[dispatch['generation_project'] == gen,['DispatchGen_MW','ExcessGen_MW','CurtailGen_MW']].reset_index(drop=True).sum(axis=1)

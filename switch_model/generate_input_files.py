@@ -20,11 +20,11 @@ import PySAM.Pvwattsv7 as pv
 import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
-def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
+def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, excessgen_limit):
     xl_gen_validated = xl_gen.copy()
     
     # add a column for ppa penalty
-    xl_gen_validated['ppa_penalty'] = 0
+    xl_gen_validated['gen_excessgen_limit'] = '.'
 
     # remove any generation projects that are not variable or baseload
     gens_to_check = xl_gen_validated.copy().loc[(xl_gen_validated['gen_is_variable'] == 1) | (xl_gen_validated['gen_is_baseload'] == 1),:]
@@ -33,28 +33,38 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
     
     # for each generator
     for gen in gens_to_check:
-        ppa_price = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].values[0]
-        node = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
-        nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
-        profile = df_vcf.copy()[[gen]].reset_index(drop=True)
+        # check if the generator has a predetermined build capacity
+        predetermined_cap = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_predetermined_cap'].values[0]
+        max_cap = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_capacity_limit_mw'].values[0]
+        # if the generator already is capped at a predetermined build limit, don't set a limit
+        if predetermined_cap == '.':
+            set_limit = True
+        elif max_cap == '.':
+            set_limit = True
+        elif predetermined_cap < max_cap:
+            set_limit = True
+        elif predetermined_cap == max_cap:
+            set_limt = False
 
+        if set_limit == True:
+            ppa_price = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].values[0]
+            node = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
+            nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
+            profile = df_vcf.copy()[[gen]].reset_index(drop=True)
 
-        # calculate PPA cost
-        mean_ppa_cost = (profile[gen] * ppa_price).sum() / profile[gen].sum()
+            # calculate PPA cost
+            mean_ppa_cost = (profile[gen] * ppa_price).sum() / profile[gen].sum()
 
-        # caclulate nodal revenue
-        mean_nodal_revenue = (profile[gen] * nodal_price[node]).sum() / profile[gen].sum()
+            # caclulate nodal revenue
+            mean_nodal_revenue = (profile[gen] * nodal_price[node]).sum() / profile[gen].sum()
 
-        # if the mean nodal revenue is greater than the mean PPA cost
-        if mean_nodal_revenue >= mean_ppa_cost:
-            # calculate a penalty value that makes the mean PPA value higher than nodal revenue by $0.01 per MWh
-            ppa_penalty = round(mean_nodal_revenue - mean_ppa_cost + 0.01, 3)
-            print(f'WARNING: {gen} nodal revenue greater than PPA cost')
-            print('This may lead to over-procurement of this resource')
-            print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MWh')
-            print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MWh')
-            print(f'Adding ${ppa_penalty} penalty to PPA cost')
-            xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_penalty'] = ppa_penalty
+            # if the mean nodal revenue is greater than the mean PPA cost
+            if mean_nodal_revenue >= mean_ppa_cost:
+                print(f'WARNING: {gen} nodal revenue greater than PPA cost')
+                print('This may lead to over-procurement of this resource')
+                print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MWh')
+                print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MWh')
+                xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_excessgen_limit'] = excessgen_limit
 
     return xl_gen_validated
 
@@ -164,7 +174,7 @@ def generate_inputs(model_workspace):
     xl_storage['gen_is_storage'] = 1
     xl_storage['gen_is_variable'] = 0
     xl_storage['gen_is_baseload'] = 0
-    xl_storage['solar_age_degredation'] = 1
+    xl_storage['solar_age_degredation'] = '.'
 
     # concat xl_gen and xl_storage, and fill missing values with '.'
     xl_gen = pd.concat([xl_gen,xl_storage], sort=False, ignore_index=True).fillna('.')
@@ -366,8 +376,12 @@ def generate_inputs(model_workspace):
 
         df_vcf = df_vcf.reset_index()
 
+        #TODO: Update excessgen limit to read from an input
+        # setting limit to 5% for testing 10/26/2021
+        excessgen_limit = 0.05
+
         # validate cost inputs
-        set_gens = validate_cost_inputs(set_gens, df_vcf, xl_nodal_prices)
+        set_gens = validate_cost_inputs(set_gens, df_vcf, xl_nodal_prices, excessgen_limit)
                     
         #iterate for each scenario and save outputs to csv files
         for scenario in set_scenario_list:
@@ -532,7 +546,7 @@ def generate_inputs(model_workspace):
                         'baseload_gen_scheduled_outage_rate',	
                         'gen_forced_outage_rate',
                         'variable_gen_curtailment_limit',
-                        'ppa_penalty']
+                        'gen_excessgen_limit']
 
             generation_projects_info = set_gens[[col for col in set_gens.columns if col in gpi_columns]]
 
@@ -544,11 +558,6 @@ def generate_inputs(model_workspace):
 
             if 'select_variants' not in option_list:
                 generation_projects_info = generation_projects_info.drop(columns=['gen_variant_group'])
-
-            # save the information about the PPA penalty and overbuild risk as an output file
-            overbuild_risk = generation_projects_info.copy()[['GENERATION_PROJECT',	'gen_pricing_node','ppa_energy_cost','ppa_penalty']]
-            overbuild_risk.to_csv(output_dir / 'overbuild_projects.csv', index=False)
-            generation_projects_info = generation_projects_info.drop(columns=['ppa_penalty'])
 
             generation_projects_info.to_csv(input_dir / 'generation_projects_info.csv', index=False)
 

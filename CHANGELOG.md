@@ -1,4 +1,20 @@
 -------------------------------------------------------------------------------
+Branch limit_excessgen
+-------------------------------------------------------------------------------
+
+Add excess pnode revenue back into the objective function, but define a constraint for what % of total generation from at risk generators can come from excess gen
+
+Steps:
+ - Add `ExcessGenPnodeRevenueInTP` to the objective function
+ - Add parameter `gen_excessgen_limit` that is added to each generation project if identified as an overbuild risk in generate_input_files.py, only if there is not a predetermined build amount
+ - Add constraint `Enforce_Overbuild_Limit` that requires the annual total excess gen to be less than the `gen_excessgen_limit` * Annual total generation
+
+Change the default hedge contract cost to 0.001
+Exclude hedge market revenue from Objective function
+Test run with no hedge costs
+
+
+-------------------------------------------------------------------------------
 Commmit 2021.11.02 (Version 0.12.1)
 -------------------------------------------------------------------------------
 Fixes bugs that raise errors if the optional storage module is not used

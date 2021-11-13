@@ -70,7 +70,7 @@ def define_components(mod):
     mod.hedge_contract_cost = Param(
         mod.ZONE_TIMEPOINTS,
         within=Reals,
-        default=0.0000001)
+        default=0.001)
 
     mod.hedge_settlement_node = Param(
         mod.LOAD_ZONES,
