@@ -257,23 +257,6 @@ def define_components(mod):
             mod.STORAGE_GEN_TPS,
             within=NonNegativeReals)
 
-    # Variables and constraints to prevent simultaneous charging and discharging
-
-    mod.ChargeBinary = Var(
-        mod.STORAGE_GEN_TPS,
-        within=Binary)
-
-    # forces ChargeBinary to be 1 when ChargeStorage > 0, using a "Big M" of 2000
-    # the world's largest battery is currently 1.2GW
-    mod.One_When_Charging = Constraint(
-        mod.STORAGE_GEN_TPS,
-        rule=lambda m,g,t: m.ChargeStorage[g,t] <= m.ChargeBinary[g,t] * 2000)
-
-    mod.Prevent_Simultaneous_Charge_Discharge = Constraint(
-        mod.STORAGE_GEN_TPS,
-        rule=lambda m,g,t: m.DischargeStorage[g,t] <= (1 - m.ChargeBinary[g,t]) * 2000)
-
-
     mod.Enforce_Storage_Discharge_Upper_Limit = Constraint(
         mod.STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
@@ -283,6 +266,10 @@ def define_components(mod):
         mod.STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
             m.ChargeStorage[g,t] <= m.GenCapacityInTP[g, t] * m.storage_charge_to_discharge_ratio[g]))
+    
+    mod.Limit_Storage_Simultaneous_Charge_Discharge = Constraint(
+        mod.STORAGE_GEN_TPS,
+        rule=lambda m, g, t: m.ChargeStorage[g,t] + m.DischargeStorage[g, t] <= m.GenCapacityInTP[g, t])
 
     # Summarize storage charging for the energy balance equations
     mod.ZoneTotalStorageDischarge = Expression(
@@ -307,8 +294,7 @@ def define_components(mod):
     # from renewable sources only, not system power.
     mod.Zonal_Charge_Storage_Upper_Limit = Constraint(
         mod.ZONE_TIMEPOINTS,
-        rule = lambda m, z, t: m.ZoneTotalStorageCharge[z,t] <= m.ZoneTotalGeneratorDispatch[z,t] 
-    )
+        rule = lambda m, z, t: m.ZoneTotalStorageCharge[z,t] <= m.ZoneTotalGeneratorDispatch[z,t])
 
 
     # HYBRID STORAGE CHARGING 

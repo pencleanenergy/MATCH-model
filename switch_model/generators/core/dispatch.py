@@ -359,18 +359,19 @@ def define_components(mod):
     # For generators that have a net negative cost, add a constraint on the amount of excess generation
     # so that they are not overbuilt
 
-    mod.gen_excessgen_limit = Param(
-        mod.VARIABLE_GENS,
+    mod.excessgen_penalty = Param(
         within=NonNegativeReals,
-        default=float("inf"))
+        default=0)
 
-    mod.Enforce_Overbuild_Limit = Constraint(
-        mod.VARIABLE_GENS, mod.PERIODS,
-        rule=lambda m, g, p: 
-        Constraint.Skip if m.gen_excessgen_limit[g] == float("inf") # no value specified
-        else
-        (m.AnnualExcessGen[g,p] <= m.gen_excessgen_limit[g] * m.AnnualTotalGen[g,p])
-    )
+    if mod.options.goal_type == "hourly":
+
+        # set the penalty equal to $10 for now
+        mod.ExcessGenPenaltyInTP = Expression(
+            mod.TIMEPOINTS,
+            rule=lambda m, t: sum(m.ZoneTotalExcessGen[z,t] * (10) for z in m.LOAD_ZONES),
+            doc="Summarize costs for the objective function")
+        mod.Cost_Components_Per_TP.append('ExcessGenPenaltyInTP')
+    
 
 def load_inputs(mod, switch_data, inputs_dir):
     """
@@ -414,6 +415,11 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'rec_value.csv'),
         select=('period','rec_resale_value'),
         param=[mod.rec_resale_value])
+
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'excessgen_penalty.csv'),
+        autoselect=True,
+        param=[mod.excessgen_penalty])
 
 
 def post_solve(instance, outdir):
