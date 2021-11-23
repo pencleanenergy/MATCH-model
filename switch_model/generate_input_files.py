@@ -20,11 +20,11 @@ import PySAM.Pvwattsv7 as pv
 import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
-def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
+def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, excessgen_limit):
     xl_gen_validated = xl_gen.copy()
     
     # add a column for ppa penalty
-    xl_gen_validated['ppa_penalty'] = 0
+    xl_gen_validated['gen_excessgen_limit'] = '.'
 
     # remove any generation projects that are not variable or baseload
     gens_to_check = xl_gen_validated.copy().loc[(xl_gen_validated['gen_is_variable'] == 1) | (xl_gen_validated['gen_is_baseload'] == 1),:]
@@ -33,28 +33,53 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices):
     
     # for each generator
     for gen in gens_to_check:
-        ppa_price = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].values[0]
-        node = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
-        nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
-        profile = df_vcf.copy()[[gen]].reset_index(drop=True)
+        # check if the generator has a predetermined build capacity
+        predetermined_cap = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_predetermined_cap'].values[0]
+        max_cap = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_capacity_limit_mw'].values[0]
+        # if the generator already is capped at a predetermined build limit, don't set a limit
+        if predetermined_cap == '.':
+            set_limit = True
+        elif max_cap == '.':
+            set_limit = True
+        elif predetermined_cap < max_cap:
+            set_limit = True
+        elif predetermined_cap == max_cap:
+            set_limit = False
 
+        if set_limit == True:
+            ppa_price = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].values[0]
+            node = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_pricing_node'].values[0]
+            nodal_price = nodal_prices.copy()[[node]].reset_index(drop=True)
+            profile = df_vcf.copy()[[gen]].reset_index(drop=True)
 
-        # calculate PPA cost
-        mean_ppa_cost = (profile[gen] * ppa_price).sum() / profile[gen].sum()
+            # calculate PPA cost
+            mean_ppa_cost = (profile[gen] * ppa_price).sum() / profile[gen].sum()
 
-        # caclulate nodal revenue
-        mean_nodal_revenue = (profile[gen] * nodal_price[node]).sum() / profile[gen].sum()
+            # check if the generator is a hybrid, and if so, add the capacity cost of the battery portion
+            # removed this for now because it doesn't take into account revenue from storage arbitrage
+            """
+            if xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_is_hybrid'].values[0] == 1:
+                storage_portion = xl_gen_validated.loc[xl_gen_validated['storage_hybrid_generation_project'] == gen, 'GENERATION_PROJECT'].values[0]
+                storage_price = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == storage_portion, 'ppa_capacity_cost'].values[0]
+                storage_min_cap = xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == storage_portion, 'storage_hybrid_min_capacity_ratio'].values[0]
 
-        # if the mean nodal revenue is greater than the mean PPA cost
-        if mean_nodal_revenue >= mean_ppa_cost:
-            # calculate a penalty value that makes the mean PPA value higher than nodal revenue by $0.01 per MWh
-            ppa_penalty = round(mean_nodal_revenue - mean_ppa_cost + 0.01, 3)
-            print(f'WARNING: {gen} nodal revenue greater than PPA cost')
-            print('This may lead to over-procurement of this resource')
-            print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MWh')
-            print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MWh')
-            print(f'Adding ${ppa_penalty} penalty to PPA cost')
-            xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_penalty'] = ppa_penalty
+                storage_cost = storage_price * storage_min_cap
+
+                mean_storage_cost = storage_cost / profile[gen].sum()
+
+                mean_ppa_cost = mean_ppa_cost + mean_storage_cost
+            """
+
+            # caclulate nodal revenue
+            mean_nodal_revenue = (profile[gen] * nodal_price[node]).sum() / profile[gen].sum()
+
+            # if the mean nodal revenue is greater than the mean PPA cost
+            if mean_nodal_revenue >= mean_ppa_cost:
+                print(f'WARNING: {gen} nodal revenue greater than PPA cost')
+                print('This may lead to over-procurement of this resource')
+                print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MWh')
+                print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MWh')
+                xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_excessgen_limit'] = excessgen_limit
 
     return xl_gen_validated
 
@@ -136,7 +161,7 @@ def generate_inputs(model_workspace):
 
     #financials
     df_financials = pd.DataFrame(
-        data={'base_financial_year': [int(xl_general.loc[xl_general['Parameter'] == 'Base Financial Year', 'Input'].item())],
+        data={'base_financial_year': [int(xl_general.loc[xl_general['Parameter'] == 'Current Year', 'Input'].item())],
             'discount_rate': [xl_general.loc[xl_general['Parameter'] == 'Discount Rate', 'Input'].item()]}
     )
 
@@ -154,8 +179,7 @@ def generate_inputs(model_workspace):
 
     # calculate the solar degredation discount for the model year, assuming a 0.5% annual degredation rate
     xl_gen['solar_age_degredation'] = 1
-    xl_gen.loc[xl_gen['solar_cod_year'] != '.', 'solar_age_degredation'] = (1-0.005)**(year - xl_gen.loc[xl_gen['solar_cod_year'] != '.', 'solar_cod_year'])
-    xl_gen = xl_gen.drop(columns=['solar_cod_year'])
+    xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'solar_age_degredation'] = (1-0.005)**(year - xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'solar_cod_year'])
 
 
     xl_storage = pd.read_excel(io=model_inputs, sheet_name='storage', skiprows=3).dropna(axis=1, how='all')
@@ -164,7 +188,7 @@ def generate_inputs(model_workspace):
     xl_storage['gen_is_storage'] = 1
     xl_storage['gen_is_variable'] = 0
     xl_storage['gen_is_baseload'] = 0
-    xl_storage['solar_age_degredation'] = 1
+    xl_storage['solar_age_degredation'] = '.'
 
     # concat xl_gen and xl_storage, and fill missing values with '.'
     xl_gen = pd.concat([xl_gen,xl_storage], sort=False, ignore_index=True).fillna('.')
@@ -174,7 +198,7 @@ def generate_inputs(model_workspace):
         raise ValueError("Nodal prices contain a missing value. Please check")
 
     # ra_requirement.csv
-    xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements').dropna(axis=1, how='all')
+    xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements', skiprows=1).dropna(axis=1, how='all')
     ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] != 'flexible_RA']
     ra_requirement['period'] = year
     ra_requirement = ra_requirement[['period','tp_month','ra_requirement','ra_cost','ra_resell_value']]
@@ -202,10 +226,7 @@ def generate_inputs(model_workspace):
         else:
             pass
 
-    xl_hedge_contract_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_contract_cost', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
-
-    xl_hedge_settlement_node = pd.read_excel(io=model_inputs, sheet_name='hedge_settlement_node', index_col='load_zone').dropna(axis=1, how='all')
-    hedge_node_list = list(xl_hedge_settlement_node.hedge_settlement_node.unique())
+    xl_hedge_premium_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_premium_cost',skiprows=1).dropna(axis=1, how='all')
 
     # midterm_reliability_requirement.csv
     xl_midterm_ra = pd.read_excel(io=model_inputs, sheet_name='midterm_RA_requirement').dropna(axis=1, how='all')
@@ -366,8 +387,12 @@ def generate_inputs(model_workspace):
 
         df_vcf = df_vcf.reset_index()
 
+        #TODO: Update excessgen limit to read from an input
+        # setting limit to 5% for testing 10/26/2021
+        excessgen_limit = 0.05
+
         # validate cost inputs
-        set_gens = validate_cost_inputs(set_gens, df_vcf, xl_nodal_prices)
+        set_gens = validate_cost_inputs(set_gens, df_vcf, xl_nodal_prices, excessgen_limit)
                     
         #iterate for each scenario and save outputs to csv files
         for scenario in set_scenario_list:
@@ -383,10 +408,13 @@ def generate_inputs(model_workspace):
                                     'switch_model.financials',
                                     'switch_model.balancing.load_zones',
                                     'switch_model.generators.core.build',
-                                    'switch_model.generators.core.dispatch',
-                                    'switch_model.balancing.renewable_target']
+                                    'switch_model.generators.core.dispatch']
             module_list = list(xl_scenarios.loc[(xl_scenarios['Input Type'] == 'Optional Modules') & (xl_scenarios[scenario] == 1), 'Parameter'])
-            module_list = required_module_list + module_list + ['switch_model.reporting.generate_report']
+            if 'switch_model.generators.extensions.storage' in module_list:
+                module_list.remove('switch_model.generators.extensions.storage')
+                module_list = required_module_list + ['switch_model.generators.extensions.storage','switch_model.balancing.renewable_target'] + module_list + ['switch_model.reporting.generate_report']
+            else:
+                module_list = required_module_list + ['switch_model.balancing.renewable_target'] + module_list + ['switch_model.reporting.generate_report']
             modules = open(input_dir / 'modules.txt', 'w+')
             for module in module_list:
                 modules.write(module)
@@ -403,6 +431,11 @@ def generate_inputs(model_workspace):
                                                   'renewable_target':[renewable_target_value],
                                                   'excess_generation_limit':[excess_generation_limit]})
             renewable_target.to_csv(input_dir / 'renewable_target.csv', index=False)
+
+            # excessgen_penalty.csv
+            excessgen_penalty = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excessgen_penalty'), scenario].item()
+            excessgen_penalty = pd.DataFrame(data={'excessgen_penalty':[excessgen_penalty]})
+            excessgen_penalty.to_csv(input_dir / 'excessgen_penalty.csv', index=False)
 
             # summary_report.ipynb
             shutil.copy('reporting/summary_report.ipynb', input_dir)
@@ -531,8 +564,7 @@ def generate_inputs(model_workspace):
                         'solar_age_degredation',		
                         'baseload_gen_scheduled_outage_rate',	
                         'gen_forced_outage_rate',
-                        'variable_gen_curtailment_limit',
-                        'ppa_penalty']
+                        'variable_gen_curtailment_limit']
 
             generation_projects_info = set_gens[[col for col in set_gens.columns if col in gpi_columns]]
 
@@ -544,11 +576,6 @@ def generate_inputs(model_workspace):
 
             if 'select_variants' not in option_list:
                 generation_projects_info = generation_projects_info.drop(columns=['gen_variant_group'])
-
-            # save the information about the PPA penalty and overbuild risk as an output file
-            overbuild_risk = generation_projects_info.copy()[['GENERATION_PROJECT',	'gen_pricing_node','ppa_energy_cost','ppa_penalty']]
-            overbuild_risk.to_csv(output_dir / 'overbuild_projects.csv', index=False)
-            generation_projects_info = generation_projects_info.drop(columns=['ppa_penalty'])
 
             generation_projects_info.to_csv(input_dir / 'generation_projects_info.csv', index=False)
 
@@ -588,20 +615,15 @@ def generate_inputs(model_workspace):
                 xl_midterm_ra.to_csv(input_dir / 'midterm_reliability_requirement.csv', index=False)
             
             # hedge_cost.csv
-            hedge_cost = xl_hedge_contract_cost.reset_index(drop=True)
-            hedge_cost['timepoint'] = hedge_cost.index + 1
-            hedge_cost = hedge_cost.melt(id_vars=['timepoint'], var_name='load_zone', value_name='hedge_contract_cost')
-            hedge_cost = hedge_cost[['load_zone','timepoint','hedge_contract_cost']]
+            hedge_cost = xl_hedge_premium_cost
             # round all prices to the nearest whole cent
-            hedge_cost['hedge_contract_cost'] = hedge_cost['hedge_contract_cost'].round(2)
-            hedge_cost.to_csv(input_dir / 'hedge_contract_cost.csv', index=False)
+            hedge_cost['hedge_premium_cost'] = hedge_cost['hedge_premium_cost'].round(2)
+            hedge_cost.to_csv(input_dir / 'hedge_premium_cost.csv', index=False)
 
-            # hedge_settlement_node.csv
-            xl_hedge_settlement_node.to_csv(input_dir / 'hedge_settlement_node.csv')
 
             # pricing_nodes.csv
             node_list = list(set_gens.gen_pricing_node.unique())
-            node_list = node_list + load_list + hedge_node_list
+            node_list = node_list + load_list
             node_list = [i for i in node_list if i not in ['.',np.nan]]
             node_list = list(set(node_list)) # only keep unique values
             pricing_nodes = pd.DataFrame(data={'PRICING_NODE':node_list})
@@ -609,6 +631,7 @@ def generate_inputs(model_workspace):
 
             #nodal_prices.csv
             nodal_prices = xl_nodal_prices.reset_index(drop=True)
+            nodal_prices = nodal_prices.astype(float)
             nodal_prices = nodal_prices[node_list]
             nodal_prices['timepoint'] = nodal_prices.index + 1
             nodal_prices = nodal_prices.melt(id_vars=['timepoint'], var_name='pricing_node', value_name='nodal_price')
@@ -616,8 +639,6 @@ def generate_inputs(model_workspace):
             # round all nodal prices to the nearest whole cent
             nodal_prices['nodal_price'] = nodal_prices['nodal_price'].round(2)
             # add system power / demand node prices to df
-            # NOTE: removed because this was adding duplicate values if one of the generators is located at the load node
-            #nodal_prices = pd.concat([nodal_prices, hedge_cost.rename(columns={'load_zone':'pricing_node','hedge_cost':'nodal_price'})], axis=0, ignore_index=True)
             nodal_prices.to_csv(input_dir / 'nodal_prices.csv', index=False)
 
             #variable_capacity_factors.csv

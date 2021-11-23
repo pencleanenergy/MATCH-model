@@ -289,6 +289,10 @@ def define_components(mod):
         mod.NON_STORAGE_GEN_TPS,
         rule=lambda m, g, t: (m.DispatchGen[g, t] + m.ExcessGen[g,t]) if m.gen_is_variable[g] else m.DispatchGen[g, t])
 
+    mod.AnnualTotalGen = Expression(
+        mod.NON_STORAGE_GENS, mod.PERIODS,
+        rule=lambda m, g, p: sum(m.TotalGen[g,t] for t in m.TIMEPOINTS if m.tp_period[t] == p))
+
     mod.ZoneTotalExcessGen = Expression(
         mod.ZONE_TIMEPOINTS,
         rule=lambda m, z, t: \
@@ -305,8 +309,7 @@ def define_components(mod):
         return excess
     mod.AnnualExcessGen = Expression(
         mod.VARIABLE_GENS, mod.PERIODS, #for each variable generator in each period
-        rule=Calculate_Annual_Excess_Energy_By_Gen #calculate a value according to the rule 
-    )
+        rule=Calculate_Annual_Excess_Energy_By_Gen) #calculate a value according to the rule 
 
     mod.ExcessGenPPACostInTP = Expression(
         mod.TIMEPOINTS,
@@ -351,6 +354,25 @@ def define_components(mod):
         mod.NON_STORAGE_GEN_TPS,
         rule=EnforceDispatchUpperLimit_rule)
 
+    # LIMIT EXCESSGEN FOR OVERBUILD GENERATORS
+    ##########################################
+    # For generators that have a net negative cost, add a constraint on the amount of excess generation
+    # so that they are not overbuilt
+
+    mod.excessgen_penalty = Param(
+        within=NonNegativeReals,
+        default=0)
+
+    if mod.options.goal_type == "hourly":
+
+        # set the penalty equal to $10 for now
+        mod.ExcessGenPenaltyInTP = Expression(
+            mod.TIMEPOINTS,
+            rule=lambda m, t: sum(m.ZoneTotalExcessGen[z,t] * (10) for z in m.LOAD_ZONES),
+            doc="Summarize costs for the objective function")
+        mod.Cost_Components_Per_TP.append('ExcessGenPenaltyInTP')
+    
+
 def load_inputs(mod, switch_data, inputs_dir):
     """
 
@@ -393,6 +415,11 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'rec_value.csv'),
         select=('period','rec_resale_value'),
         param=[mod.rec_resale_value])
+
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'excessgen_penalty.csv'),
+        autoselect=True,
+        param=[mod.excessgen_penalty])
 
 
 def post_solve(instance, outdir):

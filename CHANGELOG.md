@@ -1,4 +1,33 @@
 -------------------------------------------------------------------------------
+Commit 2021.11.22 (Version 0.13.0)
+-------------------------------------------------------------------------------
+
+## Fix generator overbuilding issue
+When a generator's annual Pnode revenue > annual PPA cost, the generator has a negative cost, so the model wants to build as much of it as possible, even if the generation is not needed to meet load. To stop this before, we penalized excessgen by not allowing generators to earn pnode revenue on excessgen. This represented an extreme penalty as if all excess generation were curtailed, but the offtaker still had to pay the ppa cost. However, this solution sometimes caused other unexpected incentives in the model. To fix this, I added excess pnode revenue back into the objective function, but also added a flat penalty value `excessgen_penalty` to all excess generation. This seems to perform well, since it doesn't create an incentive to dispatch one generator over another. However, the modeling results could depend on the penalty value chosen, so users should test the sensitivity of their model to this parameter.
+
+## Optimization of hedge costs
+Optimizing both the contract cost and market revenues from hedging can lead to incentives for the model to utilize system power in unexpected ways. Because system power is designed to fill any gaps when generation doesn't match load, we don't necessarily want to optimize it.
+
+If we entirely exclude hedge costs (meaning that system power has zero cost), the actual time-coincident renewable percent ends up being lower than the percentage when running the sensitivity reports with the greedy charging algorithm. Thus, we want system power to have some cost associated with it. 
+
+This new implementation allows the user to specify a hedge contract cost premium value that gets assigned to all MWh of system power. This input only covers the cost premium paid to hedge, rather than the full contract cost of the hedge. For example, if the hedge were to be settled at a node with an average nodal price of $40/MWh, and we assume a 10% contract premium to hedge, then the user would enter ($40/MWh * 10%) = $4/MWh as the hedge premium.
+
+## Bug Fixes
+Changed the order of the modules added to `modules.txt` in `generate_input_files.py`: the storage module should come before the renewable target module to prevent errors when using an annual renewable target
+
+For annual renewable targets, require that the total amount of generation == load, rather than being greater or equal to. We don't want any excess volume if pursuing this goal
+
+Updated the pre-check for overbuild risk to take into account the capacity cost of the storage portion of hybrid projects. 
+
+## Summary Report
+In the summary report, updated the formatting of the generator cost table to show total congestion cost rather than pnode revenue and delivery cost separately
+Fixed an issue where hedge market costs were reported as a "fixed" cost
+
+## Removes binary constraint on simultaneous storage charging and discharging
+In a previous commit, I had added a binary constraint to the storage module to prevent storage from charging and discharging at the same time, which happened primarily when LMPs were negative, since there was an incentive to "waste" power while keeping the load balance constraint balanced. We don't want storage charging and discharging simultaneously, because this is generally not physically realistic. Howerever, because this binary constraint was indexed by generator and timepoint, it was very computatationally expensive. Thus, I have removed this binary constraint. However, to keep charging behavior still realistic, I implemented a new constraint `Limit_Storage_Simultaneous_Charge_Discharge`, which requires that the sum of charging and discharging from each battery in each hour be less than or equal to the total power capacity of the battery. Because we are modeling at an hourly resolution, this allows the battery to theoretically charge for half an hour and discharge for half an hour - to us it still looks like simulataneous charge and discharge, but it is limited in a way that is still physically possible if we were to look at charging behavior at a subhourly resolution. 
+
+
+-------------------------------------------------------------------------------
 Commmit 2021.11.02 (Version 0.12.1)
 -------------------------------------------------------------------------------
 Fixes bugs that raise errors if the optional storage module is not used

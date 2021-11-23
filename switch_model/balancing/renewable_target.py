@@ -32,7 +32,7 @@ def define_components(mod):
     renewable_target[p] is a parameter that describes how much of load (as a percentage) must be served by GENERATION_PROJECTS.
     This assumes that all GENERATION_PROJECTS are renewable generators that count toward the goal.
 
-    hedge_contract_cost[z,t] is a parameter that describes the cost of system/grid power ($/MWh) for each timepoint in each load zone. 
+    hedge_premium_cost[z] is a parameter that describes the cost of system/grid power ($/MWh) for each timepoint in each load zone. 
     This could describe wholesale prices of electricity at the demand node or your utility rate structure 
     (whereever you will be buying energy from if not procuring from one of the GENERATION_PROJECTS)
 
@@ -67,15 +67,10 @@ def define_components(mod):
 
     # if no hedge cost is specified, set the cost to a very small amount
     # This discourages use of system power 
-    mod.hedge_contract_cost = Param(
-        mod.ZONE_TIMEPOINTS,
-        within=Reals,
-        default=0.0000001)
-
-    mod.hedge_settlement_node = Param(
+    mod.hedge_premium_cost = Param(
         mod.LOAD_ZONES,
-        within=Any
-    )
+        within=Reals,
+        default=1.00)
     
     #implementation of system power as a decision variable
     mod.SystemPower = Var(
@@ -86,11 +81,11 @@ def define_components(mod):
     mod.Zone_Power_Injections.append('SystemPower')
 
     #calculate the cost of using system power for the objective function
-    mod.HedgeContractCostInTP = Expression(
+    mod.HedgePremiumCostInTP = Expression(
         mod.TIMEPOINTS,
-        rule=lambda m, t: sum(m.SystemPower[z, t] * m.hedge_contract_cost[z, t] for z in m.LOAD_ZONES) 
+        rule=lambda m, t: sum(m.SystemPower[z, t] * m.hedge_premium_cost[z] for z in m.LOAD_ZONES) 
     )
-    mod.Cost_Components_Per_TP.append('HedgeContractCostInTP')
+    mod.Cost_Components_Per_TP.append('HedgePremiumCostInTP')
     
 
     if mod.options.goal_type == "hourly":
@@ -129,7 +124,7 @@ def define_components(mod):
                 mod.PERIODS,
                 rule=lambda m, p: sum(m.ZoneTotalStorageCharge[z,t] - m.ZoneTotalStorageDischarge[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
             )
-        except:
+        except ValueError:
             mod.total_storage_losses_in_period = Param(
                 mod.PERIODS,
                 default=0
@@ -137,7 +132,7 @@ def define_components(mod):
 
         mod.Enforce_Annual_Renewable_Target = Constraint(
             mod.PERIODS, # for each zone in each period
-            rule=lambda m, p: (m.total_generation_in_period[p] - m.total_storage_losses_in_period[p] >= m.renewable_target[p] * m.total_demand_in_period[p]))
+            rule=lambda m, p: (m.total_generation_in_period[p] - m.total_storage_losses_in_period[p] == m.renewable_target[p] * m.total_demand_in_period[p]))
 
     #Enforce limit on excess generation
     if mod.options.excess_generation_limit_type == "annual":
@@ -160,8 +155,8 @@ def load_inputs(mod, switch_data, inputs_dir):
     renewable_target.csv
         period, renewable_target
 
-    hedge_contract_cost.csv
-        load_zone, timepoint, hedge_contract_cost
+    hedge_premium_cost.csv
+        load_zone, timepoint, hedge_premium_cost
 
     """
 
@@ -173,14 +168,10 @@ def load_inputs(mod, switch_data, inputs_dir):
 
     #load inputs which include costs for each timepoint in each zone
     switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'hedge_contract_cost.csv'),
-        select=('load_zone','timepoint','hedge_contract_cost'),
-        param=[mod.hedge_contract_cost])
+        filename=os.path.join(inputs_dir, 'hedge_premium_cost.csv'),
+        select=('load_zone','hedge_premium_cost'),
+        param=[mod.hedge_premium_cost])
 
-    switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'hedge_settlement_node.csv'),
-        select=('load_zone','hedge_settlement_node'),
-        param=[mod.hedge_settlement_node])
 
 
 def post_solve(instance, outdir):
@@ -194,11 +185,9 @@ def post_solve(instance, outdir):
         "timestamp": instance.tp_timestamp[t],
         "load_zone": z,
         "system_power_MW":value(instance.SystemPower[z,t]),
-        "hedge_contract_cost_per_MWh":instance.hedge_contract_cost[z,t],
-        "hedge_contract_cost": value(
-            instance.SystemPower[z,t] * instance.hedge_contract_cost[z,t] *
+        "hedge_premium_cost": value(
+            instance.SystemPower[z,t] * instance.hedge_premium_cost[z] *
             instance.tp_weight_in_year[t]),
-        "hedge_market_revenue": value(instance.SystemPower[z,t] * - instance.nodal_price[instance.hedge_settlement_node[z],t]),
     } for z, t in instance.ZONE_TIMEPOINTS ]
     SP_df = pd.DataFrame(system_power_dat)
     SP_df.set_index(["load_zone","timestamp"], inplace=True)

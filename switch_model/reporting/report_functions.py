@@ -276,6 +276,10 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap, genera
         hybrid_gens = list(generation_projects_info.loc[((generation_projects_info['gen_is_hybrid'] == 1) & (generation_projects_info['gen_is_storage'] == 0)), 'GENERATION_PROJECT'])
         gen_costs.loc[gen_costs['generation_project'].isin(hybrid_gens), 'Generation_MW'] = gen_costs.loc[gen_costs['generation_project'].isin(hybrid_gens), 'Generation_MW'] - gen_costs['ChargeMW']
 
+    # calculate congestion cost from pnode revenue and delivery cost
+    gen_costs['Congestion Cost'] = gen_costs['Delivery_Cost'] + gen_costs['Pnode_Revenue']
+    #gen_costs = gen_costs.drop(columns=['Delivery_Cost','Pnode_Revenue'])
+
     # rename columns
     gen_costs = gen_costs.rename(columns={'Contract_Cost':'Energy Contract Cost',
                                           'PPA_Capacity_Cost':'Capacity Contract Cost',
@@ -287,6 +291,7 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap, genera
     # calculate per MWh costs
     gen_costs['Energy Contract Cost'] = gen_costs['Energy Contract Cost'] / gen_costs['Generation MWh']
     gen_costs['Capacity Contract Cost'] = gen_costs['Capacity Contract Cost'] / gen_costs['Generation MWh']
+    gen_costs['Congestion Cost'] = gen_costs['Congestion Cost'] / gen_costs['Generation MWh']
     gen_costs['Pnode Revenue'] = gen_costs['Pnode Revenue'] / gen_costs['Generation MWh']
     gen_costs['Delivery Cost'] = gen_costs['Delivery Cost'] / gen_costs['Generation MWh']
     try:
@@ -301,7 +306,7 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap, genera
     gen_costs = gen_costs.round(decimals=2)
 
     # only keep relevant columns
-    relevant_columns = ['generation_project', 'Energy Contract Cost', 'Capacity Contract Cost', 'Pnode Revenue', 'Delivery Cost','Storage Arbitrage Revenue','Total Cost']
+    relevant_columns = ['generation_project', 'Energy Contract Cost', 'Capacity Contract Cost', 'Pnode Revenue', 'Delivery Cost','Congestion Cost','Storage Arbitrage Revenue','Total Cost']
     gen_costs = gen_costs[[col for col in gen_costs.columns if col in relevant_columns]]
 
     return gen_costs
@@ -414,10 +419,9 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
     hourly_costs = system_power.copy().drop(columns=['load_zone','system_power_MW'])
 
     # if the hedge cost was set as the default value, remove the hedge cost
-    if hourly_costs['hedge_contract_cost_per_MWh'].mean() == 0.0000001:
-        hourly_costs['hedge_contract_cost'] = 0
-
-    hourly_costs = hourly_costs.drop(columns=['hedge_contract_cost_per_MWh'])
+    mean_hedge_cost = system_power['hedge_premium_cost'].sum() / system_power['system_power_MW'].sum()
+    if mean_hedge_cost == 1.00:
+        hourly_costs['hedge_premium_cost'] = 0
 
     # add generator timepoint costs next
     hourly_costs = hourly_costs.merge(costs_by_tp, how='left', on='timestamp')
@@ -479,8 +483,7 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
 
     # rename columns
     hourly_costs = hourly_costs.rename(columns={'DLAP Cost':'DLAP Load Cost',
-                                                'hedge_contract_cost': 'Hedge Contract Cost',
-                                                'hedge_market_revenue':'Hedge Market Revenue',
+                                                'hedge_premium_cost': 'Hedge Premium Cost',
                                                 'Capacity Contract Cost':'Storage Capacity PPA Cost',
                                                 'ra_open_position_cost':'RA Open Position Cost',
                                                 'StorageDispatchPnodeCost':'Storage Wholesale Price Arbitrage',
@@ -574,7 +577,7 @@ def construct_cost_and_resale_tables(hourly_costs, load_balance, financials, yea
     resale_table[f'Cost Per MWh ({base_year}$)'] = resale_table[f'Cost Per MWh ({year}$)'] * to_pv
 
     # create a column that categorizes all of the costs
-    cost_category_dict = {'Hedge Contract Cost':'Contract', 
+    cost_category_dict = {'Hedge Premium Cost':'Contract', 
                         'Dispatched Generation PPA Cost':'Contract',
                         'Excess Generation PPA Cost':'Contract',
                         'Dispatched Generation Pnode Revenue':'Wholesale Market',
@@ -721,6 +724,8 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
     if storage_exists:
         dispatch_fig.add_scatter(x=storage_charge.timestamp, y=storage_charge['Load+Charge'], text=storage_charge['ChargeMW'], line=dict(color='green', width=3), name='Storage Charge')
     dispatch_fig.add_scatter(x=load_line.timestamp, y=load_line.zone_demand_mw, line=dict(color='black', width=3), name='Demand')
+
+    dispatch_fig.update_traces(line_shape='hv')
 
     dispatch_fig.update_xaxes(
         rangeslider_visible=True,
@@ -915,6 +920,8 @@ def build_month_hour_dispatch_plot(dispatch_by_tech, load_line, storage_charge, 
     mh_fig.add_scatter(x=mh_load_line.loc[mh_load_line['Month'] == 11, 'Hour'], y=mh_load_line.loc[mh_load_line['Month'] == 11, 'zone_demand_mw'], line=dict(color='black', width=4), row=1, col=5, name='Demand', showlegend=False)
     mh_fig.add_scatter(x=mh_load_line.loc[mh_load_line['Month'] == 12, 'Hour'], y=mh_load_line.loc[mh_load_line['Month'] == 12, 'zone_demand_mw'], line=dict(color='black', width=4), row=1, col=6, name='Demand', showlegend=False)
 
+    mh_fig.update_traces(line_shape='hv')
+
     month_names = ['July', 'August', 'September', 'October', 'November', 'December','January', 'February', 'March', 'April', 'May', 'June']
     for i, a in enumerate(mh_fig.layout.annotations):
         a.text = month_names[i]
@@ -960,7 +967,7 @@ def build_open_position_plot(load_balance, storage_exists):
                             labels={'variable':'Position','value':'MW'}).update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
     mh_mismatch_fig.update_xaxes(dtick=3)
     mh_mismatch_fig.for_each_annotation(lambda a: a.update(text=a.text.replace("Month=", "")))
-    mh_mismatch_fig.update_traces(fill='tozeroy')
+    mh_mismatch_fig.update_traces(fill='tozeroy', line_shape='hv')
 
     return mh_mismatch_fig
 
@@ -1156,6 +1163,7 @@ def calculate_load_shadow_price(results, timestamps, year):
     dual_plot.for_each_annotation(lambda a: a.update(text=a.text.replace("Month=", "")))
     dual_plot.update_xaxes(dtick=3)
     dual_plot.update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
+    dual_plot.update_traces(line_shape='hv')
 
     return dual_plot
 
@@ -1199,11 +1207,12 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
 
     summary[f'Portfolio Cost per MWh ({base_year}$)'] = cost_table.loc[cost_table['Cost Category'] == 'Total', f'Cost Per MWh ({base_year}$)'].item()
 
-    if sensitivity_table == None:
-        pass
-    else:
+    # if no sensitivity table was created, skip this
+    try:
         for year in list(sensitivity_table['Weather Year']):
             summary[f'Sensitivity Performance Year {year}'] = sensitivity_table.loc[sensitivity_table['Weather Year'] == year, 'Time-Coincident %'].item()
+    except (AttributeError, TypeError) as e:
+        pass
 
     #Portfolio Mix
     portfolio_summary = portfolio[['MW','Status','Technology']].groupby(['Status','Technology']).sum().reset_index()
@@ -1280,11 +1289,11 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
         # for each generator
         for gen in list(built_gens['generation_project']):
             # get the built MW capacity
-            built_capacity = built_gens.loc[built_gens['generation_project'] == gen, 'GenCapacity'].item()
+            built_capacity = float(built_gens.loc[built_gens['generation_project'] == gen, 'GenCapacity'].item())
             try:
                 # if the generator is represented in the SAM weather data, calculate the new dispatch profile
                 vcf = vcf_for_year[gen]
-                generation[gen] = built_capacity * vcf * generation_projects_info.loc[generation_projects_info['GENERATION_PROJECT'] == gen, 'solar_age_degredation'].item()
+                generation[gen] = built_capacity * vcf * float(generation_projects_info.loc[generation_projects_info['GENERATION_PROJECT'] == gen, 'solar_age_degredation'].item())
             except KeyError:
                 # otherwise, if the generator had a manually-inputted capacity factor, get the dispatch profile from the model outputs
                 generation[gen] = dispatch.copy().loc[dispatch['generation_project'] == gen,['DispatchGen_MW','ExcessGen_MW','CurtailGen_MW']].reset_index(drop=True).sum(axis=1)
