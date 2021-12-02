@@ -1,4 +1,16 @@
 -------------------------------------------------------------------------------
+Commit 2021.12.02 (Version 0.14.0)
+-------------------------------------------------------------------------------
+
+Adds a new parameter `cod_year` for all GENERATION_PROJECTS, to indicate the year that the project began commercial operation. This is used to distinguish between existing projects and new build projects for the impact metrics.
+
+The new cod_year parameter is also now being used to calculate solar age degredation directly in the model rather than calculating it as a separate model input value.
+
+Adds new reporting on the grid impact of the portfolio. These two metrics focus on how the wind and solar resources chosen affect the net demand profile, which impacts the net system peak, and the daily maximum 3 hour ramp, both of which reflect the "duck curve."
+
+This also updates how grid emissions are calculated: instead of requiring the user to input grid average and marginal emissions data, these are now loaded and calculated from NREL's Cambium dataset. Currently the user will have to manually download the Cambium datasets, and the model is only configured to work for California. In the future, I plan to add the ability for the user to specify the grid regions associated with each load zone, and hopefully automatically download the data from an API. 
+
+-------------------------------------------------------------------------------
 Commit 2021.11.22 (Version 0.13.0)
 -------------------------------------------------------------------------------
 
@@ -17,7 +29,6 @@ Changed the order of the modules added to `modules.txt` in `generate_input_files
 
 For annual renewable targets, require that the total amount of generation == load, rather than being greater or equal to. We don't want any excess volume if pursuing this goal
 
-Updated the pre-check for overbuild risk to take into account the capacity cost of the storage portion of hybrid projects. 
 
 ## Summary Report
 In the summary report, updated the formatting of the generator cost table to show total congestion cost rather than pnode revenue and delivery cost separately

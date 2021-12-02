@@ -179,7 +179,7 @@ def generate_inputs(model_workspace):
 
     # calculate the solar degredation discount for the model year, assuming a 0.5% annual degredation rate
     xl_gen['solar_age_degredation'] = 1
-    xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'solar_age_degredation'] = (1-0.005)**(year - xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'solar_cod_year'])
+    xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'solar_age_degredation'] = (1-0.005)**(year - xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'cod_year'])
 
 
     xl_storage = pd.read_excel(io=model_inputs, sheet_name='storage', skiprows=3).dropna(axis=1, how='all')
@@ -548,6 +548,7 @@ def generate_inputs(model_workspace):
                         'gen_variant_group',
                         'gen_capacity_limit_mw',
                         'gen_min_build_capacity',
+                        'cod_year',
                         'ppa_energy_cost',
                         'ppa_capacity_cost',
                         'gen_pricing_node',

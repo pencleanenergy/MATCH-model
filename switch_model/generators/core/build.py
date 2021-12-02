@@ -240,8 +240,7 @@ def define_components(mod):
         initialize=mod.GENERATION_PROJECTS,
         filter=lambda m, g: m.gen_is_baseload[g])
 
-    mod.solar_age_degredation = Param(mod.NON_STORAGE_GENS,
-        within=PercentFraction, default=1)
+    mod.cod_year = Param(mod.GENERATION_PROJECTS, within=PositiveIntegers)
     mod.baseload_gen_scheduled_outage_rate = Param(mod.BASELOAD_GENS,
         within=PercentFraction, default=0)
     mod.gen_forced_outage_rate = Param(mod.NON_STORAGE_GENS,
@@ -531,7 +530,7 @@ def load_inputs(mod, switch_data, inputs_dir):
                mod.gen_capacity_limit_mw, mod.gen_min_build_capacity, mod.ppa_energy_cost, 
                mod.ppa_capacity_cost, mod.gen_pricing_node, mod.gen_energy_source,
                mod.baseload_gen_scheduled_outage_rate, mod.gen_forced_outage_rate, mod.variable_gen_curtailment_limit, 
-               mod.gen_unit_size, mod.solar_age_degredation])
+               mod.gen_unit_size, mod.cod_year])
     # Construct sets of unit-size-specified
     # projects. These sets include projects for which these parameters have
     # a value
