@@ -123,7 +123,7 @@ def build_hourly_emissions_heatmap(total_emissions, emissions_unit):
     Creates a heatmap showing delivered emissions intensity of each hour of the year
 
     Inputs:
-        total: a dataframe containing hourly emissions data, calculated from calculate_emissions()
+        total_emissions: a dataframe containing hourly emissions data, calculated from calculate_emissions()
         emissions_unit: a string identifying the unit of measure used for emission rates, loaded from inputs/ghg_emissions_unit.txt
     Returns:
         emissions_heatmap: a plotly image plot representing a heatmap of hourly emissions intensity of delivered electricity
@@ -1430,8 +1430,10 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
                 balance.loc[t,'grid_power'] = 0 if ((total_generation_t + balance.loc[t,'hybrid_discharge'] + balance.loc[t,'discharge']) >= load_t) else (load_t - (total_generation_t + balance.loc[t,'hybrid_discharge'] + balance.loc[t,'discharge']))
         else:
             for t in range(len(balance)):
+                generation_t = balance.loc[t,'generation']
+                load_t = balance.loc[t,'load']
                 # fill any remaining open position with grid power
-                balance.loc[t,'grid_power'] = 0 if ((total_generation_t) >= load_t) else (load_t - (total_generation_t))
+                balance.loc[t,'grid_power'] = 0 if ((generation_t) >= load_t) else (load_t - (generation_t))
 
         tc_performance = (1 - (balance.grid_power.sum() / balance.load.sum())) * 100
                 
@@ -1552,7 +1554,7 @@ def calculate_emissions(dispatch, generation_projects_info, system_power, load_b
 
     # merge the generator and grid emission data together and calculate a total emission rate
     total_emissions = generator_emissions[['Generator Emission Rate']].merge(grid_emissions[['co2_rate_residual','Grid Emission Rate']], how='left', left_index=True, right_index=True)
-    total_emissions['Total Emission Rate'] = total_emissions.sum(axis=1)
+    total_emissions['Total Emission Rate'] = total_emissions['Generator Emission Rate'] + total_emissions['Grid Emission Rate']
     # get load timeseries data and merge into total emissions data
     load = load_balance.copy()[['timestamp','zone_demand_mw']].set_index('timestamp')
     load.index = pd.to_datetime(load.index)

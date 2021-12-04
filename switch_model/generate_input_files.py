@@ -136,6 +136,10 @@ def generate_inputs(model_workspace):
 
     scenario_list = list(xl_scenarios.iloc[:, 3:].columns)
 
+    # determine if there are any modules that are not used by any scenarios
+    modules_used = xl_scenarios[xl_scenarios['Input Type'] == 'Optional Modules'].drop(columns=['Input Type','Description']).set_index('Parameter').sum(axis=1)
+    unused_modules = list(modules_used[modules_used == 0].index)
+
     for scenario in scenario_list:
         try:
             os.mkdir(model_workspace / f'inputs/{scenario}')
@@ -181,39 +185,47 @@ def generate_inputs(model_workspace):
     xl_gen['solar_age_degredation'] = 1
     xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'solar_age_degredation'] = (1-0.005)**(year - xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'cod_year'])
 
+    if 'switch_model.generators.extensions.storage' in unused_modules:
+        pass
+    else:
+        xl_storage = pd.read_excel(io=model_inputs, sheet_name='storage', skiprows=3).dropna(axis=1, how='all')
+        # add defaults for storage
+        xl_storage['gen_tech'] = 'Storage'
+        xl_storage['gen_is_storage'] = 1
+        xl_storage['gen_is_variable'] = 0
+        xl_storage['gen_is_baseload'] = 0
+        xl_storage['solar_age_degredation'] = '.'
 
-    xl_storage = pd.read_excel(io=model_inputs, sheet_name='storage', skiprows=3).dropna(axis=1, how='all')
-    # add defaults for storage
-    xl_storage['gen_tech'] = 'Storage'
-    xl_storage['gen_is_storage'] = 1
-    xl_storage['gen_is_variable'] = 0
-    xl_storage['gen_is_baseload'] = 0
-    xl_storage['solar_age_degredation'] = '.'
-
-    # concat xl_gen and xl_storage, and fill missing values with '.'
-    xl_gen = pd.concat([xl_gen,xl_storage], sort=False, ignore_index=True).fillna('.')
+        # concat xl_gen and xl_storage, and fill missing values with '.'
+        xl_gen = pd.concat([xl_gen,xl_storage], sort=False, ignore_index=True).fillna('.')
 
     xl_load = pd.read_excel(io=model_inputs, sheet_name='load', header=[1,2], index_col=0).dropna(axis=1, how='all')
     if xl_load.isnull().values.any():
         raise ValueError("Nodal prices contain a missing value. Please check")
 
-    # ra_requirement.csv
-    xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements', skiprows=1).dropna(axis=1, how='all')
-    ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] != 'flexible_RA']
-    ra_requirement['period'] = year
-    ra_requirement = ra_requirement[['period','tp_month','ra_requirement','ra_cost','ra_resell_value']]
+    if 'switch_model.generators.extensions.resource_adequacy' in unused_modules:
+        pass
+    else:
+        # ra_requirement.csv
+        xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements', skiprows=1).dropna(axis=1, how='all')
+        ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] != 'flexible_RA']
+        ra_requirement['period'] = year
+        ra_requirement = ra_requirement[['period','tp_month','ra_requirement','ra_cost','ra_resell_value']]
 
-    # flexible_ra_requirement.csv
-    flexible_ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] == 'flexible_RA']
-    flexible_ra_requirement['period'] = year
-    flexible_ra_requirement = flexible_ra_requirement.drop(columns=['RA_RESOURCE'])
-    flexible_ra_requirement = flexible_ra_requirement.rename(columns={'ra_requirement':'flexible_ra_requirement','ra_cost':'flexible_ra_cost', 'ra_resell_value':'flexible_ra_resell_value'})
-    flexible_ra_requirement = flexible_ra_requirement[['period','tp_month','flexible_ra_requirement','flexible_ra_cost','flexible_ra_resell_value']]
+        # flexible_ra_requirement.csv
+        flexible_ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] == 'flexible_RA']
+        flexible_ra_requirement['period'] = year
+        flexible_ra_requirement = flexible_ra_requirement.drop(columns=['RA_RESOURCE'])
+        flexible_ra_requirement = flexible_ra_requirement.rename(columns={'ra_requirement':'flexible_ra_requirement','ra_cost':'flexible_ra_cost', 'ra_resell_value':'flexible_ra_resell_value'})
+        flexible_ra_requirement = flexible_ra_requirement[['period','tp_month','flexible_ra_requirement','flexible_ra_cost','flexible_ra_resell_value']]
 
-    # ra_capacity_value.csv
-    ra_capacity_value = pd.read_excel(io=model_inputs, sheet_name='RA_capacity_value').dropna(axis=1, how='all')
-    ra_capacity_value['period'] = year
-    ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','elcc','ra_production_factor']]
+        # ra_capacity_value.csv
+        ra_capacity_value = pd.read_excel(io=model_inputs, sheet_name='RA_capacity_value').dropna(axis=1, how='all')
+        ra_capacity_value['period'] = year
+        ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','elcc','ra_production_factor']]
+
+         # midterm_reliability_requirement.csv
+        xl_midterm_ra = pd.read_excel(io=model_inputs, sheet_name='midterm_RA_requirement').dropna(axis=1, how='all')
 
     xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
     if xl_nodal_prices.isnull().values.any():
@@ -228,20 +240,11 @@ def generate_inputs(model_workspace):
 
     xl_hedge_premium_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_premium_cost',skiprows=1).dropna(axis=1, how='all')
 
-    # midterm_reliability_requirement.csv
-    xl_midterm_ra = pd.read_excel(io=model_inputs, sheet_name='midterm_RA_requirement').dropna(axis=1, how='all')
-
     # rec_value.csv
     xl_rec_value = pd.read_excel(io=model_inputs, sheet_name='rec_value').dropna(axis=1, how='all')
 
     # fixed_costs.csv
     xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs').dropna(axis=1, how='all')
-
-    # grid_emissions.csv
-    xl_grid_emissions = pd.read_excel(io=model_inputs, sheet_name='grid_emissions', skiprows=2).dropna(axis=1, how='all')
-
-    # marginal_emissions.csv
-    xl_marginal_emissions = pd.read_excel(io=model_inputs, sheet_name='marginal_emissions', skiprows=2).dropna(axis=1, how='all')
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
     vcf_sets = xl_scenarios[xl_scenarios['Input Type'].isin(['Resource year(s)', 'Generator Set'])].drop(columns=['Input Type','Parameter','Description']).transpose().reset_index()
@@ -509,18 +512,6 @@ def generate_inputs(model_workspace):
             # fixed_costs.csv
             xl_fixed_costs.to_csv(input_dir / 'fixed_costs.csv', index=False)
 
-            # grid_emissions.csv
-            grid_emissions = xl_grid_emissions.reset_index(drop=True).drop(columns=['Datetime'])
-            grid_emissions['timepoint'] = grid_emissions.index + 1
-            grid_emissions = grid_emissions.melt(id_vars=['timepoint'], var_name='load_zone', value_name='grid_emission_factor')
-            grid_emissions = grid_emissions[['load_zone','timepoint','grid_emission_factor']]
-            grid_emissions.to_csv(input_dir / 'grid_emissions.csv', index=False)
-
-            # marginal_emissions.csv
-            marginal_emissions = xl_marginal_emissions.reset_index(drop=True).drop(columns=['Datetime'])
-            marginal_emissions['timepoint'] = marginal_emissions.index + 1
-            marginal_emissions.to_csv(input_dir / 'marginal_emissions.csv', index=False)
-
             # gen_build_years.csv
             gen_build_years = set_gens.copy()[['GENERATION_PROJECT']]
             gen_build_years['build_year'] = year
@@ -612,13 +603,16 @@ def generate_inputs(model_workspace):
                 ra_capacity_value_scenario = ra_capacity_value[ra_capacity_value['gen_energy_source'].isin(energy_source_list)]
                 ra_capacity_value_scenario.to_csv(input_dir / 'ra_capacity_value.csv', index=False)
 
-                # rec_value.csv
+                # midterm_reliability_requirement.csv
                 xl_midterm_ra.to_csv(input_dir / 'midterm_reliability_requirement.csv', index=False)
             
             # hedge_cost.csv
             hedge_cost = xl_hedge_premium_cost
             # round all prices to the nearest whole cent
-            hedge_cost['hedge_premium_cost'] = hedge_cost['hedge_premium_cost'].round(2)
+            try:
+                hedge_cost['hedge_premium_cost'] = hedge_cost['hedge_premium_cost'].round(2)
+            except TypeError:
+                pass
             hedge_cost.to_csv(input_dir / 'hedge_premium_cost.csv', index=False)
 
 
@@ -706,7 +700,7 @@ def simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, confi
 
         nsrdbfetcher = tools.FetchResourceFiles(
                         tech='solar',
-                        workers=1,  # thread workers if fetching multiple files
+                        workers=4,  # thread workers if fetching multiple files
                         nrel_api_key=nrel_api_key,
                         resource_type='psm3',
                         resource_year=str(year),
@@ -828,7 +822,7 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
         #specify wind data input
         wtkfetcher = tools.FetchResourceFiles(
                         tech='wind',
-                        workers=1,  # thread workers if fetching multiple files
+                        workers=4,  # thread workers if fetching multiple files
                         nrel_api_key=nrel_api_key,
                         nrel_api_email=nrel_api_email,
                         resource_year=str(year),
@@ -913,7 +907,7 @@ def simulate_csp_generation(nrel_api_key, nrel_api_email, resource_dict, config_
 
         nsrdbfetcher = tools.FetchResourceFiles(
                         tech='solar',
-                        workers=1,  # thread workers if fetching multiple files
+                        workers=4,  # thread workers if fetching multiple files
                         nrel_api_key=nrel_api_key,
                         resource_type='psm3',
                         resource_year=str(year),
