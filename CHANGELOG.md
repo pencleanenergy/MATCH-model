@@ -1,5 +1,16 @@
 -------------------------------------------------------------------------------
-Commit 2021.12.XX (Version 0.14.1)
+Commit 2021.12.08 (Version 0.14.2)
+-------------------------------------------------------------------------------
+Removes the reduced cost summaries from the summary report. After further discussion and testing of this output, it was determined that there are too many decision variables that will affect choice outcomes to accurately interpret reduced costs from the model. 
+
+To align with recent research, changes the solar decredation from compounding to linear (https://github.com/NREL/ssc/issues/503)
+
+Adds calculation of consequential emissions impacts to the summary report
+
+Reorganizes the summary report
+
+-------------------------------------------------------------------------------
+Commit 2021.12.03 (Version 0.14.1)
 -------------------------------------------------------------------------------
 
 Bug fixes for summary reports, input file generation

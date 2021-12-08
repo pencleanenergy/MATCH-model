@@ -129,7 +129,7 @@ def build_hourly_emissions_heatmap(total_emissions, emissions_unit):
         emissions_heatmap: a plotly image plot representing a heatmap of hourly emissions intensity of delivered electricity
     """
     # get the maximum grid emissions factor
-    grid_max_ef = total_emissions['co2_rate_residual'].max()
+    grid_max_ef = total_emissions['residual_ef'].max()
 
     # rearrange data in a grid
     emissions_heatmap_data = total_emissions.copy()[['Delivered Emission Factor']]
@@ -207,7 +207,7 @@ def generator_portfolio(gen_cap, gen_build_predetermined, generation_projects_in
 
     # add a column for operating status
     capacity['Build Status'] = 'Existing'
-    capacity.loc[capacity['cod_year'] >= year, 'Build Status'] = 'Future'
+    capacity.loc[capacity['cod_year'] > year, 'Build Status'] = 'Future'
     capacity = capacity.drop(columns=['cod_year'])
 
     # sort the values
@@ -1171,7 +1171,7 @@ def calculate_load_shadow_price(results, timestamps, year):
 
     return dual_plot
 
-def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, avoided_emissions, emissions, emissions_unit, base_year):
+def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, sr_impact, total_emissions, emissions_unit, base_year):
     """
     Creates a csv file output of key metrics from the summary report to compare with other scenarios.
 
@@ -1217,21 +1217,19 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
         pass
 
     #Portfolio Mix
-    portfolio_summary = portfolio[['MW','Status','Technology']].groupby(['Status','Technology']).sum().reset_index()
-    portfolio_summary['Description'] = portfolio_summary['Status'] + " " + portfolio_summary['Technology']
-    portfolio_summary = portfolio_summary.drop(columns=['Status','Technology'])
+    portfolio_summary = portfolio[['MW','Contract Status','Technology']].groupby(['Contract Status','Technology']).sum().reset_index()
+    portfolio_summary['Description'] = portfolio_summary['Contract Status'] + " " + portfolio_summary['Technology']
+    portfolio_summary = portfolio_summary.drop(columns=['Contract Status','Technology'])
     portfolio_summary = portfolio_summary.set_index('Description').transpose().reset_index(drop=True).add_prefix('MW Capacity from ')
     portfolio_summary['Total MW Capacity'] = portfolio_summary.sum(axis=1)
 
     summary = pd.concat([summary, portfolio_summary], axis=1)
 
-    summary[f'Annual Emissions Footprint ({emissions_unit.split("/")[0]})'] = emissions["Emission Rate"].sum().round(1)
-    summary[f'Delivered Emissions Factor ({emissions_unit})'] = emissions["Delivered Emission Factor"].mean().round(3)
+    summary[f'Annual Emissions Footprint ({emissions_unit.split("/")[0]})'] = total_emissions["Total Emission Rate"].sum().round(1)
+    summary[f'Delivered Emissions Factor ({emissions_unit})'] = total_emissions["Delivered Emission Factor"].mean().round(3)
 
-
-    summary['Low Case Avoided Emissions'] = avoided_emissions.low_case
-    summary['Mid Case Avoided Emissions'] = avoided_emissions.mid_case
-    summary['High Case Avoided Emissions'] = avoided_emissions.high_case
+    summary[f'Long-run Marginal Impact ({emissions_unit})'] = lr_impact.loc['Average','Total lbCO2/MWh']
+    summary[f'Short-run Marginal Impact ({emissions_unit})'] = sr_impact.loc['Average','Total lbCO2/MWh']
 
     summary = summary.transpose()
     summary.columns = [f'{scenario_name}']
@@ -1483,27 +1481,17 @@ def load_cambium_data(scenario, year):
 
     # if the year is an even number, load the file corresponding to the year
     if year % 2 == 0:
-        cambium = pd.read_csv(cambium_dir / f'StdScen20_{scenario}_hourly_CA_{year}.csv', skiprows=2)
-
-        cambium.index = pd.to_datetime(cambium.timestamp_local)
-
-        cambium = cambium.drop(columns=['timestamp','timestamp_local'])
-    # otherwise, average together the two years on either side of the year
+        year_to_load = year
     else:
-        firstyear = year - 1
-        secondyear = year + 1
+        year_to_load = year + 1
 
-        cambium_1 = pd.read_csv(cambium_dir / f'StdScen20_{scenario}_hourly_CA_{firstyear}.csv', skiprows=2)
-        cambium_2 = pd.read_csv(cambium_dir / f'StdScen20_{scenario}_hourly_CA_{secondyear}.csv', skiprows=2)
+    cambium = pd.read_csv(cambium_dir / f'StdScen21_{scenario}_hourly_CAMXc_{year_to_load}.csv', skiprows=4)
 
-        # get the datetimeindex
-        cambium_1
+    cambium = cambium.drop(columns=['timestamp','timestamp_local'])
 
-        cambium = (cambium_1.drop(columns=['timestamp','timestamp_local']) + cambium_2.drop(columns=['timestamp','timestamp_local'])) / 2
-
-        # create a datetime index, skipping leap days
-        dates = pd.date_range(start=f'01/01/{year} 00:00', end=f'12/31/{year} 23:00', freq='H', name='timestamp_local')
-        cambium.index = pd.DatetimeIndex(data=(t for t in dates if ((t.month != 2) | (t.day != 29))))
+    # create a datetime index, skipping leap days
+    dates = pd.date_range(start=f'01/01/{year} 00:00', end=f'12/31/{year} 23:00', freq='H', name='timestamp_local')
+    cambium.index = pd.DatetimeIndex(data=(t for t in dates if ((t.month != 2) | (t.day != 29))))
 
     cambium.index = cambium.index.rename('timestamp')
         
@@ -1511,20 +1499,41 @@ def load_cambium_data(scenario, year):
 
 def calculate_residual_mix(cambium, emissions_unit):
     """
-    Still need to convert units to lb/MWh
+    This function estimates an hourly residual mix emission rate using data from Cambium. 
+    Because Cambium does not report residual mix, we must estimate it as the emission factor of all fossil generation in the region
     """
-    resid_mix = cambium.copy()[['co2_rate_avg_gen','generation', 'coal_MWh','coal-ccs_MWh','o-g-s_MWh','gas-cc_MWh','gas-cc-ccs_MWh','gas-ct_MWh']]
+    if 'CO2e' in emissions_unit:
+        ghg = 'co2e'
+        ghg_unit = 'CO2e'
+    else:
+        ghg = 'co2'
+        ghg_unit = 'CO2'
 
-    resid_mix['residual_generation'] = resid_mix[['coal_MWh','coal-ccs_MWh','o-g-s_MWh','gas-cc_MWh','gas-cc-ccs_MWh','gas-ct_MWh']].sum(axis=1)
-    resid_mix['co2_rate_residual'] = (resid_mix.co2_rate_avg_gen * resid_mix.generation) / resid_mix.residual_generation
+    resid_mix = cambium.copy()[['enduse_load','busbar_load','distloss_rate_avg',f'aer_load_{ghg}_c','generation', 'coal_MWh','coal-ccs_MWh','o-g-s_MWh','gas-cc_MWh','gas-cc-ccs_MWh','gas-ct_MWh']]
 
-    resid_mix = resid_mix[['co2_rate_residual']]
+    # calculate total busbar emissions
+    resid_mix['total_emissions'] = resid_mix[f'aer_load_{ghg}_c'] * resid_mix['enduse_load'] * (1 - resid_mix['distloss_rate_avg'])
+
+    # calculate imports and exports
+    resid_mix['zero'] = 0
+    resid_mix['imports'] = resid_mix['busbar_load'] - resid_mix['generation']
+    resid_mix['imports'] = resid_mix[['imports','zero']].max(axis=1)
+    resid_mix['exports'] = resid_mix['generation'] - resid_mix['busbar_load']
+    resid_mix['exports'] = resid_mix[['exports','zero']].max(axis=1)
+
+    # calculate total residual generation, assuming exported energy comes from all generation equally
+    resid_mix['residual_generation'] = resid_mix[['coal_MWh','coal-ccs_MWh','o-g-s_MWh','gas-cc_MWh','gas-cc-ccs_MWh','gas-ct_MWh','imports']].sum(axis=1) - (resid_mix['exports'] * (resid_mix[['coal_MWh','coal-ccs_MWh','o-g-s_MWh','gas-cc_MWh','gas-cc-ccs_MWh','gas-ct_MWh']].sum(axis=1) / resid_mix['generation']))
+
+    # calculate the residual EF, adjusting for distribution losses
+    resid_mix['residual_ef'] = (resid_mix['total_emissions'] / resid_mix['residual_generation']) / (1 - resid_mix['distloss_rate_avg'])
+
+    resid_mix = resid_mix[['residual_ef']]
 
     # convert the unit from kgCO2/MWh to the appropriate unit
-    unit_conversion = {'lbCO2/MWh':2.20462,
-                        'kgCO2/MWh':1,
-                        'mTCO2/MWh':0.001,
-                        'tonCO2/MWh':(2.20462/2000)}
+    unit_conversion = {f'lb{ghg_unit}/MWh':2.20462,
+                        f'kg{ghg_unit}/MWh':1,
+                        f'mT{ghg_unit}/MWh':0.001,
+                        f'ton{ghg_unit}/MWh':(2.20462/2000)}
     resid_mix = resid_mix * unit_conversion[emissions_unit]
 
     return resid_mix
@@ -1550,10 +1559,10 @@ def calculate_emissions(dispatch, generation_projects_info, system_power, load_b
     # merge system power and residual mix data together
     grid_emissions = grid_emissions.merge(residual_mix, how='left', left_index=True, right_index=True)
     # calculate the grid emission rate
-    grid_emissions['Grid Emission Rate'] = grid_emissions['system_power_MW'] * grid_emissions['co2_rate_residual']
+    grid_emissions['Grid Emission Rate'] = grid_emissions['system_power_MW'] * grid_emissions['residual_ef']
 
     # merge the generator and grid emission data together and calculate a total emission rate
-    total_emissions = generator_emissions[['Generator Emission Rate']].merge(grid_emissions[['co2_rate_residual','Grid Emission Rate']], how='left', left_index=True, right_index=True)
+    total_emissions = generator_emissions[['Generator Emission Rate']].merge(grid_emissions[['residual_ef','Grid Emission Rate']], how='left', left_index=True, right_index=True)
     total_emissions['Total Emission Rate'] = total_emissions['Generator Emission Rate'] + total_emissions['Grid Emission Rate']
     # get load timeseries data and merge into total emissions data
     load = load_balance.copy()[['timestamp','zone_demand_mw']].set_index('timestamp')
@@ -1564,98 +1573,120 @@ def calculate_emissions(dispatch, generation_projects_info, system_power, load_b
 
     return total_emissions
 
-def load_cambium_lrmer(scenario, gea_region):
-    """
-    Loads long run marginal emission rate data from the excel workbooks in the cambium directory
-    """
 
-    cambium_dir = Path.cwd()/ '../../../nrel_cambium'
-    
-    lrmer = pd.read_excel(cambium_dir / f'Cambium_LRMER_StdScen20_{scenario}.xlsx', sheet_name=gea_region,  skiprows=8).drop(columns='Hour of the year')
-
-    multiplier = pd.read_excel(cambium_dir / f'Cambium_LRMER_StdScen20_{scenario}.xlsx', sheet_name='CO2 to CO2e Multipliers', skiprows=1, usecols='B:C')
-
-    multiplier = multiplier.loc[multiplier['GEA Region'] == gea_region, 'CO2 to CO2e Multiplier'].item()
-
-    return lrmer, multiplier
-
-def calculate_levelized_lrmer(gea_region, start_year, period, discount, unit, emissions_unit):
+def calculate_levelized_lrmer(start_year, period, discount, emissions_unit):
     """
     Calculates a levelized LRMER from the Cambium data
-    """
     
-    scenarios = ['LowRECost','MidCase','HighRECost']
+    Inputs:
+        start_year: the start year for the levelization (should be the model year)
+        period: the number of years of expected project lifetime
+        discount: the social discount rate as a percent fraction for discounting emission damages in future years
+        emissions_unit: the desired unit for the emissions factor
+    Returns:
+        levelized_lrmers: a dataframe containing levelized LRMER timeseries for each scenario
+    """
 
-    levelized_lrmer = pd.DataFrame()
+    if 'CO2e' in emissions_unit:
+        ghg = 'co2e'
+        ghg_unit = 'CO2e'
+    else:
+        ghg = 'co2'
+        ghg_unit = 'CO2'
 
+    # load data
+
+    scenarios = ['LowRECost','MidCase','MidCase95by2035','MidCase95by2050','HighRECost']
+
+    # create an empty df to hold all of the levelized lrmers
+    levelized_lrmers = pd.DataFrame()
+
+    # for each scenario, load all years and calculate a levelized value
     for scenario in scenarios:
 
-        lrmer, multiplier = load_cambium_lrmer(scenario, gea_region)
+        # create a blank dataframe to hold the lrmers for each year
+        lrmer_scenario = pd.DataFrame()
 
         # start a variable to track the discounted number of years for the levelization
         denominator = 0
 
-        # for each year in the lrmer columns calculate the weighting
-        for year in lrmer.columns:
-            if (start_year <= year-1) & (start_year + period > year-1):
-                odd_year_weight = 1/((1+discount)**(year-1-start_year))
-            else:
-                odd_year_weight = 0
-            if (start_year <= year) & (start_year + period > year):
-                even_year_weight = 1/((1+discount)**(year-start_year))
-            else:
-                even_year_weight = 0
-            total_weight = odd_year_weight + even_year_weight
-            
-            denominator += total_weight
+        for year in range(start_year, start_year + period + 1):
 
-            # multiply the single year lrmer data by the weighting factor
-            lrmer[year] = lrmer[year] * total_weight
+            # load the data and only keep the lrmer value
+            lrmer = load_cambium_data(scenario, year)[[f'lrmer_{ghg}_c','distloss_rate_marg']]
 
-        # calculate the levelized lrmer
-        levelized_lrmer_s = lrmer.sum(axis=1) / denominator
+            # convert to busbar values
+            lrmer[f'lrmer_{ghg}_c'] = lrmer[f'lrmer_{ghg}_c'] * (1 - lrmer['distloss_rate_marg'])
 
-        # adjust for the unit
-        if unit == 'CO2e':
-            levelized_lrmer_s = levelized_lrmer_s * multiplier
+            # calculate the weighting factor for the year
+            weight = 1/((1+discount)**(year-start_year))
+            denominator += weight
 
-        levelized_lrmer[scenario] = levelized_lrmer_s
+            # discount the data
+            lrmer[f'lrmer_{ghg}_c'] = lrmer[f'lrmer_{ghg}_c'] * weight
+
+            # reset the index
+            lrmer = lrmer.reset_index()
+
+            # add the data to the containing df
+            lrmer_scenario[year] = lrmer[f'lrmer_{ghg}_c']
+
+        # calculate the levelized lrmer for the scenario
+        levelized_lrmers[scenario] = lrmer_scenario.sum(axis=1) / denominator
 
     # convert the unit from kgCO2/MWh to the appropriate unit
-    unit_conversion = {'lbCO2/MWh':2.20462,
-                        'kgCO2/MWh':1,
-                        'mTCO2/MWh':0.001,
-                        'tonCO2/MWh':(2.20462/2000)}
-    levelized_lrmer = levelized_lrmer * unit_conversion[emissions_unit]
+    unit_conversion = {f'lb{ghg_unit}/MWh':2.20462,
+                        f'kg{ghg_unit}/MWh':1,
+                        f'mT{ghg_unit}/MWh':0.001,
+                        f'ton{ghg_unit}/MWh':(2.20462/2000)}
+    levelized_lrmers = levelized_lrmers * unit_conversion[emissions_unit]
 
     # create a datetime index, skipping leap days
     dates = pd.date_range(start=f'01/01/{start_year} 00:00', end=f'12/31/{start_year} 23:00', freq='H', name='timestamp_local')
-    levelized_lrmer.index = pd.DatetimeIndex(data=(t for t in dates if ((t.month != 2) | (t.day != 29))))
+    levelized_lrmers.index = pd.DatetimeIndex(data=(t for t in dates if ((t.month != 2) | (t.day != 29))))
 
-    return levelized_lrmer
+    return levelized_lrmers
 
 def load_srmer_data(model_year, emissions_unit):
     """
     Loads short run marginal emission data from Cambium
     """
 
+    if 'CO2e' in emissions_unit:
+        ghg = 'co2e'
+        ghg_unit = 'CO2e'
+    else:
+        ghg = 'co2'
+        ghg_unit = 'CO2'
+
+    # load data
+
+    scenarios = ['LowRECost','MidCase','MidCase95by2035','MidCase95by2050','HighRECost']
+
     srmer_data = pd.DataFrame()
 
-    scenarios = ['LowRECost','MidCase','HighRECost']
-
     for scenario in scenarios:
-        srmer_data[scenario] = load_cambium_data(scenario=scenario, year=model_year)[['co2_srmer_enduse']]
+        # load the data
+        temp = load_cambium_data(scenario=scenario, year=model_year)[[f'srmer_{ghg}_c','distloss_rate_marg']]
+        # convert to busbar values
+        temp[f'srmer_{ghg}_c'] = temp[f'srmer_{ghg}_c'] * (1 - temp['distloss_rate_marg'])
+
+        srmer_data[scenario] = temp[[f'srmer_{ghg}_c']]
 
     # convert the unit from kgCO2/MWh to the appropriate unit
-    unit_conversion = {'lbCO2/MWh':2.20462,
-                        'kgCO2/MWh':1,
-                        'mTCO2/MWh':0.001,
-                        'tonCO2/MWh':(2.20462/2000)}
+    unit_conversion = {f'lb{ghg_unit}/MWh':2.20462,
+                        f'kg{ghg_unit}/MWh':1,
+                        f'mT{ghg_unit}/MWh':0.001,
+                        f'ton{ghg_unit}/MWh':(2.20462/2000)}
     srmer_data = srmer_data * unit_conversion[emissions_unit]
+
+    # create a datetime index, skipping leap days
+    dates = pd.date_range(start=f'01/01/{model_year} 00:00', end=f'12/31/{model_year} 23:00', freq='H', name='timestamp_local')
+    srmer_data.index = pd.DatetimeIndex(data=(t for t in dates if ((t.month != 2) | (t.day != 29))))
 
     return srmer_data
 
-def determine_additional_dispatch(portfolio, dispatch, storage_dispatch):
+def determine_additional_dispatch(portfolio, dispatch, storage_dispatch, storage_exists):
     """
     Calculates the dispatch that was additional, using a load sign convention (generation is negative, demand is positive)
     """
@@ -1663,48 +1694,65 @@ def determine_additional_dispatch(portfolio, dispatch, storage_dispatch):
     # get a list of all of the additional gens
     additional_gens = list(portfolio.loc[portfolio['Build Status'] == 'Future','generation_project'])
 
-    # calculate dispatch from additional generators for long run marginal 
-    #filter the dispatch data to the additional gens
-    addl_dispatch = dispatch.copy()[dispatch['generation_project'].isin(additional_gens)]
+    if len(additional_gens) > 0:
 
-    # add information about the generator technology
-    addl_dispatch = addl_dispatch.merge(portfolio[['generation_project','Technology']], how='left', on='generation_project')
+        # calculate dispatch from additional generators for long run marginal 
+        #filter the dispatch data to the additional gens
+        addl_dispatch = dispatch.copy()[dispatch['generation_project'].isin(additional_gens)]
 
-    # add a column for variable resources
-    addl_dispatch['Type'] = 'Nonvariable_Dispatch'
-    addl_dispatch.loc[(addl_dispatch['Technology'].str.contains('Wind')) | (addl_dispatch['Technology'].str.contains('Solar')),'Type'] = 'Variable_Dispatch'
+        # add information about the generator technology
+        addl_dispatch = addl_dispatch.merge(portfolio[['generation_project','Technology']], how='left', on='generation_project')
 
-    # groupby timestamp and type (variable and nonvariable resources)
-    addl_dispatch = addl_dispatch.groupby(['Type','timestamp']).sum().reset_index()
+        # add a column for variable resources
+        addl_dispatch['Type'] = 'Nonvariable_Dispatch'
+        addl_dispatch.loc[(addl_dispatch['Technology'].str.contains('Wind')) | (addl_dispatch['Technology'].str.contains('Solar')),'Type'] = 'Variable_Dispatch'
 
-    # calculate total generation in each timestamp
-    addl_dispatch['Generator_Dispatch'] = -1 * (addl_dispatch['DispatchGen_MW'] + addl_dispatch['ExcessGen_MW'])
+        # groupby timestamp and type (variable and nonvariable resources)
+        addl_dispatch = addl_dispatch.groupby(['Type','timestamp']).sum().reset_index()
 
-    # pivot the data
-    addl_dispatch = addl_dispatch.pivot(index='timestamp', columns='Type', values='Generator_Dispatch')
+        # calculate total generation in each timestamp
+        addl_dispatch['Generator_Dispatch'] = -1 * (addl_dispatch['DispatchGen_MW'] + addl_dispatch['ExcessGen_MW'])
 
-    # calculate a total column and drop the nonvariable data
-    addl_dispatch['Total_Dispatch'] = addl_dispatch.sum(axis=1)
-    addl_dispatch = addl_dispatch[['Variable_Dispatch','Total_Dispatch']]
+        # pivot the data
+        addl_dispatch = addl_dispatch.pivot(index='timestamp', columns='Type', values='Generator_Dispatch')
 
-    # convert the index to a datetime
-    addl_dispatch.index = pd.to_datetime(addl_dispatch.index)
+        # calculate a total column and drop the nonvariable data
+        addl_dispatch['Total_Dispatch'] = addl_dispatch.sum(axis=1)
+        addl_dispatch = addl_dispatch[['Variable_Dispatch','Total_Dispatch']]
 
-    ### STORAGE ###
+        # convert the index to a datetime
+        addl_dispatch.index = pd.to_datetime(addl_dispatch.index)
 
-    # calculate dispatch from additional storage for short-run marginal
-    addl_storage_dispatch = storage_dispatch.copy()[storage_dispatch['generation_project'].isin(additional_gens)]
+        ### STORAGE ###
+        if storage_exists:
+            # calculate dispatch from additional storage for short-run marginal
+            addl_storage_dispatch = storage_dispatch.copy()[storage_dispatch['generation_project'].isin(additional_gens)]
 
-    # groupby timestamp
-    addl_storage_dispatch = addl_storage_dispatch.groupby('timestamp').sum()
+            # groupby timestamp
+            addl_storage_dispatch = addl_storage_dispatch.groupby('timestamp').sum()
 
-    # calculate total generation in each timestamp
-    addl_storage_dispatch['Storage_Dispatch'] = addl_storage_dispatch['ChargeMW'] - addl_storage_dispatch['DischargeMW']
+            # calculate total generation in each timestamp
+            addl_storage_dispatch['Storage_Dispatch'] = addl_storage_dispatch['ChargeMW'] - addl_storage_dispatch['DischargeMW']
 
-    addl_storage_dispatch = addl_storage_dispatch[['Storage_Dispatch']]
-    addl_storage_dispatch.index = pd.to_datetime(addl_storage_dispatch.index)
+            addl_storage_dispatch = addl_storage_dispatch[['Storage_Dispatch']]
+            addl_storage_dispatch.index = pd.to_datetime(addl_storage_dispatch.index)
 
-    return addl_dispatch, addl_storage_dispatch
+            return addl_dispatch, addl_storage_dispatch
+        
+        else:
+
+            addl_storage_dispatch = pd.DataFrame()
+
+            return addl_dispatch, addl_storage_dispatch
+
+    else:
+        addl_dispatch = pd.DataFrame()
+        addl_storage_dispatch = pd.DataFrame()
+
+        return addl_dispatch, addl_storage_dispatch
+
+
+
 
 def calculate_system_ramp(net_load, year, ramp_length):
 

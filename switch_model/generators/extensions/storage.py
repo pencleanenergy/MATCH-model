@@ -199,19 +199,6 @@ def define_components(mod):
         mod.STORAGE_GEN_BLD_YRS,
         within=NonNegativeReals)
 
-    # TODO: add a condition that hybrid storage and paired generator must be built together
-    #if generator is built, storage must be built
-
-    """
-    mod.Enforce_Hybrid_Build = Constraint(
-        mod.STORAGE_GEN_BLD_YRS,
-        rule=lambda m, g, y: 
-        Constraint.Skip if m.storage_hybrid_capacity_ratio[g] == float("inf") # no value specified
-        else
-        (m.BuildGen[g, y] == m.storage_hybrid_capacity_ratio[g] * m.BuildGen[m.storage_hybrid_generation_project[g], y])
-    )
-    """
-
     mod.Enforce_Minimum_Hybrid_Build = Constraint(
         mod.STORAGE_GEN_BLD_YRS,
         rule=lambda m, g, y: 

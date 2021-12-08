@@ -215,8 +215,8 @@ def define_components(mod):
                 (1 - m.baseload_gen_scheduled_outage_rate[g]))
         elif m.gen_tech[g] == 'Solar_PV':
             year = sum(m.period_start[p] for p in m.PERIODS_FOR_GEN[g])
-            # calculate solar degredation assuming 0.5% per year panel degredation
-            return (1 - m.gen_forced_outage_rate[g]) * (1-0.005)**(year - m.cod_year[g])
+            # calculate solar degredation assuming 0.5% per year linear panel degredation
+            return (1 - m.gen_forced_outage_rate[g]) * (1-(0.005*(year - m.cod_year[g])))
         else:
             return (1 - m.gen_forced_outage_rate[g])
     mod.gen_availability = Param(
@@ -367,7 +367,6 @@ def define_components(mod):
 
     if mod.options.goal_type == "hourly":
 
-        # set the penalty equal to $10 for now
         mod.ExcessGenPenaltyInTP = Expression(
             mod.TIMEPOINTS,
             rule=lambda m, t: sum(m.ZoneTotalExcessGen[z,t] * m.excessgen_penalty for z in m.LOAD_ZONES),
