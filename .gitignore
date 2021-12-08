@@ -8,6 +8,8 @@ MODEL_RUNS/*
 !MODEL_RUNS/generic_office_example/
 MODEL_RUNS/generic_office_example/*
 !MODEL_RUNS/generic_office_example/model_inputs.xlsx
+# include the nrel cambium data for lfs
+!MODEL_RUNS/nrel_cambium/
 
 *pyc
 **parse_table_datacmds.py
