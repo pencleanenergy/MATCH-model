@@ -1,4 +1,13 @@
 -------------------------------------------------------------------------------
+Commit 2021.12.09 (Version 0.14.3)
+-------------------------------------------------------------------------------
+Implements changes that reduce the number of decision variables in the model to improve model speed.
+
+The variable `ExcessGen` has been converted to an Expression instead of a decision variable since it can be calculated as DispatchUpperLimit - DispatchGen. Because ExcessGen was indexed by [g,t], this is expected to significantly reduce model solve time.
+
+In addition, the variable `CurtailGen` has been reindexed to reduce the number of generators to which it applies. Previously, CurtailGen was indexed to all variable generators, even if those generators did not allow curtailment. We have now indexed this variable to a new set of generators `CURTAILABLE_GENS` which are defined based on whether the parameter `variable_gen_curtailment_limit` > 0. This should also significantly reduce the number of decision variables.
+
+-------------------------------------------------------------------------------
 Commit 2021.12.08 (Version 0.14.2)
 -------------------------------------------------------------------------------
 Removes the reduced cost summaries from the summary report. After further discussion and testing of this output, it was determined that there are too many decision variables that will affect choice outcomes to accurately interpret reduced costs from the model. 
@@ -14,7 +23,6 @@ Commit 2021.12.03 (Version 0.14.1)
 -------------------------------------------------------------------------------
 
 Bug fixes for summary reports, input file generation
-
 
 -------------------------------------------------------------------------------
 Commit 2021.12.02 (Version 0.14.0)

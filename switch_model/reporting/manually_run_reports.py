@@ -11,7 +11,7 @@ import shutil
 import pandas as pd
 
 # modify the file path to the name of the scenario for which you want to re-run the reporting
-run_folder = '../../MODEL_RUNS/historical_validation'
+run_folder = '../../MODEL_RUNS/test_grid_impact'
 #run_folder = '../../../../Box/Supply/24x7 Time-Coincident Work/MODEL_RUNS/test'
 
 scenarios = os.listdir(f'{run_folder}/outputs')

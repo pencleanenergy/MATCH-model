@@ -471,6 +471,11 @@ def define_components(mod):
     #define the input parameter for the annual number of hours of curtialment/excess gen allowed
     mod.variable_gen_curtailment_limit = Param(mod.VARIABLE_GENS, within=NonNegativeReals, default=0)
 
+    # define a new set of curtailable gens that have a curtailment limit
+    mod.CURTAILABLE_GENS = Set(
+        initialize=mod.VARIABLE_GENS, 
+        filter=lambda m, g: m.variable_gen_curtailment_limit[g] > 0)
+
     # Derived annual costs
     mod.GenCapacityCost = Expression(
         mod.GENERATION_PROJECTS, mod.PERIODS,
