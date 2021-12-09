@@ -182,6 +182,13 @@ def define_components(mod):
             (g, tp)
                 for g in m.NON_STORAGE_GENS
                     for tp in m.TPS_FOR_GEN[g]))
+    mod.CURTAILABLE_GEN_TPS = Set(
+        dimen=2,
+        initialize=lambda m: (
+            (g, tp)
+                for g in m.CURTAILABLE_GENS
+                    for tp in m.TPS_FOR_GEN[g]))
+
 
 
     #TODO: Move pricing nodes to a different module
@@ -273,19 +280,51 @@ def define_components(mod):
     # ECONOMIC CURTAILMENT
     ######################
     mod.CurtailGen = Var(
-        mod.VARIABLE_GEN_TPS,
+        mod.CURTAILABLE_GEN_TPS,
         within=NonNegativeReals)
 
     #limit curtailment to below the cap
     mod.Maximum_Annual_Curtailment = Constraint(
-        mod.VARIABLE_GENS, mod.PERIODS,
+        mod.CURTAILABLE_GENS, mod.PERIODS,
         rule=lambda m, g, p: sum(m.CurtailGen[g,t] for t in m.TPS_IN_PERIOD[p]) <= (m.variable_gen_curtailment_limit[g] * m.GenCapacity[g, p]))
+
+    # DISPATCH UPPER LIMITS
+    #######################
+
+    def DispatchUpperLimit_expr(m, g, t):
+        if g in m.VARIABLE_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.variable_capacity_factor[g, t])
+        elif g in m.BASELOAD_GENS:
+            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
+                    m.baseload_capacity_factor[g, t])
+        else:
+            return m.GenCapacityInTP[g, t] * m.gen_availability[g]
+    mod.DispatchUpperLimit = Expression(
+        mod.NON_STORAGE_GEN_TPS,
+        rule=DispatchUpperLimit_expr)
+
+    def EnforceDispatchUpperLimit_rule(m,g,t):
+        if g in m.CURTAILABLE_GENS:
+            return (m.DispatchGen[g, t] + m.CurtailGen[g,t] <= m.DispatchUpperLimit[g, t]) 
+        elif g in m.BASELOAD_GENS:
+            return (m.DispatchGen[g, t] == m.DispatchUpperLimit[g, t]) 
+        else: 
+            return (m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t])
+    mod.Enforce_Dispatch_Upper_Limit = Constraint(
+        mod.NON_STORAGE_GEN_TPS,
+        rule=EnforceDispatchUpperLimit_rule)
 
     # EXCESS GENERATION
     ###################
-    mod.ExcessGen = Var(
+    def ExcessGen_rule(m,g,t):
+        if g in m.CURTAILABLE_GENS:
+            return m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] - m.CurtailGen[g,t]
+        else:
+            return m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t]
+    mod.ExcessGen = Expression(
         mod.VARIABLE_GEN_TPS,
-        within=NonNegativeReals)
+        rule=ExcessGen_rule)
 
     mod.TotalGen = Expression(
         mod.NON_STORAGE_GEN_TPS,
@@ -328,33 +367,6 @@ def define_components(mod):
 
         #add to objective function
         mod.Cost_Components_Per_Period.append('ExcessRECValue')
-
-    # DISPATCH UPPER LIMITS
-    #######################
-
-    def DispatchUpperLimit_expr(m, g, t):
-        if g in m.VARIABLE_GENS:
-            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
-                    m.variable_capacity_factor[g, t])
-        elif g in m.BASELOAD_GENS:
-            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
-                    m.baseload_capacity_factor[g, t])
-        else:
-            return m.GenCapacityInTP[g, t] * m.gen_availability[g]
-    mod.DispatchUpperLimit = Expression(
-        mod.NON_STORAGE_GEN_TPS,
-        rule=DispatchUpperLimit_expr)
-
-    def EnforceDispatchUpperLimit_rule(m,g,t):
-        if g in m.VARIABLE_GENS:
-            return (m.DispatchGen[g, t] + m.CurtailGen[g,t] + m.ExcessGen[g,t] == m.DispatchUpperLimit[g, t]) # define ExcessGen as a slack variable
-        elif g in m.BASELOAD_GENS:
-            return (m.DispatchGen[g, t] == m.DispatchUpperLimit[g, t]) 
-        else: 
-            return (m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t])
-    mod.Enforce_Dispatch_Upper_Limit = Constraint(
-        mod.NON_STORAGE_GEN_TPS,
-        rule=EnforceDispatchUpperLimit_rule)
 
     # LIMIT EXCESSGEN FOR OVERBUILD GENERATORS
     ##########################################
@@ -449,7 +461,7 @@ def post_solve(instance, outdir):
         "timestamp": instance.tp_timestamp[t],
         "DispatchGen_MW": value(instance.DispatchGen[g, t]),
         "ExcessGen_MW":value(instance.ExcessGen[g, t]) if instance.gen_is_variable[g] else 0,
-        "CurtailGen_MW":value(instance.CurtailGen[g, t]) if instance.gen_is_variable[g] else 0
+        "CurtailGen_MW":value(instance.CurtailGen[g, t]) if g in instance.CURTAILABLE_GENS else 0
     } for g, t in instance.NON_STORAGE_GEN_TPS]
     dispatch_full_df = pd.DataFrame(gen_data)
     dispatch_full_df.set_index(["generation_project", "timestamp"], inplace=True)
