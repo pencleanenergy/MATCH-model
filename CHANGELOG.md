@@ -1,4 +1,14 @@
 -------------------------------------------------------------------------------
+Commit 2021.12.15 (Version 0.14.4)
+-------------------------------------------------------------------------------
+Fixed bug where generator variant groups were being dropped from the inputs.
+
+Made updates to summary report including:
+ - Calculations of the cost of the net REC position have been updated 
+ - REC costs and excess RA resale have been added to the main cost table, and the resale table removed
+ - Updated the grid impact metrics to show impacts both with and without storage dispatch
+
+-------------------------------------------------------------------------------
 Commit 2021.12.09 (Version 0.14.3)
 -------------------------------------------------------------------------------
 Implements changes that reduce the number of decision variables in the model to improve model speed.

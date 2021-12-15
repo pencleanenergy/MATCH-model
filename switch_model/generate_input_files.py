@@ -452,7 +452,7 @@ def generate_inputs(model_workspace):
             df_timeseries.to_csv(input_dir / 'timeseries.csv', index=False)
 
             #get configuration options
-            option_list = list(xl_scenarios.loc[(xl_scenarios['Input Type'] == 'Options') & (xl_scenarios[scenario] == 1), 'Parameter'])
+            option_list = list(xl_scenarios.loc[(xl_scenarios['Input Type'] == 'Options') & (xl_scenarios[scenario] != 0), 'Parameter'])
 
             # scenarios.txt
             scenarios = open(model_workspace / 'scenarios.txt', 'a+')

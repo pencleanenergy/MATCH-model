@@ -396,7 +396,7 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
 
     return dispatch_mix
 
-def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage_dispatch, fixed_costs, rec_value, load_balance, storage_exists):
+def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage_dispatch, fixed_costs, storage_exists):
     """
     Calculates the cost of power for each hour of the year in real $
 
@@ -472,16 +472,6 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
     for val in fixed_cost_component['cost_name']:
         hourly_costs[val] = fixed_cost_component.loc[fixed_cost_component['cost_name'] == val, 'annual_cost'].item()
 
-    # calculate value of excess recs
-    excess_generation = load_balance.copy()[['timestamp', 'ZoneTotalExcessGen']]
-    excess_generation['Excess REC Value'] = excess_generation['ZoneTotalExcessGen'] * -rec_value
-
-    # merge the REC sale value
-    hourly_costs = hourly_costs.merge(excess_generation[['timestamp', 'Excess REC Value']], how='left', on='timestamp')
-
-    # calculate hedge market costs
-
-
     # parse dates
     hourly_costs = hourly_costs.set_index(pd.to_datetime(hourly_costs['timestamp'])).drop(columns=['timestamp'])
 
@@ -536,7 +526,7 @@ def build_hourly_cost_plot(hourly_costs, load_balance, year):
 
     return hourly_cost_plot
 
-def construct_cost_and_resale_tables(hourly_costs, load_balance, financials, year):
+def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year):
     """
     Constructs tables that break down costs by component
 
@@ -547,10 +537,30 @@ def construct_cost_and_resale_tables(hourly_costs, load_balance, financials, yea
         year: the model year, as an integer (YYYY)
     Returns:
         cost_table: a dataframe summarizing delivered costs by total and cost per MWh
-        resale_table: a dataframe summarizing the value of any sellable excess RA or RECs
     """
     # calculate total cost 
     cost_table = hourly_costs.sum(axis=0).reset_index().rename(columns={'index':'Cost Component',0:'Annual Real Cost'})
+
+    # Add REC Costs
+
+    # get rec cost and value
+    rec_resale_value = rec_value['rec_resale_value'].item()
+    rec_cost = rec_value['rec_cost'].item()
+
+    # calculate net rec balance
+    rec_open = load_balance.sum()['SystemPower']
+    rec_excess = load_balance.sum()['ZoneTotalExcessGen']
+    net_rec_position = rec_open - rec_excess
+
+    # calculate cost based on net rec position
+    if net_rec_position > 0:
+        net_rec_cost = net_rec_position * rec_cost
+        net_rec_resale = 0
+    else:
+        net_rec_cost = 0
+        net_rec_resale = net_rec_position * rec_resale_value
+
+    cost_table = cost_table.append(pd.DataFrame.from_dict(data={'Cost Component':['REC Net Position Cost','REC Net Position Resale'],'Annual Real Cost': [net_rec_cost,net_rec_resale]}), ignore_index=True)
 
     # calculate the total demand
     load = load_balance['zone_demand_mw'].sum()
@@ -558,27 +568,9 @@ def construct_cost_and_resale_tables(hourly_costs, load_balance, financials, yea
     # calculate the cost per MWh consumed
     cost_table['Cost Per MWh'] = cost_table['Annual Real Cost'] / load
 
-    # TODO: START HERE
-    # remove resale costs to a separate table
-    resale_components = ['Excess RA Value', 'Excess REC Value']
-    resale_table = cost_table.copy()[cost_table['Cost Component'].isin(resale_components)]
-
-    # add a total column
-    resale_table = resale_table.append({'Cost Component':'Total', 'Annual Real Cost':resale_table['Annual Real Cost'].sum(), 'Cost Per MWh': resale_table['Cost Per MWh'].sum()}, ignore_index=True)
-
-    # remove resale data from cost table
-    cost_table = cost_table[~cost_table['Cost Component'].isin(resale_components)]
-
     # get financial parameters
     to_pv = fv_to_pv(financials, year)
     base_year = financials.loc[0,'base_financial_year']
-
-    # rename the columns
-    resale_table = resale_table.rename(columns={'Annual Real Cost':f'Annual Cost ({year}$)','Cost Per MWh':f'Cost Per MWh ({year}$)'})
-
-    # add columns for present value
-    resale_table[f'Annual Cost ({base_year}$)'] = resale_table[f'Annual Cost ({year}$)'] * to_pv
-    resale_table[f'Cost Per MWh ({base_year}$)'] = resale_table[f'Cost Per MWh ({year}$)'] * to_pv
 
     # create a column that categorizes all of the costs
     cost_category_dict = {'Hedge Premium Cost':'Contract', 
@@ -587,7 +579,10 @@ def construct_cost_and_resale_tables(hourly_costs, load_balance, financials, yea
                         'Dispatched Generation Pnode Revenue':'Wholesale Market',
                         'Excess Generation Pnode Revenue':'Wholesale Market', 
                         'DLAP Load Cost':'Wholesale Market',
-                        'RA Open Position Cost':'Resource Adequacy', 
+                        'RA Open Position Cost':'Resource Adequacy',
+                        'Excess RA Value':'Resource Adequacy',
+                        'REC Net Position Cost':'RECs',
+                        'REC Net Position Resale':'RECs',
                         'Storage Capacity PPA Cost': 'Contract',
                         'Storage Wholesale Price Arbitrage':'Wholesale Market'}
     cost_table['Cost Category'] = cost_table['Cost Component'].map(cost_category_dict).fillna('Fixed')
@@ -608,7 +603,7 @@ def construct_cost_and_resale_tables(hourly_costs, load_balance, financials, yea
     cost_table[f'Annual Cost ({base_year}$)'] = cost_table[f'Annual Cost ({year}$)'] * to_pv
     cost_table[f'Cost Per MWh ({base_year}$)'] = cost_table[f'Cost Per MWh ({year}$)'] * to_pv
 
-    return cost_table, resale_table
+    return cost_table
 
 def build_ra_open_position_plot(ra_summary):
     """
@@ -1440,39 +1435,6 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
 
     return sensitivity_table
 
-def calculate_avoided_emissions(portfolio, dispatch, marginal_emissions):
-    """
-    Estimates the avoided emissions resulting from additional generators added to the portfolio by the model,
-    using marginal emission rates from NREL's Cambium model. 
-
-    Inputs:
-        portfolio: a dataframe summarizing the built portfolio, created as an output of the generator_portfolio() function
-        dispatch: a dataframe containing hourly generator dispatch data contained in outputs/dispatch.csv
-        marginal_emissions: a dataframe containing marginal emission rate input data contained in inputs/marginal_emissions.csv
-    Returns:
-        avoided_emissions: a dataframe containing the total annual avoided emissions from additional generators under each Cambium case (low/mid/high)
-    """
-    # get a list of all of the additional gens
-    additional_gens = list(portfolio.loc[portfolio['Status'] == 'Additional','generation_project'])
-
-    #filter the dispatch data to the additional gens
-    addl_dispatch = dispatch.copy()[dispatch['generation_project'].isin(additional_gens)]
-
-    # groupby timestamp
-    addl_dispatch = addl_dispatch.groupby('timestamp').sum()
-
-    # calculate total generation in each timestamp
-    addl_dispatch['TotalGen_MW'] = addl_dispatch['DispatchGen_MW'] + addl_dispatch['ExcessGen_MW']
-
-    # calculate the avoided emissions in each timepoint
-    avoided_emissions = marginal_emissions.copy().drop(columns='timepoint')
-    for col in avoided_emissions.columns:
-        avoided_emissions[col] = avoided_emissions[col] * addl_dispatch['TotalGen_MW'].reset_index(drop=True)
-
-    # get the total for the entire year
-    avoided_emissions = avoided_emissions.sum()
-
-    return avoided_emissions
 
 def load_cambium_data(scenario, year):
 
@@ -1752,15 +1714,13 @@ def determine_additional_dispatch(portfolio, dispatch, storage_dispatch, storage
         return addl_dispatch, addl_storage_dispatch
 
 
-
-
-def calculate_system_ramp(net_load, year, ramp_length):
+def calculate_system_ramp(net_load, ramp_length):
 
     ramp = net_load.shift(-ramp_length, fill_value=0) - net_load
     ramp.index = pd.to_datetime(ramp.index)
     max_ramp = ramp.groupby([ramp.index.date]).max()
     max_ramp.index = pd.to_datetime(max_ramp.index)
-    max_ramp = max_ramp.groupby(max_ramp.index.quarter).mean()
+    max_ramp = max_ramp.groupby(max_ramp.index.month).mean()
 
     # find the hour of each day when net load peaks
     max_ramp_hour = ramp.groupby([ramp.index.date]).idxmax()
@@ -1768,18 +1728,16 @@ def calculate_system_ramp(net_load, year, ramp_length):
 
     # find the average hour during which net load peaks in each quarter
     max_ramp_hour.index = pd.to_datetime(max_ramp_hour.index)
-    max_ramp_hour = max_ramp_hour.groupby(max_ramp_hour.index.quarter).mean()
+    max_ramp_hour = max_ramp_hour.groupby(max_ramp_hour.index.month).mean()
     max_ramp_hour['max_ramp_hour'] = max_ramp_hour['net_load_busbar'].apply(lambda row: f'{int(row)}:{int((row*60)%60):02d}')
 
     #combine the data together
     ramp = max_ramp.rename(columns={'net_load_busbar':f'max_{ramp_length}_hr_ramp_MW'})
     ramp['ramp_start_hour'] = max_ramp_hour['max_ramp_hour']
 
-    ramp.index = pd.MultiIndex.from_product([ramp.index, [year]], names=['Quarter','Year'])
-
     return ramp
 
-def compare_system_ramps(cambium, addl_dispatch, base_year, model_year, ramp_length):
+def compare_system_ramps(cambium, addl_dispatch, addl_storage_dispatch, ramp_length):
     """
     """
     pre_net_load = cambium.copy()[['net_load_busbar']]
@@ -1787,31 +1745,39 @@ def compare_system_ramps(cambium, addl_dispatch, base_year, model_year, ramp_len
 
     # change the index of the dispatch data to match the net load data
     addl_dispatch.index = post_net_load.index
+    addl_storage_dispatch.index = post_net_load.index
 
     post_net_load = post_net_load.merge(addl_dispatch[['Variable_Dispatch']], how='left', left_index=True, right_index=True)
+    post_net_load_storage = post_net_load.merge(addl_storage_dispatch[['Storage_Dispatch']], how='left', left_index=True, right_index=True)
 
     # calculate the new net load value and drop the variable dispatch data
     post_net_load['net_load_busbar'] = post_net_load['net_load_busbar'] + post_net_load['Variable_Dispatch']
     post_net_load = post_net_load.drop(columns='Variable_Dispatch')
-    
-    pre_ramp = calculate_system_ramp(pre_net_load, base_year, ramp_length)
-    post_ramp = calculate_system_ramp(post_net_load, model_year, ramp_length)
 
-    delta_ramp = (post_ramp.droplevel(1)[['max_3_hr_ramp_MW']] - pre_ramp.droplevel(1)[['max_3_hr_ramp_MW']])
-    delta_ramp.index = pd.MultiIndex.from_product([delta_ramp.index, ['delta']], names=['Quarter','Year'])
+    # calculate the new net load value and drop the variable dispatch data
+    post_net_load_storage['net_load_busbar'] = post_net_load_storage['net_load_busbar'] + post_net_load_storage['Variable_Dispatch'] + post_net_load_storage['Storage_Dispatch']
+    post_net_load_storage = post_net_load_storage.drop(columns=['Variable_Dispatch','Storage_Dispatch'])
 
-    ramp_comparison = pd.concat([pre_ramp,post_ramp, delta_ramp]).sort_index()
+    pre_ramp = calculate_system_ramp(pre_net_load, ramp_length)
+    post_ramp = calculate_system_ramp(post_net_load, ramp_length)
+    post_ramp_storage = calculate_system_ramp(post_net_load_storage, ramp_length)
 
-    return ramp_comparison
+    delta_ramp = pre_ramp.copy()
+    delta_ramp['portfolio_impact_no_storage'] = post_ramp['max_3_hr_ramp_MW'] - pre_ramp['max_3_hr_ramp_MW']
+    delta_ramp['portfolio_impact_with_storage'] = post_ramp_storage['max_3_hr_ramp_MW'] - pre_ramp['max_3_hr_ramp_MW']
+    delta_ramp.index = delta_ramp.index.rename('Month')
+    delta_ramp = delta_ramp.append(delta_ramp[['max_3_hr_ramp_MW','portfolio_impact_no_storage','portfolio_impact_with_storage']].mean(axis=0).rename('Average'))
 
-def calculate_system_peak(net_load, year):
+    return delta_ramp
+
+def calculate_system_peak(net_load):
 
     # find the maximum net load on each day
     peak_demand = net_load.groupby(net_load.index.date).max()
 
     # find the average daily peak load in each quarter
     peak_demand.index = pd.to_datetime(peak_demand.index)
-    peak_demand = peak_demand.groupby(peak_demand.index.quarter).mean()
+    peak_demand = peak_demand.groupby(peak_demand.index.month).mean()
 
     # find the hour of each day when net load peaks
     peak_hour = net_load.groupby(net_load.index.date).idxmax()
@@ -1819,18 +1785,16 @@ def calculate_system_peak(net_load, year):
 
     # find the average hour during which net load peaks in each quarter
     peak_hour.index = pd.to_datetime(peak_hour.index)
-    peak_hour = peak_hour.groupby(peak_hour.index.quarter).mean()
+    peak_hour = peak_hour.groupby(peak_hour.index.month).mean()
     peak_hour['peak_hour'] = peak_hour['net_load_busbar'].apply(lambda row: f'{int(row)}:{int((row*60)%60):02d}')
 
     #combine the data together
     peak = peak_demand.rename(columns={'net_load_busbar':'net_load_peak_MW'})
     peak['peak_hour'] = peak_hour['peak_hour']
 
-    peak.index = pd.MultiIndex.from_product([peak.index, [year]], names=['Quarter','Year'])
-
     return peak
 
-def compare_system_peaks(cambium, addl_dispatch, base_year, model_year):
+def compare_system_peaks(cambium, addl_dispatch, addl_storage_dispatch):
     """
     """
     pre_net_load = cambium.copy()[['net_load_busbar']]
@@ -1838,19 +1802,27 @@ def compare_system_peaks(cambium, addl_dispatch, base_year, model_year):
 
     # change the index of the dispatch data to match the net load data
     addl_dispatch.index = post_net_load.index
+    addl_storage_dispatch.index = post_net_load.index
 
     post_net_load = post_net_load.merge(addl_dispatch[['Variable_Dispatch']], how='left', left_index=True, right_index=True)
+    post_net_load_storage = post_net_load.merge(addl_storage_dispatch[['Storage_Dispatch']], how='left', left_index=True, right_index=True)
 
     # calculate the new net load value and drop the variable dispatch data
     post_net_load['net_load_busbar'] = post_net_load['net_load_busbar'] + post_net_load['Variable_Dispatch']
     post_net_load = post_net_load.drop(columns='Variable_Dispatch')
-    
-    pre_peak = calculate_system_peak(pre_net_load, base_year)
-    post_peak = calculate_system_peak(post_net_load, model_year)
 
-    delta_peak = (post_peak.droplevel(1)[['net_load_peak_MW']] - pre_peak.droplevel(1)[['net_load_peak_MW']])
-    delta_peak.index = pd.MultiIndex.from_product([delta_peak.index, ['delta']], names=['Quarter','Year'])
+    # calculate the new net load value and drop the variable dispatch data
+    post_net_load_storage['net_load_busbar'] = post_net_load_storage['net_load_busbar'] + post_net_load_storage['Variable_Dispatch'] + post_net_load_storage['Storage_Dispatch']
+    post_net_load_storage = post_net_load_storage.drop(columns=['Variable_Dispatch','Storage_Dispatch'])
 
-    peak_comparison = pd.concat([pre_peak,post_peak, delta_peak]).sort_index()
+    pre_peak = calculate_system_peak(pre_net_load)
+    post_peak = calculate_system_peak(post_net_load)
+    post_peak_storage = calculate_system_peak(post_net_load_storage)
 
-    return peak_comparison
+    delta_peak = pre_peak.copy()
+    delta_peak['portfolio_impact_no_storage'] = post_peak['net_load_peak_MW'] - pre_peak['net_load_peak_MW']
+    delta_peak['portfolio_impact_with_storage'] = post_peak_storage['net_load_peak_MW'] - pre_peak['net_load_peak_MW']
+    delta_peak.index = delta_peak.index.rename('Month')
+    delta_peak = delta_peak.append(delta_peak[['net_load_peak_MW','portfolio_impact_no_storage','portfolio_impact_with_storage']].mean(axis=0).rename('Average'))
+
+    return delta_peak
