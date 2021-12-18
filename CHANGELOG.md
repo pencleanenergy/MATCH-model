@@ -1,4 +1,15 @@
 -------------------------------------------------------------------------------
+Commit 2021.12.17 (Version 0.15.0)
+-------------------------------------------------------------------------------
+Allows user to specify the cambium GEA region relevant to their load zone for analysis.
+
+Adds code to `generate_input_files` that automatically downloads the Cambium files if they have not already been downloaded
+
+Updated summary report to use region name
+
+Fixed bug in generate_input_files that was loading hedge premium cost data for all load zones, rather than the load zone for the specific scenario
+
+-------------------------------------------------------------------------------
 Commit 2021.12.15 (Version 0.14.4)
 -------------------------------------------------------------------------------
 Fixed bug where generator variant groups were being dropped from the inputs.

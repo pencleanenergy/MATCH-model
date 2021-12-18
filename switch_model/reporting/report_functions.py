@@ -1436,10 +1436,10 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
     return sensitivity_table
 
 
-def load_cambium_data(scenario, year):
+def load_cambium_data(scenario, year, region):
 
     # specify the location of the directory where the NREL cambium data is downloaded
-    cambium_dir = Path.cwd()/ '../../../nrel_cambium'
+    cambium_dir = Path.cwd()/ f'../../../nrel_cambium_{region}'
 
     # if the year is an even number, load the file corresponding to the year
     if year % 2 == 0:
@@ -1447,7 +1447,7 @@ def load_cambium_data(scenario, year):
     else:
         year_to_load = year + 1
 
-    cambium = pd.read_csv(cambium_dir / f'StdScen21_{scenario}_hourly_CAMXc_{year_to_load}.csv', skiprows=4)
+    cambium = pd.read_csv(cambium_dir / f'StdScen21_{scenario}_hourly_{region}_{year_to_load}.csv', skiprows=4)
 
     cambium = cambium.drop(columns=['timestamp','timestamp_local'])
 
@@ -1536,7 +1536,7 @@ def calculate_emissions(dispatch, generation_projects_info, system_power, load_b
     return total_emissions
 
 
-def calculate_levelized_lrmer(start_year, period, discount, emissions_unit):
+def calculate_levelized_lrmer(start_year, period, discount, emissions_unit, region):
     """
     Calculates a levelized LRMER from the Cambium data
     
@@ -1575,7 +1575,7 @@ def calculate_levelized_lrmer(start_year, period, discount, emissions_unit):
         for year in range(start_year, start_year + period + 1):
 
             # load the data and only keep the lrmer value
-            lrmer = load_cambium_data(scenario, year)[[f'lrmer_{ghg}_c','distloss_rate_marg']]
+            lrmer = load_cambium_data(scenario, year, region)[[f'lrmer_{ghg}_c','distloss_rate_marg']]
 
             # convert to busbar values
             lrmer[f'lrmer_{ghg}_c'] = lrmer[f'lrmer_{ghg}_c'] * (1 - lrmer['distloss_rate_marg'])
@@ -1609,7 +1609,7 @@ def calculate_levelized_lrmer(start_year, period, discount, emissions_unit):
 
     return levelized_lrmers
 
-def load_srmer_data(model_year, emissions_unit):
+def load_srmer_data(model_year, emissions_unit, region):
     """
     Loads short run marginal emission data from Cambium
     """
@@ -1629,7 +1629,7 @@ def load_srmer_data(model_year, emissions_unit):
 
     for scenario in scenarios:
         # load the data
-        temp = load_cambium_data(scenario=scenario, year=model_year)[[f'srmer_{ghg}_c','distloss_rate_marg']]
+        temp = load_cambium_data(scenario=scenario, year=model_year, region=region)[[f'srmer_{ghg}_c','distloss_rate_marg']]
         # convert to busbar values
         temp[f'srmer_{ghg}_c'] = temp[f'srmer_{ghg}_c'] * (1 - temp['distloss_rate_marg'])
 

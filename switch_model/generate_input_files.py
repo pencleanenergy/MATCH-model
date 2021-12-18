@@ -5,14 +5,15 @@
 This takes data from an input excel file and formats into individual csv files for inputs
 """
 import ast
-import pandas as pd 
-import numpy as np
-from pathlib import Path
-import os
-import shutil
-from datetime import datetime
-import pytz
 from collections import defaultdict
+from datetime import datetime
+import pandas as pd 
+import pytz
+import numpy as np
+import os
+import requests
+import shutil
+import zipfile
 
 # Import the PySAM modules for simulating solar, CSP, and wind power generation
 import PySAM.ResourceTools as tools
@@ -83,7 +84,42 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, excessgen_limit):
 
     return xl_gen_validated
 
-        
+def download_cambium_data(cambium_region_list):
+    """
+    Downloads cambium data from the 2021 Standard Scenarios
+    """
+    # specify the file ids for the five scenarios
+    file_ids = [32096,32098,32103,32110,32104]
+
+    for region in cambium_region_list:
+        # if data has already been downloaded for this region, remove it from the region list
+        if os.path.exists(f'../MODEL_RUNS/nrel_cambium_{region}'):
+            cambium_region_list.remove(region)
+
+    # if there are no regions in the region list, skip this, otherwise download the data
+    if len(cambium_region_list) > 0:
+
+        print(f'Downloading Cambium data for the following GEA Regions: {cambium_region_list}')
+
+        for file_id in file_ids:
+
+            # specify the file information
+            body = {'project_uuid':'a3e2f719-dd5a-4c3e-9bbf-f24fef563f45', 'file_ids':f'{file_id}'}
+
+            # download and save the data to a zip file
+            with open('../MODEL_RUNS/cambium_download.zip','wb') as output_file:
+                output_file.write(requests.post('https://cambium.nrel.gov/api/download/', data=body, stream=True).content)
+
+            # extract the files for each region, saving to a different directory
+            with zipfile.ZipFile('../MODEL_RUNS/cambium_download.zip', 'r') as z:
+                for file in z.infolist():
+                    for region in cambium_region_list:
+                        if region in file.filename:
+                            file.filename = os.path.basename(file.filename)
+                            z.extract(file, f'../MODEL_RUNS/nrel_cambium_{region}')
+
+            # delete the downloaded zip file
+            os.remove('../MODEL_RUNS/cambium_download.zip')
 
 def generate_inputs(model_workspace):
 
@@ -189,6 +225,8 @@ def generate_inputs(model_workspace):
         pass
     else:
         xl_storage = pd.read_excel(io=model_inputs, sheet_name='storage', skiprows=3).dropna(axis=1, how='all')
+        if xl_storage.isnull().values.any():
+            raise ValueError("The storage tab contains a missing value. Please fix")
         # add defaults for storage
         xl_storage['gen_tech'] = 'Storage'
         xl_storage['gen_is_storage'] = 1
@@ -237,6 +275,14 @@ def generate_inputs(model_workspace):
             raise ValueError(f"The nodal price timeseries for {node} is missing. Please add.")
         else:
             pass
+
+    xl_cambium_region = pd.read_excel(io=model_inputs, sheet_name='cambium_region').dropna(axis=1, how='all')
+
+    # get a list of unique cambium regions
+    cambium_region_list = list(xl_cambium_region['GEA_region'].unique())
+
+    # download the cambium data if needed
+    download_cambium_data(cambium_region_list)
 
     xl_hedge_premium_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_premium_cost',skiprows=1).dropna(axis=1, how='all')
 
@@ -594,6 +640,17 @@ def generate_inputs(model_workspace):
             loads = loads[['load_zone','timepoint','zone_demand_mw']]
             loads.to_csv(input_dir / 'loads.csv', index=False)
 
+            # get the name of the load zone 
+            load_zone_name = load_list[0]
+
+            # save the name of the cambium region
+            cambium_region = xl_cambium_region.loc[xl_cambium_region['load_zone'] == load_zone_name, 'GEA_region'].item()
+
+            # emission unit.txt
+            cambium_region_file = open(input_dir / 'cambium_region.txt', 'w+')
+            cambium_region_file.write(cambium_region)
+            cambium_region_file.close()
+
             # RA data
             if 'switch_model.generators.extensions.resource_adequacy' in module_list:
 
@@ -613,8 +670,9 @@ def generate_inputs(model_workspace):
                 hedge_cost['hedge_premium_cost'] = hedge_cost['hedge_premium_cost'].round(2)
             except TypeError:
                 pass
+            # only keep data for the relevant load zones
+            hedge_cost = hedge_cost[hedge_cost['load_zone'].isin(load_list)]
             hedge_cost.to_csv(input_dir / 'hedge_premium_cost.csv', index=False)
-
 
             # pricing_nodes.csv
             node_list = list(set_gens.gen_pricing_node.unique())
