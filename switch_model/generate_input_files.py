@@ -21,11 +21,11 @@ import PySAM.Pvwattsv7 as pv
 import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
-def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, excessgen_limit):
+def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, output_dir):
     xl_gen_validated = xl_gen.copy()
     
     # add a column for ppa penalty
-    xl_gen_validated['gen_excessgen_limit'] = '.'
+    xl_gen_validated['ppa_penalty'] = 0
 
     # remove any generation projects that are not variable or baseload
     gens_to_check = xl_gen_validated.copy().loc[(xl_gen_validated['gen_is_variable'] == 1) | (xl_gen_validated['gen_is_baseload'] == 1),:]
@@ -76,13 +76,16 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, excessgen_limit):
 
             # if the mean nodal revenue is greater than the mean PPA cost
             if mean_nodal_revenue >= mean_ppa_cost:
+                ppa_penalty = round(mean_nodal_revenue - mean_ppa_cost + 0.01, 3)
                 print(f'WARNING: {gen} nodal revenue greater than PPA cost')
                 print('This may lead to over-procurement of this resource')
                 print(f'Mean PPA cost = ${mean_ppa_cost.round(3)} per MWh')
                 print(f'Mean nodal revenue = ${mean_nodal_revenue.round(3)} per MWh')
-                xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'gen_excessgen_limit'] = excessgen_limit
+                xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_penalty'] = ppa_penalty
 
-    return xl_gen_validated
+    xl_gen_validated = xl_gen_validated[['GENERATION_PROJECT',	'gen_pricing_node','ppa_energy_cost','ppa_penalty']]
+    xl_gen_validated.to_csv(output_dir / 'excessgen_penalty.csv', index=False)
+
 
 def download_cambium_data(cambium_region_list):
     """
@@ -436,12 +439,8 @@ def generate_inputs(model_workspace):
 
         df_vcf = df_vcf.reset_index()
 
-        #TODO: Update excessgen limit to read from an input
-        # setting limit to 5% for testing 10/26/2021
-        excessgen_limit = 0.05
-
         # validate cost inputs
-        set_gens = validate_cost_inputs(set_gens, df_vcf, xl_nodal_prices, excessgen_limit)
+        validate_cost_inputs(set_gens, df_vcf, xl_nodal_prices, pysam_dir)
                     
         #iterate for each scenario and save outputs to csv files
         for scenario in set_scenario_list:

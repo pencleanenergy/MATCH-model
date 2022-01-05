@@ -1,4 +1,9 @@
 -------------------------------------------------------------------------------
+Commit 2022.01.04 (Version 0.15.1)
+-------------------------------------------------------------------------------
+Updates the cost validation function in generate_projects_info.py so that it creates a summary file of the overbuild risk for each generation project based on the difference between the generation-weighted average PPA price and nodal price.
+
+-------------------------------------------------------------------------------
 Commit 2021.12.17 (Version 0.15.0)
 -------------------------------------------------------------------------------
 Allows user to specify the cambium GEA region relevant to their load zone for analysis.
