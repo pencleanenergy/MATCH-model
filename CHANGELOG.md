@@ -1,4 +1,11 @@
 -------------------------------------------------------------------------------
+Commit 2022.01.0X (Version 0.17.0)
+-------------------------------------------------------------------------------
+
+Update the model to work with PySAM 3.0.0. This upgrades the PV simulation from Pvwattsv7 to Pvwattsv8, abd allows us to set verbose=False when fetching resource files. This prevents PySAM from printing messages that can be hundreds of lines long when fetching many resource files.
+
+
+-------------------------------------------------------------------------------
 Commit 2022.01.07 (Version 0.16.0)
 -------------------------------------------------------------------------------
 Updates `generate_input_files.py` to only include generators that have a nonzero excessgen penalty in the excessgen_penalty.csv file.

@@ -17,7 +17,7 @@ import zipfile
 
 # Import the PySAM modules for simulating solar, CSP, and wind power generation
 import PySAM.ResourceTools as tools
-import PySAM.Pvwattsv7 as pv
+import PySAM.Pvwattsv8 as pv
 import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
@@ -393,7 +393,7 @@ def generate_inputs(model_workspace):
 
                 pysam_dir = model_workspace / gen_set
 
-                if sam_function == 'Pvwattsv7':
+                if sam_function == 'Pvwattsv8':
                     #run PySAM to simulate the solar outputs
                     solar_vcf = simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, config_dict, resource_years, pysam_dir, tz_offset)
                     
@@ -766,7 +766,8 @@ def simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, confi
                         resource_type='psm3',
                         resource_year=str(year),
                         nrel_api_email=nrel_api_email,
-                        resource_dir=(input_dir / 'PySAM Downloaded Weather Files/PV'))
+                        resource_dir=(input_dir / 'PySAM Downloaded Weather Files/PV'),
+                        verbose=False)
 
         #fetch resource data from the dictionary
         nsrdbfetcher.fetch(lon_lats)
@@ -888,7 +889,8 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
                         nrel_api_email=nrel_api_email,
                         resource_year=str(year),
                         resource_height=resource['resource_height'],
-                        resource_dir=(input_dir / 'PySAM Downloaded Weather Files/Wind'))
+                        resource_dir=(input_dir / 'PySAM Downloaded Weather Files/Wind'),
+                        verbose=False)
 
         #fetch resource data from the dictionary
         wtkfetcher.fetch(lon_lats)
@@ -972,7 +974,8 @@ def simulate_csp_generation(nrel_api_key, nrel_api_email, resource_dict, config_
                         resource_type='psm3',
                         resource_year=str(year),
                         nrel_api_email=nrel_api_email,
-                        resource_dir=(input_dir / 'PySAM Downloaded Weather Files/CSP'))
+                        resource_dir=(input_dir / 'PySAM Downloaded Weather Files/CSP'),
+                        verbose=False)
 
         #fetch resource data from the dictionary
         nsrdbfetcher.fetch(lon_lats)
