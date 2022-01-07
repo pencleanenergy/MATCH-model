@@ -368,22 +368,6 @@ def define_components(mod):
         #add to objective function
         mod.Cost_Components_Per_Period.append('ExcessRECValue')
 
-    # LIMIT EXCESSGEN FOR OVERBUILD GENERATORS
-    ##########################################
-    # For generators that have a net negative cost, add a constraint on the amount of excess generation
-    # so that they are not overbuilt
-
-    mod.excessgen_penalty = Param(
-        within=NonNegativeReals,
-        default=0)
-
-    if mod.options.goal_type == "hourly":
-
-        mod.ExcessGenPenaltyInTP = Expression(
-            mod.TIMEPOINTS,
-            rule=lambda m, t: sum(m.ZoneTotalExcessGen[z,t] * m.excessgen_penalty for z in m.LOAD_ZONES),
-            doc="Summarize costs for the objective function")
-        mod.Cost_Components_Per_TP.append('ExcessGenPenaltyInTP')
     
 
 def load_inputs(mod, switch_data, inputs_dir):
@@ -429,10 +413,6 @@ def load_inputs(mod, switch_data, inputs_dir):
         select=('period','rec_resale_value'),
         param=[mod.rec_resale_value])
 
-    switch_data.load_aug(
-        filename=os.path.join(inputs_dir, 'excessgen_penalty.csv'),
-        autoselect=True,
-        param=[mod.excessgen_penalty])
 
 
 def post_solve(instance, outdir):

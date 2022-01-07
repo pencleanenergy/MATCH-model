@@ -84,6 +84,9 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, output_dir):
                 xl_gen_validated.loc[xl_gen_validated['GENERATION_PROJECT'] == gen, 'ppa_penalty'] = ppa_penalty
 
     xl_gen_validated = xl_gen_validated[['GENERATION_PROJECT',	'gen_pricing_node','ppa_energy_cost','ppa_penalty']]
+    # drop where no penalty
+    xl_gen_validated = xl_gen_validated[xl_gen_validated['ppa_penalty'] != 0]
+
     xl_gen_validated.to_csv(output_dir / 'excessgen_penalty.csv', index=False)
 
 
@@ -204,7 +207,8 @@ def generate_inputs(model_workspace):
 
     #financials
     df_financials = pd.DataFrame(
-        data={'base_financial_year': [int(xl_general.loc[xl_general['Parameter'] == 'Current Year', 'Input'].item())],
+        data={'base_financial_year': [int(xl_general.loc[xl_general['Parameter'] == 'Base Year', 'Input'].item())],
+            'dollar_year': [int(xl_general.loc[xl_general['Parameter'] == 'Financial Year', 'Input'].item())],
             'discount_rate': [xl_general.loc[xl_general['Parameter'] == 'Discount Rate', 'Input'].item()]}
     )
 
@@ -266,9 +270,9 @@ def generate_inputs(model_workspace):
         ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','elcc','ra_production_factor']]
 
          # midterm_reliability_requirement.csv
-        xl_midterm_ra = pd.read_excel(io=model_inputs, sheet_name='midterm_RA_requirement').dropna(axis=1, how='all')
+        xl_midterm_ra = pd.read_excel(io=model_inputs, sheet_name='midterm_RA_requirement', skiprows=1).dropna(axis=1, how='all')
 
-    xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=1).dropna(axis=1, how='all')
+    xl_nodal_prices = pd.read_excel(io=model_inputs, sheet_name='nodal_prices', index_col='Datetime', skiprows=2).dropna(axis=1, how='all')
     if xl_nodal_prices.isnull().values.any():
         raise ValueError("Nodal prices contain a missing value. Please check")
     # check that a nodal price exists for each node specified with an MCF in the generation tab
@@ -287,13 +291,13 @@ def generate_inputs(model_workspace):
     # download the cambium data if needed
     download_cambium_data(cambium_region_list)
 
-    xl_hedge_premium_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_premium_cost',skiprows=1).dropna(axis=1, how='all')
+    xl_hedge_premium_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_premium_cost',skiprows=2).dropna(axis=1, how='all')
 
     # rec_value.csv
-    xl_rec_value = pd.read_excel(io=model_inputs, sheet_name='rec_value').dropna(axis=1, how='all')
+    xl_rec_value = pd.read_excel(io=model_inputs, sheet_name='rec_value', skiprows=1).dropna(axis=1, how='all')
 
     # fixed_costs.csv
-    xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs').dropna(axis=1, how='all')
+    xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs', skiprows=1).dropna(axis=1, how='all')
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
     vcf_sets = xl_scenarios[xl_scenarios['Input Type'].isin(['Resource year(s)', 'Generator Set'])].drop(columns=['Input Type','Parameter','Description']).transpose().reset_index()
@@ -359,7 +363,7 @@ def generate_inputs(model_workspace):
                 gen_inputs = vcf_inputs.copy()[vcf_inputs['SAM_template'] == template]
 
                 #get lat/long coordinates of all resources using this template
-                gen_inputs['long/lat'] = gen_inputs.apply(lambda row: f"({row['longitude']},{row['latitude']})", axis=1)
+                gen_inputs['long/lat'] = gen_inputs.apply(lambda row: f"({row.longitude},{row.latitude})", axis=1)
                 gen_inputs['long/lat'] = gen_inputs['long/lat'].apply(ast.literal_eval)
                 resource_dict = defaultdict(list)
                 zipped_list = zip(gen_inputs['long/lat'], gen_inputs['GENERATION_PROJECT'])
@@ -867,7 +871,7 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
                                                        cut_in=default_powercurve_value(powercurve, 'cut_in'),
                                                        cut_out=default_powercurve_value(powercurve, 'cut_out'),
                                                        drive_train=int(default_powercurve_value(powercurve, 'drive_train')))
-
+    
     lon_lats = list(resource_dict.keys())
 
     #this is the df that will hold all of the data for all years
@@ -875,7 +879,7 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
     df_index = df_resource.index
 
     for year in resource_years:
-
+        
         #specify wind data input
         wtkfetcher = tools.FetchResourceFiles(
                         tech='wind',
@@ -893,15 +897,14 @@ def simulate_wind_generation(nrel_api_key, nrel_api_email, resource_dict, config
         wtk_path_dict = wtkfetcher.resource_file_paths_dict
 
         for filename in wtk_path_dict:
-
             windResource = tools.SRW_to_wind_data(wtk_path_dict[filename])
             
             #assign the wind resource input data to the model
             system_model_wind.Resource.wind_resource_data = windResource
-
+            
             #execute the system model
             system_model_wind.execute()
-
+            
             #access sytem power generated output
             output = system_model_wind.Outputs.gen
 

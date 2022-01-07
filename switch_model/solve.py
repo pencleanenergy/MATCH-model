@@ -739,6 +739,15 @@ def solve(model):
             print("more information may be available by setting the appropriate flags in the ")
             print('solver_options_string and calling this script with "--suffixes iis".')
         raise RuntimeError("Infeasible model")
+    elif (results.solver.termination_condition != TerminationCondition.optimal):
+        print("")
+        print("Optimization termination condition was {}.".format(
+            results.solver.termination_condition))
+        if str(results.solver.message) != '<undefined>':
+            print('Solver message: {}'.format(results.solver.message))
+        print("")
+        raise RuntimeError("Optimal solution not found")
+        
 
     # Raise an error if the solver failed to produce a solution
     # Note that checking for results.solver.status in {SolverStatus.ok,

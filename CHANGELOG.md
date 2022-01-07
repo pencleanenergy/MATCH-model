@@ -1,7 +1,22 @@
 -------------------------------------------------------------------------------
+Commit 2022.01.07 (Version 0.16.0)
+-------------------------------------------------------------------------------
+Updates `generate_input_files.py` to only include generators that have a nonzero excessgen penalty in the excessgen_penalty.csv file.
+
+Updates the summary report to fix several small bugs.
+
+Raises a runtime error if an optimal solution was not found for the model.
+
+In a previous version, I had set the constraint for the annual goal such that annual generation == the goal, in order to discourage the model from building more generation than necessary to meet the goal. However, if the predetermined generation is greater than the goal, it creates an unfeasible model. To fix this, I changed the constraint back to annual generation >= the goal, but I added the excessgen penalty to the total annual volume of generation in excess of the goal to discourage overprocuring. 
+
+I was hoping to update the package to work with PySAM 3.0.0 which was just released, but it seems that somehow this package is causing jupyter to crash. https://github.com/NREL/pysam/issues/107
+
+Allow the user to specify the dollar year for which all input values have been inputted, impacting the calculation of present value.
+
+-------------------------------------------------------------------------------
 Commit 2022.01.04 (Version 0.15.1)
 -------------------------------------------------------------------------------
-Updates the cost validation function in generate_projects_info.py so that it creates a summary file of the overbuild risk for each generation project based on the difference between the generation-weighted average PPA price and nodal price.
+Updates the cost validation function in `generate_input_files.py` so that it creates a summary file of the overbuild risk for each generation project based on the difference between the generation-weighted average PPA price and nodal price.
 
 -------------------------------------------------------------------------------
 Commit 2021.12.17 (Version 0.15.0)

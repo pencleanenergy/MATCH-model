@@ -91,6 +91,9 @@ def define_components(mod):
     year. Future dollars are brought back to this dollar-year via the
     discount_rate.
 
+    dollar_year is used for net present value calculations, and represents
+    the year for which all financial parameters are entered.
+
     discount_rate is the annual real discount rate used to convert
     future dollars into net present value for purposes of comparison. It
     is mathematically similar to interest rate, but has very different
@@ -176,6 +179,7 @@ def define_components(mod):
     """
 
     mod.base_financial_year = Param(within=NonNegativeReals)
+    mod.dollar_year = Param(within=NonNegativeReals)
     mod.discount_rate = Param(
         within=NonNegativeReals)
     mod.min_data_check('base_financial_year', 'discount_rate')
@@ -187,7 +191,7 @@ def define_components(mod):
                 m.discount_rate, m.period_length_years[p]) *
             future_to_present_value(
                 m.discount_rate,
-                m.period_start[p] - m.base_financial_year)))
+                m.dollar_year - m.base_financial_year)))
     mod.bring_timepoint_costs_to_base_year = Param(
         mod.TIMEPOINTS,
         within=NonNegativeReals,
@@ -272,7 +276,7 @@ def load_inputs(mod, switch_data, inputs_dir):
     switch_data.load_aug(
         filename=os.path.join(inputs_dir, 'financials.csv'),
         optional=False, auto_select=True,
-        param=[mod.base_financial_year, mod.discount_rate]
+        param=[mod.base_financial_year, mod.dollar_year, mod.discount_rate]
     )
 
 def post_solve(instance, outdir):

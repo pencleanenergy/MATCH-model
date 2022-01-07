@@ -10,7 +10,7 @@ dependencies:
   - ipython
   - nbconvert
   - nbformat
-  - nrel-pysam
+  - nrel-pysam==2.2.4 #3.0.0 causes jupyter to crash
   - nrel-pysam-stubs
   - numpy
   - openpyxl

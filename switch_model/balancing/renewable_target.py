@@ -115,8 +115,7 @@ def define_components(mod):
         # Calculate the total generation in the period
         mod.total_generation_in_period = Expression(
             mod.PERIODS,
-            rule=lambda m, p: sum(m.ZoneTotalGeneratorDispatch[z,t] + m.ZoneTotalExcessGen[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
-        )
+            rule=lambda m, p: sum(m.ZoneTotalGeneratorDispatch[z,t] + m.ZoneTotalExcessGen[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p))
 
         # if there are any storage generators in the model
         try:
@@ -132,7 +131,7 @@ def define_components(mod):
 
         mod.Enforce_Annual_Renewable_Target = Constraint(
             mod.PERIODS, # for each zone in each period
-            rule=lambda m, p: (m.total_generation_in_period[p] - m.total_storage_losses_in_period[p] == m.renewable_target[p] * m.total_demand_in_period[p]))
+            rule=lambda m, p: (m.total_generation_in_period[p] - m.total_storage_losses_in_period[p] >= m.renewable_target[p] * m.total_demand_in_period[p]))
 
     #Enforce limit on excess generation
     if mod.options.excess_generation_limit_type == "annual":
@@ -145,6 +144,30 @@ def define_components(mod):
             mod.LOAD_ZONES, mod.TIMEPOINTS,
             rule = lambda m, z, t: m.ZoneTotalExcessGen[z,t] <= m.zone_demand_mw[z,t] * m.excess_generation_limit[m.tp_period[t]]
         )
+
+    # LIMIT EXCESSGEN FOR OVERBUILD GENERATORS
+    ##########################################
+    # For generators that have a net negative cost, add a constraint on the amount of excess generation
+    # so that they are not overbuilt
+
+    mod.excessgen_penalty = Param(
+        within=NonNegativeReals,
+        default=0)
+
+    if mod.options.goal_type == "hourly":
+
+        mod.ExcessGenPenaltyInTP = Expression(
+            mod.TIMEPOINTS,
+            rule=lambda m, t: sum(m.ZoneTotalExcessGen[z,t] * m.excessgen_penalty for z in m.LOAD_ZONES),
+            doc="Summarize costs for the objective function")
+        mod.Cost_Components_Per_TP.append('ExcessGenPenaltyInTP')
+    
+    elif mod.options.goal_type == "annual":
+        # assign a penalty for any generation in excess of the target
+        mod.ExcessGenPenalty = Expression(
+            mod.PERIODS,
+            rule=lambda m, p: (m.total_generation_in_period[p] - (m.renewable_target[p] * m.total_demand_in_period[p])) * m.excessgen_penalty)
+        mod.Cost_Components_Per_Period.append('ExcessGenPenalty')
 
         
 
@@ -171,6 +194,11 @@ def load_inputs(mod, switch_data, inputs_dir):
         filename=os.path.join(inputs_dir, 'hedge_premium_cost.csv'),
         select=('load_zone','hedge_premium_cost'),
         param=[mod.hedge_premium_cost])
+
+    switch_data.load_aug(
+        filename=os.path.join(inputs_dir, 'excessgen_penalty.csv'),
+        autoselect=True,
+        param=[mod.excessgen_penalty])
 
 
 

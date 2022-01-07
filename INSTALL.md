@@ -71,7 +71,7 @@ This will install all of the package dependencies needed to run Switch 24x7. Use
 
 Activate the new environment
 
-    conda activate switch_247
+    conda activate match_model
 
 # Install the switch package
 This will install the local codebase as switch

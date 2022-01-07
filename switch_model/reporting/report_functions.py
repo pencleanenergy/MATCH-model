@@ -12,7 +12,7 @@ import os
 This module contains a collection of functions that are called from the summary_report.ipynb, used for reporting final outputs
 """
 
-def fv_to_pv(financials, year):
+def fv_to_pv(financials):
     """
     Calculates a factor to discount future values in the model year to present value in the base year.
 
@@ -23,7 +23,7 @@ def fv_to_pv(financials, year):
     Outputs:
         future value to present value conversion factor 
     """
-    return (1+financials.loc[0,'discount_rate'])**-(year-financials.loc[0,'base_financial_year'])
+    return (1+financials.loc[0,'discount_rate'])**-(financials.loc[0,'dollar_year']-financials.loc[0,'base_financial_year'])
 
 def format_currency(x):
     """
@@ -144,6 +144,7 @@ def build_hourly_emissions_heatmap(total_emissions, emissions_unit):
             y=emissions_heatmap_data.index, 
             color_continuous_scale='rdylgn_r', 
             range_color=[0,max_ef], 
+            labels={'color':'Emissions Intensity'},
             title=f'Hourly Emisission Intensity of Delivered Energy ({emissions_unit})').update_yaxes(dtick=3)
     
     return emissions_heatmap
@@ -186,7 +187,7 @@ def generator_portfolio(gen_cap, gen_build_predetermined, generation_projects_in
             # set the contracted quantity equal to the predetermined value
             capacity.loc[capacity['generation_project'] == gen,'MW'] = predetermined_mw
             # create a new row for the additional quantity
-            capacity = capacity.append({'generation_project':gen,	'gen_tech':capacity.loc[capacity['generation_project'] == gen,'gen_tech'].item(), 'MW':(built_mw - predetermined_mw),'Status':'Additional'}, ignore_index=True)
+            capacity = capacity.append({'generation_project':gen,	'gen_tech':capacity.loc[capacity['generation_project'] == gen,'gen_tech'].item(), 'MW':(built_mw - predetermined_mw),'Contract Status':'New'}, ignore_index=True)
         else:
             pass
 
@@ -423,9 +424,10 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
     hourly_costs = system_power.copy().drop(columns=['load_zone','system_power_MW'])
 
     # if the hedge cost was set as the default value, remove the hedge cost
-    mean_hedge_cost = system_power['hedge_premium_cost'].sum() / system_power['system_power_MW'].sum()
-    if mean_hedge_cost == 1.00:
-        hourly_costs['hedge_premium_cost'] = 0
+    if system_power['system_power_MW'].sum() != 0:
+        mean_hedge_cost = system_power['hedge_premium_cost'].sum() / system_power['system_power_MW'].sum()
+        if mean_hedge_cost == 1.00:
+            hourly_costs['hedge_premium_cost'] = 0
 
     # add generator timepoint costs next
     hourly_costs = hourly_costs.merge(costs_by_tp, how='left', on='timestamp')
@@ -569,7 +571,7 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
     cost_table['Cost Per MWh'] = cost_table['Annual Real Cost'] / load
 
     # get financial parameters
-    to_pv = fv_to_pv(financials, year)
+    to_pv = fv_to_pv(financials)
     base_year = financials.loc[0,'base_financial_year']
 
     # create a column that categorizes all of the costs
@@ -596,12 +598,16 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
     # add a total column
     cost_table = cost_table.append({'Cost Category':'Total','Cost Component':'Total', 'Annual Real Cost':cost_table['Annual Real Cost'].sum(), 'Cost Per MWh': cost_table['Cost Per MWh'].sum()}, ignore_index=True)
 
-    # rename the columns
-    cost_table = cost_table.rename(columns={'Annual Real Cost':f'Annual Cost ({year}$)','Cost Per MWh':f'Cost Per MWh ({year}$)'})
 
-    # add columns for present value
-    cost_table[f'Annual Cost ({base_year}$)'] = cost_table[f'Annual Cost ({year}$)'] * to_pv
-    cost_table[f'Cost Per MWh ({base_year}$)'] = cost_table[f'Cost Per MWh ({year}$)'] * to_pv
+    if to_pv != 1:
+        # rename the columns
+        cost_table = cost_table.rename(columns={'Annual Real Cost':f'Annual Cost ({year}$)','Cost Per MWh':f'Cost Per MWh ({year}$)'})
+        
+        # add columns for present value
+        cost_table[f'Annual Cost ({base_year}$)'] = cost_table[f'Annual Cost ({year}$)'] * to_pv
+        cost_table[f'Cost Per MWh ({base_year}$)'] = cost_table[f'Cost Per MWh ({year}$)'] * to_pv
+    else:
+        cost_table = cost_table.rename(columns={'Annual Real Cost': f'Annual Cost ({base_year}$)','Cost Per MWh':f'Cost Per MWh ({base_year}$)'})
 
     return cost_table
 
@@ -1138,9 +1144,6 @@ def calculate_load_shadow_price(results, timestamps, year):
     #re-order columns
     #duals = duals[['Constraint', 'load_zone','timepoint','Dual']]
 
-    # replace all negative values with zero since interpretation is complicated by the fact that the nodal revenue of excess generation is not part of the objective function
-    duals.loc[duals['Dual'] < 0, 'Dual'] = 0
-
     # Calculate the month-hour average
     duals = duals.set_index('timestamp')
     duals = duals.groupby([duals.index.month, duals.index.hour]).mean()
@@ -1155,7 +1158,7 @@ def calculate_load_shadow_price(results, timestamps, year):
                         x='Hour', 
                         y='Dual', 
                         facet_col='Month', 
-                        title=f'Shadow Price of Energy Efficiency ({year}$)',
+                        title=f'Shadow Price of Load ({year}$)',
                         facet_col_wrap=6,
                         labels={'Dual':'Shadow Price ($/MW)'})
 
@@ -1251,6 +1254,8 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
     try:
         # get a list of all weather year file names in this folder
         weather_years = [filename for filename in os.listdir(set_folder) if '.csv' in filename]
+        if 'excessgen_penalty.csv' in weather_years:
+            weather_years.remove('excessgen_penalty.csv')
     except FileNotFoundError:
         return None
 
