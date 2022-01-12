@@ -1,22 +1,22 @@
-"""Setup script for Switch.
+"""Setup script for MATCH.
 
 Use "pip install --upgrade ." to install a copy in the site packages directory.
 
-Use "pip install --upgrade --editable ." to install Switch to be run from its
+Use "pip install --upgrade --editable ." to install MATCH to be run from its
 current location.
 
 Optional dependencies can be added during the initial install or later by
 running a command like this:
 pip install --upgrade --editable .[advanced,database_access]
 
-Use "pip uninstall switch" to uninstall switch from your system.
+Use "pip uninstall match" to uninstall match from your system.
 """
 
 import os
 from setuptools import setup, find_packages
 
 # Get the version number. Strategy #3 from https://packaging.python.org/single_source_version/
-version_path = os.path.join(os.path.dirname(__file__), 'switch_model', 'version.py')
+version_path = os.path.join(os.path.dirname(__file__), 'match_model', 'version.py')
 version = {}
 with open(version_path) as f:
     exec(f.read(), version)
@@ -26,14 +26,13 @@ def read(*rnames):
     return open(os.path.join(os.path.dirname(__file__), *rnames)).read()
 
 setup(
-    name='switch_model',
+    name='match_model',
     version=__version__,
     maintainer='Gregory Miller',
     maintainer_email='grmiller@ucdavis.edu',
-    url='http://switch-model.org',
     license='Apache License 2.0',
     platforms=["any"],
-    description='Switch 24x7 Planning Model',
+    description='MATCH 24x7 Portfolio Planning Model',
     long_description=read('README.md'),
     long_description_content_type="text/markdown",
     classifiers=[
@@ -54,7 +53,7 @@ setup(
         'Topic :: Scientific/Engineering',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],
-    packages=find_packages(include=['switch_model', 'switch_model.*']),
+    packages=find_packages(include=['match_model', 'match_model.*']),
     keywords=[
         'renewable', 'power', 'energy', 'electricity',
         'production cost', 'capacity expansion',
@@ -82,6 +81,6 @@ setup(
         'database_access': ['psycopg2-binary']
     },
     entry_points={
-        'console_scripts': ['switch = switch_model.main:main']
+        'console_scripts': ['match = match_model.main:main']
     },
 )

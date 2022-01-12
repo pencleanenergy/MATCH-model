@@ -7,8 +7,8 @@ import shutil
 import tempfile
 import unittest
 
-import switch_model.utilities as utilities
-import switch_model.solve
+import match_model.utilities as utilities
+import match_model.solve
 from pyomo.environ import DataPortal
 from testfixtures import compare
 
@@ -22,7 +22,7 @@ class UtilitiesTest(unittest.TestCase):
 
     def test_check_mandatory_components(self):
         from pyomo.environ import ConcreteModel, Param, Set
-        from switch_model.utilities import check_mandatory_components
+        from match_model.utilities import check_mandatory_components
         mod = ConcreteModel()
         mod.set_A = Set(initialize=[1,2])
         mod.paramA_full = Param(mod.set_A, initialize={1:'a',2:'b'})
@@ -43,7 +43,7 @@ class UtilitiesTest(unittest.TestCase):
 
 
     def test_min_data_check(self):
-        from switch_model.utilities import _add_min_data_check
+        from match_model.utilities import _add_min_data_check
         from pyomo.environ import AbstractModel, Param, Set
         mod = AbstractModel()
         _add_min_data_check(mod)

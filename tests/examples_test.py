@@ -7,10 +7,10 @@ import sys
 import tempfile
 import unittest
 
-import switch_model.solve
-import switch_model.utilities
+import match_model.solve
+import match_model.utilities
 
-# This runs all the Switch examples (in the 'examples' directory) as
+# This runs all the MATCH examples (in the 'examples' directory) as
 # test cases.
 
 
@@ -56,15 +56,15 @@ def get_expectation_path(example_dir):
 
 def make_test(example_dir):
     def test_example():
-        temp_dir = tempfile.mkdtemp(prefix='switch_test_')
+        temp_dir = tempfile.mkdtemp(prefix='match_test_')
         try:
             # Custom python modules may be in the example's working directory
             sys.path.append(example_dir)
-            args = switch_model.solve.get_option_file_args(dir=example_dir,
+            args = match_model.solve.get_option_file_args(dir=example_dir,
                 extra_args=[
                     '--inputs-dir', os.path.join(example_dir, 'inputs'),
                     '--outputs-dir', temp_dir])
-            switch_model.solve.main(args)
+            match_model.solve.main(args)
             total_cost = read_file(os.path.join(temp_dir, 'total_cost.txt'))
         finally:
             sys.path.remove(example_dir)
@@ -75,7 +75,7 @@ def make_test(example_dir):
         else:
             expected = float(read_file(expectation_file))
             actual = float(total_cost)
-            if not switch_model.utilities.approx_equal(expected, actual,
+            if not match_model.utilities.approx_equal(expected, actual,
                                                      tolerance=0.0001):
                 raise AssertionError(
                     'Mismatch for total_cost (the objective function value):\n'

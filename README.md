@@ -12,7 +12,7 @@ See "INSTALL.md" for instructions on how to download and install MATCH on your m
 
 # DIRECTORY STRUCTURE
 ```
-📦switch_model
+📦match_model
  ┣ 📂balancing
  ┃ ┣ 📂demand_response
  ┃ ┃ ┣ 📂iterative: not currently in use
@@ -84,7 +84,7 @@ From time to time, the code will be updated on GitHub. To ensure that you are ke
 	
 	# change the directory to whereever your local git repository is saved
 	# after hitting enter, it should show the name of the git branch (e.g. "(master)")
-	cd GitHub/SWITCH247  
+	cd GitHub/match_model  
 
 	# save any changes that you might have made locally to your copy of the code
 	git add .
@@ -93,16 +93,16 @@ From time to time, the code will be updated on GitHub. To ensure that you are ke
 	git pull origin master
 
 Your local copy of the code should now be up to date. 
-NOTE: If you've pulled updates to the summary reports that you want to re-run for existing model runs, you will need to use `manually_run_reports.py` in `switch_model/reporting`
+NOTE: If you've pulled updates to the summary reports that you want to re-run for existing model runs, you will need to use `manually_run_reports.py` in `match_model/reporting`
 
 # COLLABORATING
 If you plan on contributing edits to the codebase that will be merged into the master branch, please follow these best practices:
 
-1. Please do not make edits directly to the master branch. Any new features or edits should be completed in a new branch. To do so, open git bash, navigate to your local repo (e.g. `cd GitHub/SWITCH247`), and create a new branch, giving it a descriptive name related to the edit you will be doing:
+1. Please do not make edits directly to the master branch. Any new features or edits should be completed in a new branch. To do so, open git bash, navigate to your local repo (e.g. `cd GitHub/match_model`), and create a new branch, giving it a descriptive name related to the edit you will be doing:
 
 	`git checkout -b branch_name`
 
-2. As you code, it is a good practice to 'save' your work frequently by opening git bash, navigating to your local repo (`cd GitHub/SWITCH247`), making sure that your current feature branch is active (you should see the feature name in parentheses next to the command line), and running 
+2. As you code, it is a good practice to 'save' your work frequently by opening git bash, navigating to your local repo (`cd GitHub/match_model`), making sure that your current feature branch is active (you should see the feature name in parentheses next to the command line), and running 
 	
 	`git add .`
 

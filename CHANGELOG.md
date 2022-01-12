@@ -1,8 +1,16 @@
 -------------------------------------------------------------------------------
-Commit 2022.01.0X (Version 0.17.0)
+Commit 2022.01.12 (Version 0.17.0)
 -------------------------------------------------------------------------------
 
+Rename all model components to MATCH from SWITCH
+
 Update the model to work with PySAM 3.0.0. This upgrades the PV simulation from Pvwattsv7 to Pvwattsv8, abd allows us to set verbose=False when fetching resource files. This prevents PySAM from printing messages that can be hundreds of lines long when fetching many resource files.
+
+Move nodal pricing parameters from dispatch.py to wholesale_pricing.py
+
+Fixed a bug in the module loading order when solving
+
+Start implementation of carbon pricing module (incomplete)
 
 
 -------------------------------------------------------------------------------
