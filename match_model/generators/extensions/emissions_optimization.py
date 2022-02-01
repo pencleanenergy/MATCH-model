@@ -2,9 +2,11 @@
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
-
+This module allows for optimizing the avoided grid emissions impact of the portfolio
+#TODO: rename from carbon price because implies policy
 """
 
+from ast import Expr
 import os
 from pyomo.environ import *
 import pandas as pd
@@ -19,9 +21,19 @@ def define_components(mod):
     If the average Pnode revenue is higher than the contract cost, the model will try to overbuild
     """
 
+    # Define Parameters
+    ###################
+
+    #TODO: Load this data
     mod.social_cost_of_carbon = Param(
         within=NonNegativeReals,
         default=0)
+
+    mod.gen_is_additional = Param(mod.GENERATION_PROJECTS, within=Boolean)
+
+    mod.ADDITIONAL_GENS = Set(
+        initialize=mod.GENERATION_PROJECTS,
+        filter=lambda m, g: m.gen_is_additional[g])
 
     mod.gen_emission_factor = Param(mod.NON_STORAGE_GENS)
 
@@ -31,6 +43,11 @@ def define_components(mod):
     mod.gen_ccs_energy_load = Param(
         mod.CCS_EQUIPPED_GENS, within=PercentFraction)
 
+    mod.lrmer = Param(mod.ZONE_TIMEPOINTS)
+
+    # Calculate Emissions
+    #####################
+
     # Caclulate emissions from each generator
     def GeneratorEmissions_rule(m, g, t):
         if g not in m.CCS_EQUIPPED_GENS:
@@ -38,24 +55,30 @@ def define_components(mod):
         else:
             ccs_emission_frac = 1 - m.gen_ccs_capture_efficiency[g]
             return (m.TotalGen[g,t] * m.gen_emission_factor[g] * ccs_emission_frac)
-    mod.GeneratorEmissions = Expression(
+    mod.GeneratorEmissionsInTP = Expression(
         mod.NON_STORAGE_GEN_TPS,
-        rule=GeneratorEmissions_rule
-    )
+        rule=GeneratorEmissions_rule)
 
+    # define a set of generators that are "additional"
+    
+    # should only apply to new generators
+    mod.GenAvoidedEmissionsInTP = Expression(
+        mod.NON_STORAGE_GEN_TPS,
+        rule=lambda m, g, t: -1 * (m.TotalGen[g,t] * m.lrmer[t] if g in m.ADDITIONAL_GENS else 0))
+
+    # check if storage is used
+    mod.StorageAvoidedEmissionsInTP = Expression(
+        mod.STORAGE_GEN_TPS,
+        rule=lambda m,g,t: (m.ChargeStorage[g,t] - m.DischargeStorage[g,t]) * m.lrmer[t] if g in m.ADDITIONAL_GENS else 0)        
+    
     # Costs for objective function
     ##############################
 
-    # Pnode Revenue is earned from injecting power into the grid 
-    mod.GenPnodeRevenue = Expression(
-        mod.GEN_TPS,
-        rule=lambda m, g, t: -1 * (m.DispatchGen[g,t] * m.nodal_price[m.gen_pricing_node[g],t] if g in m.NON_STORAGE_GENS else 0))
-        
-    mod.GenPnodeRevenueInTP = Expression(
+    mod.GenEmissionsImpactCostInTP = Expression(
         mod.TIMEPOINTS,
-        rule=lambda m,t: sum(m.GenPnodeRevenue[g,t]  for g in m.NON_STORAGE_GENS))
+        rule=lambda m,t: m.social_cost_of_carbon * (sum(m.GeneratorEmissionsInTP[g,t] + m.GenAvoidedEmissionsInTP[g,t]  for g in m.NON_STORAGE_GENS) + sum(m.StorageAvoidedEmissionsInTP[g,t] for g in m.STORAGE_GENS)))
     # add Pnode revenue to objective function
-    mod.Cost_Components_Per_TP.append('GenPnodeRevenueInTP')
+    mod.Cost_Components_Per_TP.append('GenEmissionsImpactCostInTP')
 
     
 def load_inputs(mod, match_data, inputs_dir):
@@ -66,12 +89,17 @@ def load_inputs(mod, match_data, inputs_dir):
         auto_select=True,
         optional_params=['gen_ccs_energy_load', 'gen_ccs_capture_efficiency'],
         index=mod.GENERATION_PROJECTS,
-        param=[mod.gen_emission_factor, mod.gen_ccs_energy_load, mod.gen_ccs_capture_efficiency])
+        param=[mod.gen_emission_factor, mod.gen_is_additional, mod.gen_ccs_energy_load, mod.gen_ccs_capture_efficiency])
 
     # construct set of CCS equipped gens based on whether the CCS capture efficiency is specified
     if 'gen_ccs_capture_efficiency' in match_data.data():
         match_data.data()['CCS_EQUIPPED_GENS'] = {
             None: list(match_data.data(name='gen_ccs_capture_efficiency').keys())}
+
+    match_data.load_aug(
+        filename=os.path.join(inputs_dir, 'social_cost_of_carbon.csv'),
+        autoselect=True,
+        param=[mod.social_cost_of_carbon])
 
 def post_solve(instance, outdir):
     congestion_data = [{

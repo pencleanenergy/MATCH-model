@@ -327,7 +327,7 @@ def generate_inputs(model_workspace):
 
 
         if 'manual' in vcf_input_types:
-            manual_vcf = pd.read_excel(io=model_inputs, sheet_name='manual_capacity_factors', index_col='Datetime', skiprows=1).dropna(axis=1, how='all').reset_index(drop=True)
+            manual_vcf = pd.read_excel(io=model_inputs, sheet_name='manual_capacity_factors', index_col='Datetime', skiprows=2).dropna(axis=1, how='all').reset_index(drop=True)
             if manual_vcf.isnull().values.any():
                 raise ValueError("The manual_capacity_factor tab contains a missing value. Please fix")
             # check that a capacity factor exists for each generator specified with an MCF in the generation tab

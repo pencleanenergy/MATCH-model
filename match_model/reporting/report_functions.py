@@ -597,7 +597,12 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
 
     # add a total column
     cost_table = cost_table.append({'Cost Category':'Total','Cost Component':'Total', 'Annual Real Cost':cost_table['Annual Real Cost'].sum(), 'Cost Per MWh': cost_table['Cost Per MWh'].sum()}, ignore_index=True)
-
+    # add a total with no resale
+    cost_table = cost_table.append({'Cost Category':'Total',
+                                    'Cost Component':'Total without REC/RA Resale', 
+                                    'Annual Real Cost': (cost_table.loc[cost_table['Cost Component'] == 'Total', 'Annual Real Cost'].item() - cost_table.loc[cost_table['Cost Component'] == 'REC Net Position Resale', 'Annual Real Cost'].item() - cost_table.loc[cost_table['Cost Component'] == 'Excess RA Value', 'Annual Real Cost'].item()), 
+                                    'Cost Per MWh': (cost_table.loc[cost_table['Cost Component'] == 'Total', 'Cost Per MWh'].item() - cost_table.loc[cost_table['Cost Component'] == 'REC Net Position Resale', 'Cost Per MWh'].item() - cost_table.loc[cost_table['Cost Component'] == 'Excess RA Value', 'Cost Per MWh'].item())}, 
+                                    ignore_index=True)
 
     if to_pv != 1:
         # rename the columns
@@ -1205,7 +1210,8 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
     summary['Time-coincident %'] = hourly_renewable_percentage(load_balance)
     summary['Annual Volumetric %'] = annual_renewable_percentage(load_balance)
 
-    summary[f'Portfolio Cost per MWh ({base_year}$)'] = cost_table.loc[cost_table['Cost Category'] == 'Total', f'Cost Per MWh ({base_year}$)'].item()
+    summary[f'Portfolio Cost per MWh ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total', f'Cost Per MWh ({base_year}$)'].item()
+    summary[f'Portfolio Cost per MWh No Resale ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total without REC/RA Resale', f'Cost Per MWh ({base_year}$)'].item()
 
     # if no sensitivity table was created, skip this
     try:

@@ -262,10 +262,14 @@ def define_components(mod):
     ###########################
 
     def MidtermReliability_Rule(m,p):
-        # if there are no baseload generators, skip this constraint
-        #if not any(m.GenCapacity[g,p] for g in m.BASELOAD_GENS):
-        #    return Constraint.Skip
-        return sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS if m.gen_is_ra_eligible[g]) >= m.midterm_firm_requirement[p]
+        #return sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS if (m.gen_is_ra_eligible[g] and (m.cod_year[g] > m.base_financial_year)) >= m.midterm_firm_requirement[p])
+        eligible_MTR_capacity = 0
+        for g in m.BASELOAD_GENS:
+            if m.gen_is_ra_eligible[g]:
+                if m.cod_year[g] > m.base_financial_year:
+                    eligible_MTR_capacity += m.GenCapacity[g,p]
+        return eligible_MTR_capacity >= m.midterm_firm_requirement[p]
+        
 
     mod.MidtermReliabilityRequirement_Constraint = Constraint(
         mod.PERIODS,

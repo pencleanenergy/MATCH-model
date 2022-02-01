@@ -1,4 +1,14 @@
 -------------------------------------------------------------------------------
+Commit 2022.02.01 (Version 0.17.2)
+-------------------------------------------------------------------------------
+
+Updated the midterm firm reliability constraint to require that a resource be new in order to qualify to meet the requirement.
+
+Added new output in the summary report to show the total portfolio cost with and without resale of RECs and RA.
+
+Updated instructions on the `run_scenarios` notebook
+
+-------------------------------------------------------------------------------
 Commit 2022.01.12 (Version 0.17.1)
 -------------------------------------------------------------------------------
 
