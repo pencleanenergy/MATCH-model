@@ -180,6 +180,7 @@ def generator_portfolio(gen_cap, gen_build_predetermined, generation_projects_in
     capacity = capacity.merge(predetermined, how='left', on='generation_project').fillna('New')
 
     # check if any of the contracted projects had additional capacity added and split out as separate projects
+    split_projects = []
     for gen in list(capacity.loc[capacity['Contract Status'] == 'Contracted','generation_project']):
         built_mw = capacity.loc[capacity['generation_project'] == gen,'MW'].item()
         predetermined_mw = gen_build_predetermined.loc[gen_build_predetermined['GENERATION_PROJECT'] == gen,'gen_predetermined_cap'].item()
@@ -187,9 +188,15 @@ def generator_portfolio(gen_cap, gen_build_predetermined, generation_projects_in
             # set the contracted quantity equal to the predetermined value
             capacity.loc[capacity['generation_project'] == gen,'MW'] = predetermined_mw
             # create a new row for the additional quantity
-            capacity = capacity.append({'generation_project':gen,	'gen_tech':capacity.loc[capacity['generation_project'] == gen,'gen_tech'].item(), 'MW':(built_mw - predetermined_mw),'Contract Status':'New'}, ignore_index=True)
+            split_projects.append({'generation_project':gen,	
+                              'gen_tech':capacity.loc[capacity['generation_project'] == gen,'gen_tech'].item(), 
+                              'MW':(built_mw - predetermined_mw),
+                              'Contract Status':'New'})
+            
         else:
             pass
+    # append all projects to dataframe
+    capacity = pd.concat([capacity, pd.DataFrame.from_records(split_projects)], axis='index', ignore_index=True)
 
     # if there are any hybrid projects, add hybrid to the gen tech
     # merge gen is hybrid indicator
@@ -360,12 +367,6 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
         dispatch_mix: a dataframe containing the total MWh of generation delivered to meet load or charge storage
     """
 
-    # calculate the percent of energy from grid power
-    percent_from_grid = load_balance.SystemPower.sum() / load_balance.zone_demand_mw.sum()
-
-    # calculate the amount of load served by portfolio generation (less storage losses)
-    load_from_dispatch = load_balance.zone_demand_mw.sum() - load_balance.SystemPower.sum()
-    
     # get the list of technologies
     generator_technology_dict = generation_projects_info[['GENERATION_PROJECT','gen_tech']]
     generator_technology_dict = dict(zip(generator_technology_dict.GENERATION_PROJECT, generator_technology_dict.gen_tech))
@@ -374,17 +375,15 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
     dispatch['gen_tech'] = dispatch['generation_project'].map(generator_technology_dict)
 
     # calculate the mix of dispatched energy
-    dispatch_mix = dispatch.groupby('gen_tech').sum().reset_index()[['gen_tech','DispatchGen_MW']]
+    dispatch_mix = dispatch.groupby('gen_tech').sum().reset_index()[['gen_tech','DispatchGen_MW','ExcessGen_MW']]
 
-    # calculate scaling factor for dispatched generation
-    generation_scaling_factor = load_from_dispatch / dispatch_mix.DispatchGen_MW.sum()
-    
-    # discount generation by this scaling factor
-    dispatch_mix['DispatchGen_MW'] = dispatch_mix['DispatchGen_MW'] * generation_scaling_factor
+    # add the system power amount
+    dispatch_mix = pd.concat([dispatch_mix, pd.DataFrame({'gen_tech':['Grid Energy'],'DispatchGen_MW': [load_balance.SystemPower.sum()], 'ExcessGen_MW': [0]})], ignore_index=True)
 
-    dispatch_mix = dispatch_mix.append({'gen_tech':'Grid Energy','DispatchGen_MW': load_balance.SystemPower.sum()}, ignore_index=True)
+    # rename the columns
+    dispatch_mix = dispatch_mix.rename(columns={'gen_tech':'Source','DispatchGen_MW':'Dispatched_MWh', 'ExcessGen_MW':'Excess_MWh'})
 
-    dispatch_mix = dispatch_mix.rename(columns={'gen_tech':'Source','DispatchGen_MW':'MWh'})
+    dispatch_mix['Total_MWh'] = dispatch_mix['Dispatched_MWh'] + dispatch_mix['Excess_MWh']
 
     # replace underscores in the gen tech name with spaces
     dispatch_mix.Source = dispatch_mix.Source.str.replace('_',' ')
@@ -393,7 +392,7 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
     dispatch_mix = dispatch_mix.round(0)
 
     # drop any rows with zero generation
-    dispatch_mix = dispatch_mix[dispatch_mix['MWh'] > 0]
+    dispatch_mix = dispatch_mix[dispatch_mix['Total_MWh'] > 0]
 
     return dispatch_mix
 
@@ -562,7 +561,7 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
         net_rec_cost = 0
         net_rec_resale = net_rec_position * rec_resale_value
 
-    cost_table = cost_table.append(pd.DataFrame.from_dict(data={'Cost Component':['REC Net Position Cost','REC Net Position Resale'],'Annual Real Cost': [net_rec_cost,net_rec_resale]}), ignore_index=True)
+    cost_table = pd.concat([cost_table, pd.DataFrame.from_dict(data={'Cost Component':['REC Net Position Cost','REC Net Position Resale'],'Annual Real Cost': [net_rec_cost,net_rec_resale]})], ignore_index=True)
 
     # calculate the total demand
     load = load_balance['zone_demand_mw'].sum()
@@ -596,13 +595,12 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
     cost_table = cost_table[['Cost Category','Cost Component', 'Annual Real Cost', 'Cost Per MWh']]
 
     # add a total column
-    cost_table = cost_table.append({'Cost Category':'Total','Cost Component':'Total', 'Annual Real Cost':cost_table['Annual Real Cost'].sum(), 'Cost Per MWh': cost_table['Cost Per MWh'].sum()}, ignore_index=True)
+    cost_table = pd.concat([cost_table, pd.DataFrame({'Cost Category':['Total'],'Cost Component':['Total'], 'Annual Real Cost':[cost_table['Annual Real Cost'].sum()], 'Cost Per MWh': [cost_table['Cost Per MWh'].sum()]})], ignore_index=True)
     # add a total with no resale
-    cost_table = cost_table.append({'Cost Category':'Total',
-                                    'Cost Component':'Total without REC/RA Resale', 
-                                    'Annual Real Cost': (cost_table.loc[cost_table['Cost Component'] == 'Total', 'Annual Real Cost'].item() - cost_table.loc[cost_table['Cost Component'] == 'REC Net Position Resale', 'Annual Real Cost'].item() - cost_table.loc[cost_table['Cost Component'] == 'Excess RA Value', 'Annual Real Cost'].item()), 
-                                    'Cost Per MWh': (cost_table.loc[cost_table['Cost Component'] == 'Total', 'Cost Per MWh'].item() - cost_table.loc[cost_table['Cost Component'] == 'REC Net Position Resale', 'Cost Per MWh'].item() - cost_table.loc[cost_table['Cost Component'] == 'Excess RA Value', 'Cost Per MWh'].item())}, 
-                                    ignore_index=True)
+    cost_table = pd.concat([cost_table, pd.DataFrame({'Cost Category':['Total'],
+                                    'Cost Component':['Total without REC/RA Resale'], 
+                                    'Annual Real Cost': [(cost_table.loc[cost_table['Cost Component'] == 'Total', 'Annual Real Cost'].item() - cost_table.loc[cost_table['Cost Component'] == 'REC Net Position Resale', 'Annual Real Cost'].item() - cost_table.loc[cost_table['Cost Component'] == 'Excess RA Value', 'Annual Real Cost'].item())], 
+                                    'Cost Per MWh': [(cost_table.loc[cost_table['Cost Component'] == 'Total', 'Cost Per MWh'].item() - cost_table.loc[cost_table['Cost Component'] == 'REC Net Position Resale', 'Cost Per MWh'].item() - cost_table.loc[cost_table['Cost Component'] == 'Excess RA Value', 'Cost Per MWh'].item())]})], ignore_index=True)
 
     if to_pv != 1:
         # rename the columns
@@ -692,12 +690,12 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
         storage_discharge = storage_discharge.groupby('timestamp').sum().reset_index()
         # add a technology column
         storage_discharge['Technology'] = 'Storage Discharge'
-        dispatch_by_tech = dispatch_by_tech.append(storage_discharge)
+        dispatch_by_tech = pd.concat([dispatch_by_tech,storage_discharge])
 
     # append grid energy
     grid_energy = system_power.copy()[['timestamp','system_power_MW']].groupby('timestamp').sum().reset_index().rename(columns={'system_power_MW':'MWh'})
     grid_energy['Technology'] = 'Grid Energy'
-    dispatch_by_tech = dispatch_by_tech.append(grid_energy)
+    dispatch_by_tech = pd.concat([dispatch_by_tech,grid_energy])
 
     #only keep observations greater than 0
     dispatch_by_tech = dispatch_by_tech[dispatch_by_tech['MWh'] > 0]
@@ -1229,8 +1227,8 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
 
     summary = pd.concat([summary, portfolio_summary], axis=1)
 
-    summary[f'Annual Emissions Footprint ({emissions_unit.split("/")[0]})'] = total_emissions["Total Emission Rate"].sum().round(1)
-    summary[f'Delivered Emissions Factor ({emissions_unit})'] = total_emissions["Delivered Emission Factor"].mean().round(3)
+    summary[f'Annual Emissions Footprint ({emissions_unit.split("/")[0]})'] = round(total_emissions["Total Emission Rate"].sum(), 1)
+    summary[f'Delivered Emissions Factor ({emissions_unit})'] = round(total_emissions["Delivered Emission Factor"].mean(), 3)
 
     summary[f'Long-run Marginal Impact ({emissions_unit})'] = lr_impact.loc['Average','Total lbCO2/MWh']
     summary[f'Short-run Marginal Impact ({emissions_unit})'] = sr_impact.loc['Average','Total lbCO2/MWh']
@@ -1442,7 +1440,7 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
         tc_performance = (1 - (balance.grid_power.sum() / balance.load.sum())) * 100
                 
         print(f'Time-coincident performance using year {year} weather data: {tc_performance.round(2)}%')
-        sensitivity_table = sensitivity_table.append({'Weather Year':year, 'Time-Coincident %':tc_performance}, ignore_index=True)
+        sensitivity_table = pd.concat([sensitivity_table, pd.DataFrame({'Weather Year': [year], 'Time-Coincident %': [tc_performance]})], ignore_index=True)
 
     return sensitivity_table
 
@@ -1777,7 +1775,7 @@ def compare_system_ramps(cambium, addl_dispatch, addl_storage_dispatch, ramp_len
     delta_ramp['portfolio_impact_no_storage'] = post_ramp['max_3_hr_ramp_MW'] - pre_ramp['max_3_hr_ramp_MW']
     delta_ramp['portfolio_impact_with_storage'] = post_ramp_storage['max_3_hr_ramp_MW'] - pre_ramp['max_3_hr_ramp_MW']
     delta_ramp.index = delta_ramp.index.rename('Month')
-    delta_ramp = delta_ramp.append(delta_ramp[['max_3_hr_ramp_MW','portfolio_impact_no_storage','portfolio_impact_with_storage']].mean(axis=0).rename('Average'))
+    delta_ramp = pd.concat([delta_ramp, pd.DataFrame(delta_ramp[['max_3_hr_ramp_MW','portfolio_impact_no_storage','portfolio_impact_with_storage']].mean(axis=0).rename('Average')).T])
 
     return delta_ramp
 
@@ -1834,6 +1832,6 @@ def compare_system_peaks(cambium, addl_dispatch, addl_storage_dispatch):
     delta_peak['portfolio_impact_no_storage'] = post_peak['net_load_peak_MW'] - pre_peak['net_load_peak_MW']
     delta_peak['portfolio_impact_with_storage'] = post_peak_storage['net_load_peak_MW'] - pre_peak['net_load_peak_MW']
     delta_peak.index = delta_peak.index.rename('Month')
-    delta_peak = delta_peak.append(delta_peak[['net_load_peak_MW','portfolio_impact_no_storage','portfolio_impact_with_storage']].mean(axis=0).rename('Average'))
+    delta_peak = pd.concat([delta_peak, pd.DataFrame(delta_peak[['net_load_peak_MW','portfolio_impact_no_storage','portfolio_impact_with_storage']].mean(axis=0).rename('Average')).T])
 
     return delta_peak

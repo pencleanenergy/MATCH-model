@@ -1,4 +1,14 @@
 -------------------------------------------------------------------------------
+Commit 2022.02.01 (Version 0.17.3)
+-------------------------------------------------------------------------------
+
+Remove pandas.DataFrame.append() in advance of method being deprecated.
+
+Updated summary report outputs:
+ - Now summarizes total excess MWh and load MWh
+ - Adds power content labels for both annual and time-coincident accounting
+
+-------------------------------------------------------------------------------
 Commit 2022.02.01 (Version 0.17.2)
 -------------------------------------------------------------------------------
 
