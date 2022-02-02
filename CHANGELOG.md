@@ -8,6 +8,8 @@ Updated summary report outputs:
  - Now summarizes total excess MWh and load MWh
  - Adds power content labels for both annual and time-coincident accounting
 
+Fixes bug in generate_input_files that looked for cambium data in the incorrect directory
+
 -------------------------------------------------------------------------------
 Commit 2022.02.01 (Version 0.17.2)
 -------------------------------------------------------------------------------

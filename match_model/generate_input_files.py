@@ -90,7 +90,7 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, output_dir):
     xl_gen_validated.to_csv(output_dir / 'excessgen_penalty.csv', index=False)
 
 
-def download_cambium_data(cambium_region_list):
+def download_cambium_data(cambium_region_list, model_workspace):
     """
     Downloads cambium data from the 2021 Standard Scenarios
     """
@@ -99,7 +99,7 @@ def download_cambium_data(cambium_region_list):
 
     for region in cambium_region_list:
         # if data has already been downloaded for this region, remove it from the region list
-        if os.path.exists(f'../MODEL_RUNS/nrel_cambium_{region}'):
+        if os.path.exists(f'{model_workspace}/../nrel_cambium_{region}'):
             cambium_region_list.remove(region)
 
     # if there are no regions in the region list, skip this, otherwise download the data
@@ -113,19 +113,19 @@ def download_cambium_data(cambium_region_list):
             body = {'project_uuid':'a3e2f719-dd5a-4c3e-9bbf-f24fef563f45', 'file_ids':f'{file_id}'}
 
             # download and save the data to a zip file
-            with open('../MODEL_RUNS/cambium_download.zip','wb') as output_file:
+            with open(f'{model_workspace}/../cambium_download.zip','wb') as output_file:
                 output_file.write(requests.post('https://cambium.nrel.gov/api/download/', data=body, stream=True).content)
 
             # extract the files for each region, saving to a different directory
-            with zipfile.ZipFile('../MODEL_RUNS/cambium_download.zip', 'r') as z:
+            with zipfile.ZipFile(f'{model_workspace}/../cambium_download.zip', 'r') as z:
                 for file in z.infolist():
                     for region in cambium_region_list:
                         if region in file.filename:
                             file.filename = os.path.basename(file.filename)
-                            z.extract(file, f'../MODEL_RUNS/nrel_cambium_{region}')
+                            z.extract(file, f'{model_workspace}/../nrel_cambium_{region}')
 
             # delete the downloaded zip file
-            os.remove('../MODEL_RUNS/cambium_download.zip')
+            os.remove(f'{model_workspace}/../cambium_download.zip')
 
 def generate_inputs(model_workspace):
 
@@ -289,7 +289,7 @@ def generate_inputs(model_workspace):
     cambium_region_list = list(xl_cambium_region['GEA_region'].unique())
 
     # download the cambium data if needed
-    download_cambium_data(cambium_region_list)
+    download_cambium_data(cambium_region_list, model_workspace)
 
     xl_hedge_premium_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_premium_cost',skiprows=2).dropna(axis=1, how='all')
 
