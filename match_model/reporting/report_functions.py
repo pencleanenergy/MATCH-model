@@ -118,7 +118,7 @@ def hourly_renewable_percentage(load_balance):
 
     return percent
 
-def build_hourly_emissions_heatmap(total_emissions, emissions_unit):
+def build_hourly_emissions_heatmap(total_emissions, emissions_unit, cambium_scenario):
     """
     Creates a heatmap showing delivered emissions intensity of each hour of the year
 
@@ -145,7 +145,7 @@ def build_hourly_emissions_heatmap(total_emissions, emissions_unit):
             color_continuous_scale='rdylgn_r', 
             range_color=[0,max_ef], 
             labels={'color':'Emissions Intensity'},
-            title=f'Hourly Emisission Intensity of Delivered Energy ({emissions_unit})').update_yaxes(dtick=3)
+            title=f'Hourly Emisission Intensity of Delivered Energy ({emissions_unit}) using Cambium {cambium_scenario} scenario').update_yaxes(dtick=3)
     
     return emissions_heatmap
 
@@ -286,7 +286,7 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap, genera
     # for hybrid generators, subtract out the charging MW
     if storage_exists:
         hybrid_gens = list(generation_projects_info.loc[((generation_projects_info['gen_is_hybrid'] == 1) & (generation_projects_info['gen_is_storage'] == 0)), 'GENERATION_PROJECT'])
-        gen_costs.loc[gen_costs['generation_project'].isin(hybrid_gens), 'Generation_MW'] = gen_costs.loc[gen_costs['generation_project'].isin(hybrid_gens), 'Generation_MW'] - gen_costs['ChargeMW']
+        gen_costs.loc[gen_costs['generation_project'].isin(hybrid_gens), 'Generation_MW'] = gen_costs.loc[gen_costs['generation_project'].isin(hybrid_gens), 'Generation_MW'] - gen_costs.loc[gen_costs['generation_project'].isin(hybrid_gens), 'ChargeMW']
 
     # calculate congestion cost from pnode revenue and delivery cost
     gen_costs['Congestion Cost'] = gen_costs['Delivery_Cost'] + gen_costs['Pnode_Revenue']
@@ -767,13 +767,10 @@ def build_nodal_prices_plot(nodal_prices, timestamps, generation_projects_info, 
     for node in generation_projects_info.gen_pricing_node.unique():
         node_map[node] = list(generation_projects_info.loc[generation_projects_info['gen_pricing_node'] == node, 'GENERATION_PROJECT'].unique())
 
-    nodal_data['Generators'] = nodal_data['pricing_node'].map(node_map)
-
     nodal_fig = px.line(nodal_data, 
                         x='timestamp', 
                         y='nodal_price', 
                         color='pricing_node', 
-                        hover_data=nodal_data[['Generators']],
                         labels={'nodal_price':'$/MWh','timestamp':'Datetime','pricing_node':'Node'}, 
                         title=f'Nodal Prices ({year}$)', 
                         template='plotly_white').update_layout(hovermode="x").update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
@@ -969,9 +966,7 @@ def build_open_position_plot(load_balance, storage_exists):
                             x='Hour', 
                             y=['Net generation','Net position with storage'], 
                             facet_col='Month', 
-                            facet_col_wrap=3, 
-                            width=1000, 
-                            height=1000,
+                            facet_col_wrap=6, 
                             labels={'variable':'Position','value':'MW'}).update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor='black')
     mh_mismatch_fig.update_xaxes(dtick=3)
     mh_mismatch_fig.for_each_annotation(lambda a: a.update(text=a.text.replace("Month=", "")))
@@ -1172,7 +1167,7 @@ def calculate_load_shadow_price(results, timestamps, year):
 
     return dual_plot
 
-def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, sr_impact, total_emissions, emissions_unit, base_year):
+def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, total_emissions, emissions_unit, base_year):
     """
     Creates a csv file output of key metrics from the summary report to compare with other scenarios.
 
@@ -1231,7 +1226,6 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
     summary[f'Delivered Emissions Factor ({emissions_unit})'] = round(total_emissions["Delivered Emission Factor"].mean(), 3)
 
     summary[f'Long-run Marginal Impact ({emissions_unit})'] = lr_impact.loc['Average','Total lbCO2/MWh']
-    summary[f'Short-run Marginal Impact ({emissions_unit})'] = sr_impact.loc['Average','Total lbCO2/MWh']
 
     summary = summary.transpose()
     summary.columns = [f'{scenario_name}']
@@ -1258,8 +1252,8 @@ def run_sensitivity_analysis(gen_set, gen_cap, dispatch, generation_projects_inf
     try:
         # get a list of all weather year file names in this folder
         weather_years = [filename for filename in os.listdir(set_folder) if '.csv' in filename]
-        if 'excessgen_penalty.csv' in weather_years:
-            weather_years.remove('excessgen_penalty.csv')
+        if 'projects_with_overbuild_risk.csv' in weather_years:
+            weather_years.remove('projects_with_overbuild_risk.csv')
     except FileNotFoundError:
         return None
 
@@ -1657,13 +1651,15 @@ def load_srmer_data(model_year, emissions_unit, region):
 
     return srmer_data
 
-def determine_additional_dispatch(portfolio, dispatch, storage_dispatch, storage_exists):
+def determine_additional_dispatch(generation_projects_info, dispatch, storage_dispatch, storage_exists):
     """
     Calculates the dispatch that was additional, using a load sign convention (generation is negative, demand is positive)
     """
 
+    generation_projects_info = generation_projects_info.rename(columns={'GENERATION_PROJECT':'generation_project'})
+
     # get a list of all of the additional gens
-    additional_gens = list(portfolio.loc[portfolio['Build Status'] == 'Future','generation_project'])
+    additional_gens = list(generation_projects_info.loc[generation_projects_info['gen_is_additional'] == 1,'generation_project'])
 
     if len(additional_gens) > 0:
 
@@ -1671,7 +1667,70 @@ def determine_additional_dispatch(portfolio, dispatch, storage_dispatch, storage
         #filter the dispatch data to the additional gens
         addl_dispatch = dispatch.copy()[dispatch['generation_project'].isin(additional_gens)]
 
-        # add information about the generator technology
+        # add information about the generator cabmium region
+        addl_dispatch = addl_dispatch.merge(generation_projects_info[['generation_project','gen_cambium_region']], how='left', on='generation_project')
+
+        # groupby timestamp and region
+        addl_dispatch = addl_dispatch.groupby(['gen_cambium_region','timestamp']).sum().reset_index()
+
+        # calculate total generation in each timestamp
+        addl_dispatch['Generator_Dispatch'] = -1 * (addl_dispatch['DispatchGen_MW'] + addl_dispatch['ExcessGen_MW'])
+
+        # pivot the data
+        addl_dispatch = addl_dispatch.pivot(index='timestamp', columns='gen_cambium_region', values='Generator_Dispatch')
+
+        # convert the index to a datetime
+        addl_dispatch.index = pd.to_datetime(addl_dispatch.index)
+
+        ### STORAGE ###
+        if storage_exists:
+            # calculate dispatch from additional storage for short-run marginal
+            addl_storage_dispatch = storage_dispatch.copy()[storage_dispatch['generation_project'].isin(additional_gens)]
+
+            # add information about the generator cabmium region
+            addl_storage_dispatch = addl_storage_dispatch.merge(generation_projects_info[['generation_project','gen_cambium_region']], how='left', on='generation_project')
+
+            # groupby timestamp and region
+            addl_storage_dispatch = addl_storage_dispatch.groupby(['gen_cambium_region','timestamp']).sum().reset_index()
+
+            # calculate total generation in each timestamp
+            addl_storage_dispatch['Storage_Dispatch'] = addl_storage_dispatch['ChargeMW'] - addl_storage_dispatch['DischargeMW']
+
+            # pivot the data
+            addl_storage_dispatch = addl_storage_dispatch.pivot(index='timestamp', columns='gen_cambium_region', values='Storage_Dispatch')
+
+            addl_storage_dispatch.index = pd.to_datetime(addl_storage_dispatch.index)
+
+            return addl_dispatch, addl_storage_dispatch
+        
+        else:
+
+            addl_storage_dispatch = pd.DataFrame()
+
+            return addl_dispatch, addl_storage_dispatch
+
+    else:
+        addl_dispatch = pd.DataFrame()
+        addl_storage_dispatch = pd.DataFrame()
+
+        return addl_dispatch, addl_storage_dispatch
+
+def determine_additional_variable_dispatch(generation_projects_info, portfolio, dispatch, storage_dispatch, storage_exists):
+    """
+    Calculates the dispatch that was additional, using a load sign convention (generation is negative, demand is positive)
+    """
+
+    generation_projects_info = generation_projects_info.rename(columns={'GENERATION_PROJECT':'generation_project'})
+
+    # get a list of all of the additional gens
+    additional_gens = list(generation_projects_info.loc[generation_projects_info['gen_is_additional'] == 1,'generation_project'])
+
+    if len(additional_gens) > 0:
+
+        # calculate dispatch from additional generators for long run marginal 
+        #filter the dispatch data to the additional gens
+        addl_dispatch = dispatch.copy()[dispatch['generation_project'].isin(additional_gens)]
+
         addl_dispatch = addl_dispatch.merge(portfolio[['generation_project','Technology']], how='left', on='generation_project')
 
         # add a column for variable resources

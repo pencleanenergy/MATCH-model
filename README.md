@@ -13,62 +13,56 @@ See "INSTALL.md" for instructions on how to download and install MATCH on your m
 # DIRECTORY STRUCTURE
 ```
 📦match_model
+ ┣ 📂notebooks
+ ┃ ┣ 📜run_scenarios.ipynb: Used to populate inputs and run scenarios
+ ┃ ┣ 📜manually_run_summary_reports.ipynb: Used to manually re-run summary reports for solved model run
+ ┃ ┗ 📜explore_model_instance.ipynb: Used to explore model instance for debugging
  ┣ 📂balancing
- ┃ ┣ 📂demand_response
- ┃ ┃ ┣ 📂iterative: not currently in use
- ┃ ┃ ┣ 📜simple.py: defines DR/load shift resources
  ┃ ┣ 📜load_zones.py: defines load zones, including the supply/demand balancing constraint
- ┃ ┗ 📜renewable_target.py: defines renewable energy % goals and grid power supply
- ┣ 📂energy_sources
- ┃ ┣ 📂fuel_costs: not currently used since there are no fuel-based generators
- ┃ ┗ 📜properties.py: defines properties of energy sources
+ ┃ ┣ 📜system_power.py: defines system power use and cost
+ ┃ ┣ 📜excess_generation.py: defines limits on excess generation  
+ ┃ ┗ 📜renewable_target.py: defines renewable energy % goals
  ┣ 📂generators
- ┃ ┣ 📂core
- ┃ ┃ ┣ 📂commit: Not used because unit commitment is not modeled
- ┃ ┃ ┣ 📜build.py: defines how to build/select projects
- ┃ ┃ ┣ 📜dispatch.py: defines how to dispatch generators in each timepoint
- ┃ ┃ ┣ 📜gen_discrete_build.py: forces discrete increments of a project to be built (optional)
- ┃ ┃ ┗ 📜no_commit.py: defines limits on generator dispatch in the absence of unit commitment constraints (TODO: combine with dispatch.py)
- ┃ ┣ 📂extensions
- ┃ ┃ ┣ 📜congestion_pricing.py: adds nodal pricing dynamics to the model
- ┃ ┃ ┣ 📜hydro_simple.py: not used (for dispatching hydro facilities)
- ┃ ┃ ┣ 📜resource_adequacy.py: defines RA requirements and positions
- ┃ ┗ ┗ 📜storage.py: defines how to build and dispatch energy storage 
+ ┃ ┣ 📜build.py: defines how to build/select projects
+ ┃ ┣ 📜dispatch.py: defines how to dispatch generators in each timepoint
+ ┃ ┣ 📜gen_discrete_build.py: forces discrete increments of a project to be built (e.g. 1 MW chunks) (optional)
+ ┣ 📂optional
+ ┃ ┣ 📜emissions_optimization.py: co-optimizes the consequential emissions impact of the portfolio
+ ┃ ┣ 📜wholesale_pricing.py: adds nodal pricing dynamics to the model
+ ┃ ┣ 📜resource_adequacy.py: defines RA requirements and positions according to the current rules in CA
+ ┗ ┗ 📜storage.py: defines how to build and dispatch energy storage 
  ┣ 📂reporting
- ┃ ┣ 📜basic_exports.py: not used?
- ┃ ┣ 📜dump.py: not used?
- ┃ ┣ 📜example_export.py: not used?
- ┃ ┣ 📜generate_report.py: used to execute jupyter notebooks for summary reports
+ ┃ ┣ 📜generate_report.py: runs the summary reports as part of the model post-solve
+ ┃ ┣ 📜report_functions.py: defines the functions that are run in summary_report.ipynb
  ┃ ┣ 📜summary_report.ipynb: jupyter notebook template for interactive summary of results
- ┃ ┣ 📜summary_report_public.ipynb: public version of report with data about individual generators scrubbed
- ┃ ┗ 📜test.py: testing function used for development
- ┣ 📂upgrade: not used
- ┣ 📜financials.py
+ ┣ 📜financials.py: defines financial parameters and the objective function
  ┣ 📜generate_input_files.py: creates input files from model_inputs excel spreadsheet
- ┣ 📜main.py
- ┣ 📜run_scenarios.ipynb: Used to populate inputs and run scenarios
- ┣ 📜solve.py
- ┣ 📜solve_scenarios.py
- ┣ 📜test.py
- ┣ 📜timescales.py
- ┣ 📜utilities.py
- ┗ 📜version.py
+ ┣ 📜main.py: Allows the model to be used via the command line
+ ┣ 📜solve.py: solves each model run
+ ┣ 📜solve_scenarios.py: defines functions for solving multiple scenarios in parallel
+ ┣ 📜timescales.py: defines the timescales used in the model
+ ┣ 📜utilities.py: utility functions for MATCH
+ ┗ 📜version.py: defines the current model version number
 ```
 
 # CONFIGURING MODEL RUNS
 
-All model runs, including input and output data, should be contained in the `MODEL_RUNS` directory. You may optionally specify to store your model run files in a separate directory.
 
-1. Create a directory to store your model run files.
-To get started, create a new folder within `MODEL_RUNS`. This can be named whatever you would like,
+1. Determine where you want all of your model runs to be stored.
+Your can use the default `MODEL_RUNS` folder in your github repository, or you can create a folder somewhere else on your computer. 
+We do not recommend creating this folder within Box Drive or similar cloud storage location.
+
+2. Create a folder to store your model run files.
+Create a new subfolder within `MODEL_RUNS` or your other local folder for storing model runs. This can be named whatever you would like,
 for example `model_1`. Copy the `model_inputs.xlsx` template into this model folder.
 
 2. Enter your data inputs into the spreadsheet
-In the `model_inputs` excel spreadsheet, you will find tabs for different types of input data. Any cells highlighted in yellow can be updated. 
+In the `model_inputs` excel spreadsheet, you will find tabs for different types of input data. 
 The spreadsheet contains some placeholder data that you can write over. You can configure multiple scenarios within a single inputs spreadsheet. 
 
 3. Generate model input files
-Open `run_scenarios.ipynb` and follow any directions listed.
+Open the `run_scenarios` jupyter notebook from the `match_model/notebooks` directory in your preferred jupyter notebook viewer.
+Follow the directions for each cell. You will need to input the file location of your model run folder into one of the cells.
 This step will take the data entered into the excel spreadsheet and format it for use in the model. 
 
 4. Run the model
@@ -122,8 +116,3 @@ If you plan on contributing edits to the codebase that will be merged into the m
 	- Click "Create pull request"
 	- Greg will then review the edit and merge it into the master branch, which will then delete the feature branch.
 
-# TESTING
-NOTE: The run_tests.py module has not been tested with MATCH
-To test the entire codebase, run this command from the root directory:
-
-	python run_tests.py

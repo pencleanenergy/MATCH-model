@@ -1,4 +1,50 @@
 -------------------------------------------------------------------------------
+Commit 2022.02.22 (Version 0.18.0)
+-------------------------------------------------------------------------------
+
+Emissions optimization module
+- Created a new optional module to co-optimize the portfolio to minimize direct and marginal emission. Direct emissions are calculated as the product of generation and the generator's emissions rate, accounting for any CCS. Avoided emissions are calculated by multiplying the generator's net generation by the long-run marginal emissions factor for any generators that are additional. These values are added to the objective function after multiplying them by a user-specified social cost of carbon.
+- Create new parameters: `social_cost_of_carbon`, `gen_is_additional`, `gen_cambium_region`, `cambium_scenario`
+- Update summary report calculations of marginal emissions to match the new method
+- Use the cambium_scenario input to define what is used for all emissions calculations in the summary report
+
+Month-hour hedge premium
+- Calculates the hedge premium as a percentage of the month-hour average of the hedge node nodal price
+- Sets a floor of $0.01 for the hedge premium cost in case nodal prices are ever negative on average
+
+Resource Adequacy
+- Fixed several errors that were affecting the calculation of hybrid generators
+
+Model structure
+- Move all jupyter notebooks used to interact with the model to their own directory (match_model/notebooks)
+- Change manually_run_report.py to jupyter notebook
+- Split `match_model.balancing.renewable_target` into three separate modules: 
+  - `match_model.balancing.renewable_target` defines renewable energy goals
+  - `match_model.balancing.system_power` defines how system power can be used and hedge costs
+  - `match_model.balancing.excess_generation` defines any limits on excess generation
+- Moved modules from `match_model.generators.extensions` to `match_model.optional`, and moved `match_model.generators.core` to `match_model.generators`
+- Removed `match_model.energy_sources`
+
+Model inputs excel file
+- Update hedge_premium_cost tab so that user now specifies node and percent instead of load zone and premium
+- Update scenarios tab with new module naming conventions and parameters for emissions optimization
+- Change all `tp_month` parameters to `month`
+- Switch order of general and scenarios tab
+
+Generate Inputs File
+- Change the calculation of solar capacity factors to use inputs in kWDC rather than kWDC. The generation output simulated by SAM is now normalized by (system_capacity/dc_ac_ratio) = AC capacity, rather than just the system capacity
+
+Summary Report updates
+- Save summary reports to separate directory (summary_reports/) from outputs in model run folder
+- Delete summary_report template from inputs folder after running report
+- Allow summary_comparison.csv to run even if one of the summary reports fails to run
+- Add a portfolio_summary.csv table that compares the MW of each project chosen from each scenario
+
+Other
+- Move excess generation penalty input parameters from `renewable_target.csv` to `excessgen_penalty.csv`
+- Update README
+
+-------------------------------------------------------------------------------
 Commit 2022.02.01 (Version 0.17.3)
 -------------------------------------------------------------------------------
 

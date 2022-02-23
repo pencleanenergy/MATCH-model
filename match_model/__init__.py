@@ -12,8 +12,6 @@ An additional module is required to describe fuel costs - either
 fuel_cost which specifies a simple flat fuel cost that can vary by load
 zone and period, or fuel_markets which specifies a tiered supply curve.
 
-Also, an additional module is required to constrain project dispatch -
-either operations.no_commit or operations.unitcommit.
 
 Most applications of MATCH will also benefit from optional modules such as
 transmission, local_td, reserves, etc.
@@ -23,6 +21,5 @@ core_modules = [
     'match_model.timescales',
     'match_model.financials',
     'match_model.balancing.load_zones',
-    'match_model.energy_sources.properties',
-    'match_model.generators.core',
+    'match_model.generators',
     'match_model.reporting']

@@ -2,15 +2,20 @@
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 import os
-import pandas as pd
-import pickle
+import shutil
 
 def post_solve(instance, outdir, inputs_dir):
     """
     Runs the summary report
     """
+    # get the name of the scenario
+    scenario = str(outdir).split('/')[-1]
 
-    s = str(outdir).split('/')[-1]
+    #shutil.copy('../reporting/summary_report.ipynb', inputs_dir)
+
+    # run the notebook
     os.system(f'jupyter nbconvert --ExecutePreprocessor.kernel_name="python3" --to notebook --execute --inplace {inputs_dir}/summary_report.ipynb')
-    os.system(f'jupyter nbconvert --to html --no-input --no-prompt {inputs_dir}/summary_report.ipynb --output-dir {outdir} --output summary_report_{s}')
-    os.system(f'jupyter nbconvert --clear-output --inplace {inputs_dir}/summary_report.ipynb')
+    # convert the notebook to html and save it to the output directory
+    os.system(f'jupyter nbconvert --to html --no-input --no-prompt {inputs_dir}/summary_report.ipynb --output-dir {outdir}/../../summary_reports --output summary_report_{scenario}')
+    # delete the notebook from the inputs directory
+    os.remove(f'{inputs_dir}/summary_report.ipynb')

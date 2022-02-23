@@ -247,6 +247,14 @@ def define_components(mod):
     mod.min_data_check('TIMEPOINTS', 'tp_ts')
     mod.tp_timestamp = Param(mod.TIMEPOINTS, default=lambda m, t: t, within=Any)
 
+    #set of months
+    mod.MONTHS = Set(ordered=True, initialize=[1,2,3,4,5,6,7,8,9,10,11,12], dimen=1)
+    mod.DAYS = Set(ordered=True, initialize=range(1, 366))
+
+    #specify which month each timepoint is associated with
+    mod.tp_month = Param(mod.TIMEPOINTS, within=mod.MONTHS)
+    mod.tp_day = Param(mod.TIMEPOINTS, within=mod.DAYS)
+
     # Derived sets and parameters
     # note: the first five are calculated early so they
     # can be used for the add_one_to_period_end_rule
@@ -412,6 +420,6 @@ def load_inputs(mod, match_data, inputs_dir):
                mod.ts_num_tps, mod.ts_scale_to_period])
     match_data.load_aug(
         filename=os.path.join(inputs_dir, 'timepoints.csv'),
-        select=('timepoint_id', 'timestamp', 'timeseries'),
+        select=('timepoint_id', 'timestamp', 'timeseries','tp_month','tp_day'),
         index=mod.TIMEPOINTS,
-        param=[mod.tp_timestamp, mod.tp_ts])
+        param=[mod.tp_timestamp, mod.tp_ts, mod.tp_month, mod.tp_day])

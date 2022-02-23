@@ -73,8 +73,8 @@ Activate the new environment
 
     conda activate match_model
 
-# Install the switch package
-This will install the local codebase as switch
+# Install the match_model package
+This will install the local codebase as match_model
     
     pip install --upgrade --editable .
 

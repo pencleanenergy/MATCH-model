@@ -171,7 +171,7 @@ def main(args=None):
         scenarios = os.listdir('outputs')
         all_done = []
         for s in scenarios:
-            summary_file = f'outputs/{s}/scenario_summary.csv'
+            summary_file = f'summary_reports/summary_report_{s}.html'
             if os.path.exists(summary_file):
                 all_done.append(True)
             else:
@@ -184,21 +184,31 @@ def main(args=None):
 
             i = 0
             for s in scenarios:
-                summary_file = f'outputs/{s}/scenario_summary.csv'
-
+                summary_file = f'summary_reports/scenario_summary_{s}.csv'
+                capacity_file = f'outputs/{s}/gen_cap.csv'
 
                 if i == 0:
-                    df = pd.read_csv(summary_file, index_col=0)
+                    summary_df = pd.read_csv(summary_file, index_col=0)
+                    capacity_df = pd.read_csv(capacity_file, usecols=['generation_project','gen_tech','GenCapacity']).rename(columns={'GenCapacity':s})
 
                     i += 1
                 else:
-                    df2 = pd.read_csv(summary_file, index_col=0)
-                    if len(df2) > len(df):
-                        df = df.merge(df2, how='right', left_index=True, right_index=True)
+                    summary_df2 = pd.read_csv(summary_file, index_col=0)
+                    if len(summary_df2) > len(summary_df):
+                        summary_df = summary_df.merge(summary_df2, how='right', left_index=True, right_index=True)
                     else:
-                        df = df.merge(df2, how='left', left_index=True, right_index=True)
+                        summary_df = summary_df.merge(summary_df2, how='left', left_index=True, right_index=True)
 
-            df.to_csv('outputs/scenario_comparison.csv', header=False)
+                    capacity_df2 = pd.read_csv(capacity_file, usecols=['generation_project','GenCapacity']).rename(columns={'GenCapacity':s})
+                    capacity_df = capacity_df.merge(capacity_df2, how='outer', on='generation_project')
+
+            summary_df.to_csv('summary_reports/scenario_comparison.csv', header=False)
+            capacity_df.to_csv('summary_reports/portfolio_comparison.csv', index=False)
+            
+            # delete all of the individual files
+            for s in scenarios:
+                summary_file = f'summary_reports/scenario_summary_{s}.csv'
+                os.remove(summary_file)
 
 
 

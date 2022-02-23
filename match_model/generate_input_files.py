@@ -87,7 +87,7 @@ def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, output_dir):
     # drop where no penalty
     xl_gen_validated = xl_gen_validated[xl_gen_validated['ppa_penalty'] != 0]
 
-    xl_gen_validated.to_csv(output_dir / 'excessgen_penalty.csv', index=False)
+    xl_gen_validated.to_csv(output_dir / 'projects_with_overbuild_risk.csv', index=False)
 
 
 def download_cambium_data(cambium_region_list, model_workspace):
@@ -96,16 +96,17 @@ def download_cambium_data(cambium_region_list, model_workspace):
     """
     # specify the file ids for the five scenarios
     file_ids = [32096,32098,32103,32110,32104]
-
+    regions_to_download = []
     for region in cambium_region_list:
         # if data has already been downloaded for this region, remove it from the region list
         if os.path.exists(f'{model_workspace}/../nrel_cambium_{region}'):
-            cambium_region_list.remove(region)
-
+            pass
+        else:
+            regions_to_download.append(region)
     # if there are no regions in the region list, skip this, otherwise download the data
-    if len(cambium_region_list) > 0:
+    if len(regions_to_download) > 0:
 
-        print(f'Downloading Cambium data for the following GEA Regions: {cambium_region_list}')
+        print(f'Downloading Cambium data for the following GEA Regions: {regions_to_download}')
 
         for file_id in file_ids:
 
@@ -119,13 +120,123 @@ def download_cambium_data(cambium_region_list, model_workspace):
             # extract the files for each region, saving to a different directory
             with zipfile.ZipFile(f'{model_workspace}/../cambium_download.zip', 'r') as z:
                 for file in z.infolist():
-                    for region in cambium_region_list:
+                    for region in regions_to_download:
                         if region in file.filename:
                             file.filename = os.path.basename(file.filename)
                             z.extract(file, f'{model_workspace}/../nrel_cambium_{region}')
 
             # delete the downloaded zip file
             os.remove(f'{model_workspace}/../cambium_download.zip')
+
+def load_cambium_data(model_workspace, scenario, year, region):
+    """
+    loads a single year of cambium data for a single scneario and region
+    """
+
+    # specify the location of the directory where the NREL cambium data is downloaded
+    cambium_dir = f'{model_workspace}/../nrel_cambium_{region}'
+
+    # if the year is an even number, load the file corresponding to the year
+    if year % 2 == 0:
+        year_to_load = year
+    else:
+        year_to_load = year + 1
+
+    cambium = pd.read_csv(f'{cambium_dir}/StdScen21_{scenario}_hourly_{region}_{year_to_load}.csv', skiprows=4)
+
+    cambium = cambium.drop(columns=['timestamp','timestamp_local'])
+
+    # create a datetime index, skipping leap days
+    dates = pd.date_range(start=f'01/01/{year} 00:00', end=f'12/31/{year} 23:00', freq='H', name='timestamp_local')
+    cambium.index = pd.DatetimeIndex(data=(t for t in dates if ((t.month != 2) | (t.day != 29))))
+
+    cambium.index = cambium.index.rename('timestamp')
+        
+    return cambium
+
+
+def calculate_levelized_lrmer(start_year, period, discount, emissions_unit, region_list, model_workspace):
+    """
+    Calculates a levelized LRMER from the Cambium data
+    
+    Inputs:
+        start_year: the start year for the levelization (should be the model year)
+        period: the number of years of expected project lifetime
+        discount: the social discount rate as a percent fraction for discounting emission damages in future years
+        emissions_unit: the desired unit for the emissions factor
+    Returns:
+        levelized_lrmers: a dataframe containing levelized LRMER timeseries for each scenario
+    """
+
+    if 'CO2e' in emissions_unit:
+        ghg = 'co2e'
+        ghg_unit = 'CO2e'
+    else:
+        ghg = 'co2'
+        ghg_unit = 'CO2'
+
+    # load data
+
+    scenarios = ['LowRECost','MidCase','MidCase95by2035','MidCase95by2050','HighRECost']
+
+    # create an empty df to hold all of the levelized lrmers
+    levelized_lrmers = pd.DataFrame(columns=['cambium_scenario', 'cambium_region', 'timepoint','timestamp', 'lrmer'])
+
+    # for each scenario, load all years and calculate a levelized value
+    for scenario in scenarios:
+
+        for region in region_list:
+
+            # create a blank dataframe to hold the lrmers for each year
+            lrmer_scenario = pd.DataFrame()
+
+            # start a variable to track the discounted number of years for the levelization
+            denominator = 0
+
+            for year in range(start_year, start_year + period + 1):
+
+                # load the data and only keep the lrmer value
+                lrmer = load_cambium_data(model_workspace, scenario, year, region)[[f'lrmer_{ghg}_c','distloss_rate_marg']]
+
+                # convert to busbar values
+                lrmer[f'lrmer_{ghg}_c'] = lrmer[f'lrmer_{ghg}_c'] * (1 - lrmer['distloss_rate_marg'])
+
+                # calculate the weighting factor for the year
+                weight = 1/((1+discount)**(year-start_year))
+                denominator += weight
+
+                # discount the data
+                lrmer[f'lrmer_{ghg}_c'] = lrmer[f'lrmer_{ghg}_c'] * weight
+
+                # reset the index
+                lrmer = lrmer.reset_index()
+
+                # add the data to the containing df
+                lrmer_scenario[year] = lrmer[f'lrmer_{ghg}_c']
+
+            # calculate the levelized lrmer for the region
+            region_data = pd.DataFrame(columns=['cambium_scenario', 'cambium_region', 'timepoint', 'timestamp', 'lrmer'], index=range(8760))
+            region_data['timepoint'] = region_data.index + 1
+            region_data['cambium_scenario'] = scenario
+            region_data['cambium_region'] = region
+            region_data['lrmer'] = lrmer_scenario.sum(axis=1) / denominator
+
+            # create a datetime index, skipping leap days
+            dates = pd.date_range(start=f'01/01/{start_year} 00:00', end=f'12/31/{start_year} 23:00', freq='H', name='timestamp')
+            region_data['timestamp']= pd.DatetimeIndex(data=(t for t in dates if ((t.month != 2) | (t.day != 29))))
+
+            # add the data to the dataframe
+            levelized_lrmers = pd.concat([levelized_lrmers,region_data], axis=0)
+
+    # convert the unit from kgCO2/MWh to the appropriate unit
+    unit_conversion = {f'lb{ghg_unit}/MWh':2.20462,
+                        f'kg{ghg_unit}/MWh':1,
+                        f'mT{ghg_unit}/MWh':0.001,
+                        f'ton{ghg_unit}/MWh':(2.20462/2000)}
+    levelized_lrmers['lrmer'] = levelized_lrmers['lrmer'] * unit_conversion[emissions_unit]
+
+
+    return levelized_lrmers
 
 def generate_inputs(model_workspace):
 
@@ -170,6 +281,7 @@ def generate_inputs(model_workspace):
     try:
         os.mkdir(model_workspace / 'inputs')
         os.mkdir(model_workspace / 'outputs')
+        os.mkdir(model_workspace / 'summary_reports')
     except FileExistsError:
         pass
 
@@ -228,7 +340,7 @@ def generate_inputs(model_workspace):
     xl_gen['solar_age_degredation'] = 1
     xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'solar_age_degredation'] = (1-0.005)**(year - xl_gen.loc[xl_gen['gen_tech'] == 'Solar_PV', 'cod_year'])
 
-    if 'match_model.generators.extensions.storage' in unused_modules:
+    if 'match_model.optional.storage' in unused_modules:
         pass
     else:
         xl_storage = pd.read_excel(io=model_inputs, sheet_name='storage', skiprows=3).dropna(axis=1, how='all')
@@ -241,6 +353,13 @@ def generate_inputs(model_workspace):
         xl_storage['gen_is_baseload'] = 0
         xl_storage['solar_age_degredation'] = '.'
 
+        # validate that variants are not specified for hybrid storage
+        for g in list(xl_storage['GENERATION_PROJECT'].unique()):
+            # if the generator is a hybrid and a variant group is specified, raise an error
+            if xl_storage.loc[xl_storage['GENERATION_PROJECT'] == g, 'gen_is_hybrid'].item() == 1:
+                if xl_storage.loc[xl_storage['GENERATION_PROJECT'] == g, 'gen_variant_group'].item() != '.':
+                    raise ValueError(f"Variants cannot be specified for the storage portion of a hybrid project ({g}). Instead specify different variants for the generator portion of the project, each of which has a unique hybrid storage project linked to it.")
+
         # concat xl_gen and xl_storage, and fill missing values with '.'
         xl_gen = pd.concat([xl_gen,xl_storage], sort=False, ignore_index=True).fillna('.')
 
@@ -248,26 +367,26 @@ def generate_inputs(model_workspace):
     if xl_load.isnull().values.any():
         raise ValueError("Nodal prices contain a missing value. Please check")
 
-    if 'match_model.generators.extensions.resource_adequacy' in unused_modules:
+    if 'match_model.optional.resource_adequacy' in unused_modules:
         pass
     else:
         # ra_requirement.csv
         xl_ra_req = pd.read_excel(io=model_inputs, sheet_name='RA_requirements', skiprows=1).dropna(axis=1, how='all')
         ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] != 'flexible_RA']
         ra_requirement['period'] = year
-        ra_requirement = ra_requirement[['period','tp_month','ra_requirement','ra_cost','ra_resell_value']]
+        ra_requirement = ra_requirement[['period','month','ra_requirement','ra_cost','ra_resell_value']]
 
         # flexible_ra_requirement.csv
         flexible_ra_requirement = xl_ra_req.copy()[xl_ra_req['RA_RESOURCE'] == 'flexible_RA']
         flexible_ra_requirement['period'] = year
         flexible_ra_requirement = flexible_ra_requirement.drop(columns=['RA_RESOURCE'])
         flexible_ra_requirement = flexible_ra_requirement.rename(columns={'ra_requirement':'flexible_ra_requirement','ra_cost':'flexible_ra_cost', 'ra_resell_value':'flexible_ra_resell_value'})
-        flexible_ra_requirement = flexible_ra_requirement[['period','tp_month','flexible_ra_requirement','flexible_ra_cost','flexible_ra_resell_value']]
+        flexible_ra_requirement = flexible_ra_requirement[['period','month','flexible_ra_requirement','flexible_ra_cost','flexible_ra_resell_value']]
 
         # ra_capacity_value.csv
         ra_capacity_value = pd.read_excel(io=model_inputs, sheet_name='RA_capacity_value').dropna(axis=1, how='all')
         ra_capacity_value['period'] = year
-        ra_capacity_value = ra_capacity_value[['period','gen_energy_source','tp_month','elcc','ra_production_factor']]
+        ra_capacity_value = ra_capacity_value[['period','gen_energy_source','month','elcc','ra_production_factor']]
 
          # midterm_reliability_requirement.csv
         xl_midterm_ra = pd.read_excel(io=model_inputs, sheet_name='midterm_RA_requirement', skiprows=1).dropna(axis=1, how='all')
@@ -286,10 +405,14 @@ def generate_inputs(model_workspace):
     xl_cambium_region = pd.read_excel(io=model_inputs, sheet_name='cambium_region').dropna(axis=1, how='all')
 
     # get a list of unique cambium regions
-    cambium_region_list = list(xl_cambium_region['GEA_region'].unique())
+    cambium_region_list = list(xl_gen['gen_cambium_region'].unique())
 
     # download the cambium data if needed
     download_cambium_data(cambium_region_list, model_workspace)
+
+    # calculate marginal emissions factors - these will be used in the summary report no matter what, and potentially in the emissions optimization module
+    # calculate for all regions and scenarios
+    lrmer_data = calculate_levelized_lrmer(year, 20, 0, emissions_unit, cambium_region_list, model_workspace)
 
     xl_hedge_premium_cost = pd.read_excel(io=model_inputs, sheet_name='hedge_premium_cost',skiprows=2).dropna(axis=1, how='all')
 
@@ -448,6 +571,11 @@ def generate_inputs(model_workspace):
             validate_cost_inputs(set_gens, df_vcf, xl_nodal_prices, pysam_dir)
         except UnboundLocalError:
             validate_cost_inputs(set_gens, df_vcf, xl_nodal_prices, model_workspace)
+
+        # filter the marginal emissions data to match the current gen set
+        set_cambium_region_list = list(set_gens['gen_cambium_region'].unique())
+        lrmer_for_gen_set = lrmer_data.loc[lrmer_data['cambium_region'].isin(set_cambium_region_list),:]
+
                     
         #iterate for each scenario and save outputs to csv files
         for scenario in set_scenario_list:
@@ -462,16 +590,16 @@ def generate_inputs(model_workspace):
                                     'match_model.timescales',
                                     'match_model.financials',
                                     'match_model.balancing.load_zones',
-                                    'match_model.generators.core.build',
-                                    'match_model.generators.core.dispatch']
+                                    'match_model.generators.build',
+                                    'match_model.generators.dispatch']
             module_list = list(xl_scenarios.loc[(xl_scenarios['Input Type'] == 'Optional Modules') & (xl_scenarios[scenario] == 1), 'Parameter'])
-            if 'match_model.generators.extensions.wholesale_pricing' in module_list:
-                module_list.remove('match_model.generators.extensions.wholesale_pricing')
-                required_module_list.append('match_model.generators.extensions.wholesale_pricing')
-            if 'match_model.generators.extensions.storage' in module_list:
-                module_list.remove('match_model.generators.extensions.storage')
-                required_module_list.append('match_model.generators.extensions.storage')
-            module_list = required_module_list + ['match_model.balancing.renewable_target'] + module_list + ['match_model.reporting.generate_report']
+            if 'match_model.optional.wholesale_pricing' in module_list:
+                module_list.remove('match_model.optional.wholesale_pricing')
+                required_module_list.append('match_model.optional.wholesale_pricing')
+            if 'match_model.optional.storage' in module_list:
+                module_list.remove('match_model.optional.storage')
+                required_module_list.append('match_model.optional.storage')
+            module_list = required_module_list + ['match_model.balancing.system_power','match_model.balancing.renewable_target','match_model.balancing.excess_generation'] + module_list + ['match_model.reporting.generate_report']
             modules = open(input_dir / 'modules.txt', 'w+')
             for module in module_list:
                 modules.write(module)
@@ -481,21 +609,48 @@ def generate_inputs(model_workspace):
             # renewable_target.csv
             renewable_target_value = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'renewable_target'), scenario].item()
             renewable_target_type = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'goal_type'), scenario].item()
-            excess_generation_limit = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excess_generation_limit'), scenario].item()
-            excess_generation_limit_type = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excess_generation_limit_type'), scenario].item()
             select_variants = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'select_variants'), scenario].item()
             renewable_target = pd.DataFrame(data={'period':[year], 
-                                                  'renewable_target':[renewable_target_value],
-                                                  'excess_generation_limit':[excess_generation_limit]})
+                                                  'renewable_target':[renewable_target_value]})
             renewable_target.to_csv(input_dir / 'renewable_target.csv', index=False)
 
             # excessgen_penalty.csv
             excessgen_penalty = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excessgen_penalty'), scenario].item()
-            excessgen_penalty = pd.DataFrame(data={'excessgen_penalty':[excessgen_penalty]})
-            excessgen_penalty.to_csv(input_dir / 'excessgen_penalty.csv', index=False)
+            excess_generation_limit = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excess_generation_limit'), scenario].item()
+            excess_generation_limit_type = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excess_generation_limit_type'), scenario].item()
+            excessgen_penalty = pd.DataFrame(data={'period':[year],
+                                                   'excess_generation_limit':[excess_generation_limit],
+                                                   'excessgen_penalty':[excessgen_penalty]})
+            excessgen_penalty.to_csv(input_dir / 'excessgen_limits.csv', index=False)
 
+            # save lrmer data for summary reports
+            lrmer_for_gen_set.to_csv(input_dir / 'lrmer_for_summary.csv', index=False)
+
+            # load scenario name to use
+            cambium_scenario = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'cambium_scenario'), scenario].item()
+            # write the name of the cambium scenario to a text file
+            cambium_scenario_file = open(input_dir / 'cambium_scenario.txt', 'w+')
+            cambium_scenario_file.write(cambium_scenario)
+            cambium_scenario_file.close()
+            
+            # if emissions optimization module in use, generate inputs for module
+            if 'match_model.optional.emissions_optimization' in module_list:
+                # social cost of carbon
+                social_cost_of_carbon = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'social_cost_of_carbon'), scenario].item()
+                social_cost_of_carbon = pd.DataFrame(data={'period':[year], 
+                                                    'social_cost_of_carbon':[social_cost_of_carbon]})
+                social_cost_of_carbon.to_csv(input_dir / 'social_cost_of_carbon.csv', index=False)
+
+                # filter the lrmer data for the module
+                lrmer = lrmer_for_gen_set.loc[lrmer_for_gen_set['cambium_scenario'] == cambium_scenario,['cambium_region','timepoint','lrmer']]
+                lrmer.to_csv(input_dir / 'lrmer.csv', index=False)
+
+                cambium_regions = pd.DataFrame(data={'CAMBIUM_REGIONS':set_cambium_region_list})
+                cambium_regions.to_csv(input_dir / 'cambium_regions.csv', index=False)  
+
+                
             # summary_report.ipynb
-            shutil.copy('reporting/summary_report.ipynb', input_dir)
+            shutil.copy('../reporting/summary_report.ipynb', input_dir)
 
             # generator set name
             set_name = open(input_dir / 'gen_set.txt', 'w+')
@@ -548,10 +703,7 @@ def generate_inputs(model_workspace):
             df_timepoints['tp_day'] = df_timepoints.index.dayofyear
             df_timepoints = df_timepoints.reset_index(drop=True)
             df_timepoints['timepoint_id'] = df_timepoints.index + 1
-            df_timepoints[['timepoint_id','timestamp','timeseries']].to_csv(input_dir / 'timepoints.csv', index=False)
-
-            # days.csv
-            df_timepoints[['timepoint_id','tp_day']].to_csv(input_dir / 'days.csv', index=False)
+            df_timepoints.to_csv(input_dir / 'timepoints.csv', index=False)
 
             df_financials.to_csv(input_dir / 'financials.csv', index=False)
 
@@ -586,6 +738,8 @@ def generate_inputs(model_workspace):
                         'gen_load_zone',
                         'gen_tech',	
                         'gen_emission_factor',
+                        'gen_cambium_region',
+                        'gen_is_additional',
                         'gen_is_variable',	
                         'gen_is_hybrid',
                         'gen_is_storage',
@@ -654,13 +808,13 @@ def generate_inputs(model_workspace):
             # save the name of the cambium region
             cambium_region = xl_cambium_region.loc[xl_cambium_region['load_zone'] == load_zone_name, 'GEA_region'].item()
 
-            # emission unit.txt
+            # cambium_region.txt
             cambium_region_file = open(input_dir / 'cambium_region.txt', 'w+')
             cambium_region_file.write(cambium_region)
             cambium_region_file.close()
 
             # RA data
-            if 'match_model.generators.extensions.resource_adequacy' in module_list:
+            if 'match_model.optional.resource_adequacy' in module_list:
 
                 ra_requirement.to_csv(input_dir / 'ra_requirement.csv', index=False)
                 flexible_ra_requirement.to_csv(input_dir / 'flexible_ra_requirement.csv', index=False)
@@ -670,17 +824,6 @@ def generate_inputs(model_workspace):
 
                 # midterm_reliability_requirement.csv
                 xl_midterm_ra.to_csv(input_dir / 'midterm_reliability_requirement.csv', index=False)
-            
-            # hedge_cost.csv
-            hedge_cost = xl_hedge_premium_cost
-            # round all prices to the nearest whole cent
-            try:
-                hedge_cost['hedge_premium_cost'] = hedge_cost['hedge_premium_cost'].round(2)
-            except TypeError:
-                pass
-            # only keep data for the relevant load zones
-            hedge_cost = hedge_cost[hedge_cost['load_zone'].isin(load_list)]
-            hedge_cost.to_csv(input_dir / 'hedge_premium_cost.csv', index=False)
 
             # pricing_nodes.csv
             node_list = list(set_gens.gen_pricing_node.unique())
@@ -701,6 +844,61 @@ def generate_inputs(model_workspace):
             nodal_prices['nodal_price'] = nodal_prices['nodal_price'].round(2)
             # add system power / demand node prices to df
             nodal_prices.to_csv(input_dir / 'nodal_prices.csv', index=False)
+
+            # hedge_cost.csv
+            if not xl_hedge_premium_cost.empty:
+                # create a list to hold the data
+                hedge_cost = []
+                # for each load zone, calculate a month-hour average hedge cost and add it to the list
+                for zone in list(xl_hedge_premium_cost['load_zone'].unique()):
+                    hedge_node = xl_hedge_premium_cost.loc[xl_hedge_premium_cost['load_zone'] == zone, 'hedge_node'].item()
+                    hedge_percent = xl_hedge_premium_cost.loc[xl_hedge_premium_cost['load_zone'] == zone, 'hedge_premium_percent'].item()
+
+                    # get the hedge node data
+                    nodal_data = xl_nodal_prices[[hedge_node]]
+                    nodal_data.index = pd.to_datetime(nodal_data.index)
+                    nodal_data.loc[:,'month'] = nodal_data.index.month
+                    nodal_data.loc[:,'hour'] = nodal_data.index.hour
+
+                    # calculate the month-hour average
+                    nodal_data_mh = nodal_data.groupby(['month','hour']).mean().reset_index()
+
+                    # multiply the average by the premium percent
+                    nodal_data_mh[hedge_node] = nodal_data_mh[hedge_node] * hedge_percent
+
+                    # set a floor of 0.01 if prices are ever negative
+                    nodal_data_mh.loc[nodal_data_mh[hedge_node] < 0, hedge_node] = 0.01
+
+                    #drop the original 8760 data and merge in the month-hour average data
+                    nodal_data_mh = nodal_data_mh.rename(columns={hedge_node:zone})
+                    nodal_data = nodal_data.merge(nodal_data_mh, how='left', on=['month','hour'])
+
+                    hedge_cost.append(nodal_data[[zone]])
+
+                # concat all zone data together
+                hedge_cost = pd.concat(hedge_cost, axis=1)
+                # add a timepoint column
+                hedge_cost.loc[:,'timepoint'] = hedge_cost.index + 1
+                # pivot the data to long form
+                hedge_cost = hedge_cost.melt(id_vars='timepoint', var_name='load_zone', value_name='hedge_premium_cost')
+                # change the column order
+                hedge_cost = hedge_cost[['load_zone','timepoint','hedge_premium_cost']]
+                # round to the nearest cent
+                hedge_cost['hedge_premium_cost'] = round(hedge_cost['hedge_premium_cost'], 2)
+            else:
+                hedge_cost = pd.DataFrame(columns=['load_zone','timepoint','hedge_premium_cost'])
+
+            hedge_cost.to_csv(input_dir / 'hedge_premium_cost.csv', index=False)
+
+            # round all prices to the nearest whole cent
+            try:
+                hedge_cost['hedge_premium_cost'] = hedge_cost['hedge_premium_cost'].round(2)
+            except TypeError:
+                pass
+            # only keep data for the relevant load zones
+            hedge_cost = hedge_cost[hedge_cost['load_zone'].isin(load_list)]
+            hedge_cost.to_csv(input_dir / 'hedge_premium_cost.csv', index=False)
+
 
             #variable_capacity_factors.csv
             df_vcf_scenario = df_vcf.copy()
@@ -796,8 +994,8 @@ def simulate_solar_generation(nrel_api_key, nrel_api_email, resource_dict, confi
             roll = int(tz_offset  - system_model_PV.Outputs.tz)
             df_output = pd.DataFrame(np.roll(df_output, roll))
 
-            #calculate capacity factor
-            df_output = df_output / systemDesign['system_capacity']
+            #calculate capacity factor by dividing generation by the nameplate AC capacity
+            df_output = df_output / (systemDesign['system_capacity'] / systemDesign['dc_ac_ratio'])
 
             #name the column based on resource name
             # check if the resource name is a list, meaning the profile belongs to several resources
