@@ -1,4 +1,12 @@
 -------------------------------------------------------------------------------
+Commit 2022.02.25 (Version 0.18.1)
+-------------------------------------------------------------------------------
+
+- remove gitattributes
+- allows storage projects to have a per MWh discharge energy cost
+- when calculating pv panel age degredation, fix bug that calculated negative project age if cod_year > model year
+
+-------------------------------------------------------------------------------
 Commit 2022.02.22 (Version 0.18.0)
 -------------------------------------------------------------------------------
 

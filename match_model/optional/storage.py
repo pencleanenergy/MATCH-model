@@ -344,6 +344,15 @@ def define_components(mod):
     # ENERGY ARBITRAGE COST/REVENUE RULES
     #####################################
 
+    mod.StoragePPACostInTP = Expression(
+        mod.TIMEPOINTS,
+        rule=lambda m, t: sum(
+            m.DischargeStorage[g, t] * (m.ppa_energy_cost[g]) 
+            for g in m.GENS_IN_PERIOD[m.tp_period[t]]
+            if g in m.STORAGE_GENS),
+        doc="Summarize costs for the objective function")
+    mod.Cost_Components_Per_TP.append('StoragePPACostInTP')
+
     mod.StorageDispatchPnodeCost = Expression(
         mod.STORAGE_GEN_TPS,
         rule = lambda m, g, t: (m.ChargeStorage[g, t] - m.DischargeStorage[g, t]) * m.nodal_price[m.gen_pricing_node[g], t]

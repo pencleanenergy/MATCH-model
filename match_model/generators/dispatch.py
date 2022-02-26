@@ -204,8 +204,11 @@ def define_components(mod):
                 (1 - m.baseload_gen_scheduled_outage_rate[g]))
         elif m.gen_tech[g] == 'Solar_PV':
             year = sum(m.period_start[p] for p in m.PERIODS_FOR_GEN[g])
+            project_age = year - m.cod_year[g]
+            if project_age < 0:
+                project_age = 0
             # calculate solar degredation assuming 0.5% per year linear panel degredation
-            return (1 - m.gen_forced_outage_rate[g]) * (1-(0.005*(year - m.cod_year[g])))
+            return (1 - m.gen_forced_outage_rate[g]) * (1-(0.005*(project_age)))
         else:
             return (1 - m.gen_forced_outage_rate[g])
     mod.gen_availability = Param(
