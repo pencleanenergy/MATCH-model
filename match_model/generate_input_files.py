@@ -115,7 +115,7 @@ def download_cambium_data(cambium_region_list, model_workspace):
 
             # download and save the data to a zip file
             with open(f'{model_workspace}/../cambium_download.zip','wb') as output_file:
-                output_file.write(requests.post('https://cambium.nrel.gov/api/download/', data=body, stream=True).content)
+                output_file.write(requests.post('https://scenarioviewer.nrel.gov/api/download/', data=body, stream=True).content)
 
             # extract the files for each region, saving to a different directory
             with zipfile.ZipFile(f'{model_workspace}/../cambium_download.zip', 'r') as z:
@@ -479,6 +479,12 @@ def generate_inputs(model_workspace):
             
             #get list of templates
             template_list = list(sam_inputs.SAM_template.unique())
+
+            # check that templates match
+            available_templates = list(sam_templates.Template_Name.unique())
+            for template in template_list:
+                if template not in available_templates:
+                    raise ValueError(f'SAM template for {template} not specified')
 
             #For each template, get the list of generators and simulate
             for template in template_list:
