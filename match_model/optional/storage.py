@@ -344,20 +344,19 @@ def define_components(mod):
     # ENERGY ARBITRAGE COST/REVENUE RULES
     #####################################
 
-    mod.StoragePPACostInTP = Expression(
+    mod.StorageDispatchPPACost = Expression(
+        mod.STORAGE_GEN_TPS,
+        rule = lambda m, g, t: m.DischargeStorage[g, t] * m.ppa_energy_cost[g])
+    
+    mod.StorageEnergyPPACostInTP = Expression(
         mod.TIMEPOINTS,
-        rule=lambda m, t: sum(
-            m.DischargeStorage[g, t] * (m.ppa_energy_cost[g]) 
-            for g in m.GENS_IN_PERIOD[m.tp_period[t]]
-            if g in m.STORAGE_GENS),
+        rule=lambda m, t: sum(m.StorageDispatchPPACost[g, t] for g in m.STORAGE_GENS),
         doc="Summarize costs for the objective function")
-    mod.Cost_Components_Per_TP.append('StoragePPACostInTP')
+    mod.Cost_Components_Per_TP.append('StorageEnergyPPACostInTP')
 
     mod.StorageDispatchPnodeCost = Expression(
         mod.STORAGE_GEN_TPS,
-        rule = lambda m, g, t: (m.ChargeStorage[g, t] - m.DischargeStorage[g, t]) * m.nodal_price[m.gen_pricing_node[g], t]
-        #+ m.DischargeStorage[g, t] # discharge penalty of $1
-    )
+        rule = lambda m, g, t: (m.ChargeStorage[g, t] - m.DischargeStorage[g, t]) * m.nodal_price[m.gen_pricing_node[g], t])
     mod.StorageNodalEnergyCostInTP = Expression(
         mod.TIMEPOINTS,
         rule = lambda m, t: sum(m.StorageDispatchPnodeCost[g, t] for g in m.STORAGE_GENS)
@@ -433,11 +432,11 @@ def post_solve(instance, outdir):
         output_file=os.path.join(outdir, "storage_dispatch.csv"),
         headings=("generation_project", "timestamp",
                   "ChargeMW", 'DischargeMW', 
-                  "StateOfCharge", "StorageDispatchPnodeCost","StorageDispatchDeliveryCost"),
+                  "StateOfCharge", "StorageDispatchPPACost","StorageDispatchPnodeCost","StorageDispatchDeliveryCost"),
         values=lambda m, g, t: (
             g, m.tp_timestamp[t],
             m.ChargeStorage[g, t], m.DischargeStorage[g, t], 
-            m.StateOfCharge[g, t], m.StorageDispatchPnodeCost[g, t], m.StorageDispatchDeliveryCost[g,t]
+            m.StateOfCharge[g, t], m.StorageDispatchPPACost[g,t], m.StorageDispatchPnodeCost[g, t], m.StorageDispatchDeliveryCost[g,t]
             ))
     reporting.write_table(
         instance, instance.STORAGE_GENS, instance.PERIODS,

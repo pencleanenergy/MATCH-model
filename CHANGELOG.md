@@ -1,4 +1,13 @@
 -------------------------------------------------------------------------------
+Commit 2022.03.03 (Version 0.18.4)
+-------------------------------------------------------------------------------
+
+- Added error handling to the `reporting.generate_report.py` script to retry running the jupyter notebook if there is an nbconvert RuntimeError: Kernel didn't respond in 60 seconds
+- Added storage energy ppa costs to model outputs and summary report
+- Add cost outputs using base year and dollar year financial dollars
+- Update the annual excess generation constraint
+
+-------------------------------------------------------------------------------
 Commit 2022.03.02 (Version 0.18.3)
 -------------------------------------------------------------------------------
 

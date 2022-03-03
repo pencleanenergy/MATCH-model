@@ -66,6 +66,19 @@ def define_components(mod):
         mod.PERIODS,
         rule=lambda m, p: sum(m.ZoneTotalGeneratorDispatch[z,t] + m.ZoneTotalExcessGen[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p))
 
+    # if there are any storage generators in the model
+    try:
+        mod.total_storage_losses_in_period = Expression(
+            mod.PERIODS,
+            rule=lambda m, p: sum(m.ZoneTotalStorageCharge[z,t] - m.ZoneTotalStorageDischarge[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
+        )
+    except ValueError:
+        mod.total_storage_losses_in_period = Param(
+            mod.PERIODS,
+            default=0
+        )
+    
+    
     if mod.options.goal_type == "hourly":
         
         #calculate annual system power
@@ -78,21 +91,7 @@ def define_components(mod):
             rule=lambda m, p, z: (
                 m.AnnualSystemPower[z,p] <= ((1 - m.renewable_target[p]) * m.zone_total_demand_in_period_mwh[z,p])))
 
-
     elif mod.options.goal_type == "annual":
-
-        # if there are any storage generators in the model
-        try:
-            mod.total_storage_losses_in_period = Expression(
-                mod.PERIODS,
-                rule=lambda m, p: sum(m.ZoneTotalStorageCharge[z,t] - m.ZoneTotalStorageDischarge[z,t] for (z,t) in m.ZONE_TIMEPOINTS if m.tp_period[t] == p)
-            )
-        except ValueError:
-            mod.total_storage_losses_in_period = Param(
-                mod.PERIODS,
-                default=0
-            )
-
         mod.Enforce_Annual_Renewable_Target = Constraint(
             mod.PERIODS, # for each zone in each period
             rule=lambda m, p: (m.total_generation_in_period[p] - m.total_storage_losses_in_period[p] >= m.renewable_target[p] * m.total_demand_in_period[p]))

@@ -459,7 +459,7 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
 
     if storage_exists:
         # add storage nodal costs
-        storage_cost = storage_dispatch[['timestamp','StorageDispatchPnodeCost']]
+        storage_cost = storage_dispatch[['timestamp','StorageDispatchPPACost','StorageDispatchPnodeCost']]
         # sum for each timestamp
         storage_cost = storage_cost.groupby('timestamp').sum()
         # merge the data
@@ -481,6 +481,7 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
                                                 'hedge_premium_cost': 'Hedge Premium Cost',
                                                 'Capacity Contract Cost':'Storage Capacity PPA Cost',
                                                 'ra_open_position_cost':'RA Open Position Cost',
+                                                'StorageDispatchPPACost':'Storage Energy PPA Cost',
                                                 'StorageDispatchPnodeCost':'Storage Wholesale Price Arbitrage',
                                                 'excess_ra_value':'Excess RA Value'})
 
@@ -576,6 +577,7 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
     # create a column that categorizes all of the costs
     cost_category_dict = {'Hedge Premium Cost':'Contract', 
                         'Dispatched Generation PPA Cost':'Contract',
+                        'Storage Energy PPA Cost':'Contract',
                         'Excess Generation PPA Cost':'Contract',
                         'Dispatched Generation Pnode Revenue':'Wholesale Market',
                         'Excess Generation Pnode Revenue':'Wholesale Market', 
@@ -1167,7 +1169,7 @@ def calculate_load_shadow_price(results, timestamps, year):
 
     return dual_plot
 
-def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, total_emissions, emissions_unit, base_year):
+def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, total_emissions, emissions_unit, base_year, financial_year):
     """
     Creates a csv file output of key metrics from the summary report to compare with other scenarios.
 
@@ -1205,6 +1207,9 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
 
     summary[f'Portfolio Cost per MWh ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total', f'Cost Per MWh ({base_year}$)'].item()
     summary[f'Portfolio Cost per MWh No Resale ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total without REC/RA Resale', f'Cost Per MWh ({base_year}$)'].item()
+    summary[f'Portfolio Cost per MWh ({financial_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total', f'Cost Per MWh ({financial_year}$)'].item()
+    summary[f'Portfolio Cost per MWh No Resale ({financial_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total without REC/RA Resale', f'Cost Per MWh ({financial_year}$)'].item()
+
 
     # if no sensitivity table was created, skip this
     try:
