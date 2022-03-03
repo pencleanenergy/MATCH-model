@@ -36,6 +36,10 @@ def define_arguments(argparser):
             "Whether or not to consider sold excess RA in the objective function. "
             "Specify 'none' to disable."
     )
+    argparser.add_argument('--include_RA_MTR_requirement', choices=['True', 'False'], default='False',
+        help=
+            "Whether or not to include the midterm reliability requirement constraints in the model."
+    )
 
 def define_components(mod):
     """
@@ -266,35 +270,36 @@ def define_components(mod):
     # Midterm reliability order
     ###########################
 
-    def MidtermReliability_Rule(m,p):
-        #return sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS if (m.gen_is_ra_eligible[g] and (m.cod_year[g] > m.base_financial_year)) >= m.midterm_firm_requirement[p])
-        eligible_MTR_capacity = 0
-        for g in m.BASELOAD_GENS:
-            if m.gen_is_ra_eligible[g]:
-                if m.cod_year[g] > m.base_financial_year:
-                    eligible_MTR_capacity += m.GenCapacity[g,p]
-        return eligible_MTR_capacity >= m.midterm_firm_requirement[p]
-        
+    if mod.options.include_RA_MTR_requirement == 'True':
+        def MidtermReliability_Rule(m,p):
+            #return sum(m.GenCapacity[g,p] for g in m.BASELOAD_GENS if (m.gen_is_ra_eligible[g] and (m.cod_year[g] > m.base_financial_year)) >= m.midterm_firm_requirement[p])
+            eligible_MTR_capacity = 0
+            for g in m.BASELOAD_GENS:
+                if m.gen_is_ra_eligible[g]:
+                    if m.cod_year[g] > m.base_financial_year:
+                        eligible_MTR_capacity += m.GenCapacity[g,p]
+            return eligible_MTR_capacity >= m.midterm_firm_requirement[p]
+            
 
-    mod.MidtermReliabilityRequirement_Constraint = Constraint(
-        mod.PERIODS,
-        rule=MidtermReliability_Rule)
+        mod.MidtermReliabilityRequirement_Constraint = Constraint(
+            mod.PERIODS,
+            rule=MidtermReliability_Rule)
 
-    # another part of the rule is a certain amount of long-duration energy storage is required in the portfolio
-    # long-duration energy storage is defined as storage with an EPR >= 8 hours
-    mod.LONG_DURATION_STORAGE = Set(
-        initialize=mod.STORAGE_GENS,
-        filter=lambda m, g: m.storage_energy_to_power_ratio[g] >= 8)
+        # another part of the rule is a certain amount of long-duration energy storage is required in the portfolio
+        # long-duration energy storage is defined as storage with an EPR >= 8 hours
+        mod.LONG_DURATION_STORAGE = Set(
+            initialize=mod.STORAGE_GENS,
+            filter=lambda m, g: m.storage_energy_to_power_ratio[g] >= 8)
 
-    mod.LDESCapacity = Expression(
-        mod.PERIODS,
-        rule=lambda m, p: sum(m.GenCapacity[g,p] for g in m.LONG_DURATION_STORAGE if m.gen_is_ra_eligible[g])
-    )
+        mod.LDESCapacity = Expression(
+            mod.PERIODS,
+            rule=lambda m, p: sum(m.GenCapacity[g,p] for g in m.LONG_DURATION_STORAGE if m.gen_is_ra_eligible[g])
+        )
 
-    mod.MidtermLDESRequirement_Constraint = Constraint(
-        mod.PERIODS,
-        rule= lambda m,p: m.LDESCapacity[p] >= m.midterm_ldes_requirement[p]
-    )
+        mod.MidtermLDESRequirement_Constraint = Constraint(
+            mod.PERIODS,
+            rule= lambda m,p: m.LDESCapacity[p] >= m.midterm_ldes_requirement[p]
+        )
 
 
 

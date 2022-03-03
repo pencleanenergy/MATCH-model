@@ -1,4 +1,12 @@
 -------------------------------------------------------------------------------
+Commit 2022.03.02 (Version 0.18.3)
+-------------------------------------------------------------------------------
+
+- Fixed bug in `optional.emissions_optimization` where `gen_ccs_energy_load` was defined twice
+- Adds an option to the `optional.resource_adequacy` model to ignore the MTR constraints, and adds a corresponding input to the model inputs spreadsheet scenarios tab
+
+
+-------------------------------------------------------------------------------
 Commit 2022.03.01 (Version 0.18.2)
 -------------------------------------------------------------------------------
 

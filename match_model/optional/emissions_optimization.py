@@ -53,9 +53,6 @@ def define_components(mod):
     # Calculate CCS Load
     ####################
 
-    mod.gen_ccs_energy_load = Param(
-        mod.CCS_EQUIPPED_GENS, within=PercentFraction)
-
     mod.ZoneTotalCCSLoad = Expression(
         mod.LOAD_ZONES, mod.TIMEPOINTS,
         rule=lambda m, z, t: \

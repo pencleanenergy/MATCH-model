@@ -696,7 +696,12 @@ def generate_inputs(model_workspace):
             else:
                 rec_option = '' 
 
-            scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}{ra_option}{rec_option}')
+            if 'include_RA_MTR_requirement' in option_list:
+                mtr_option = ' --include_RA_MTR_requirement True'
+            else:
+                mtr_option = '' 
+
+            scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}{ra_option}{mtr_option}{rec_option}')
             scenarios.write('\n')
             scenarios.close()
 
