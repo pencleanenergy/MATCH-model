@@ -1169,7 +1169,7 @@ def calculate_load_shadow_price(results, timestamps, year):
 
     return dual_plot
 
-def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, total_emissions, emissions_unit, base_year, financial_year):
+def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, total_emissions, peaks, ramps, emissions_unit, base_year, financial_year):
     """
     Creates a csv file output of key metrics from the summary report to compare with other scenarios.
 
@@ -1231,6 +1231,12 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
     summary[f'Delivered Emissions Factor ({emissions_unit})'] = round(total_emissions["Delivered Emission Factor"].mean(), 3)
 
     summary[f'Long-run Marginal Impact ({emissions_unit})'] = lr_impact.loc['Average','Total lbCO2/MWh']
+
+    summary['Impact on System Peak No Storage'] = peaks.loc['Average','portfolio_impact_no_storage']
+    summary['Impact on System Peak With Storage'] = peaks.loc['Average','portfolio_impact_with_storage']
+
+    summary['Impact on System Ramp No Storage'] = ramps.loc['Average','portfolio_impact_no_storage']
+    summary['Impact on System Ramp With Storage'] = ramps.loc['Average','portfolio_impact_with_storage']
 
     summary = summary.transpose()
     summary.columns = [f'{scenario_name}']

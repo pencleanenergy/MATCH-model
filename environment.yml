@@ -10,7 +10,7 @@ dependencies:
   - ipython
   - nbconvert
   - nbformat
-  - nrel-pysam<=2.2.4 #lock this until bug with v3.0.0 is fixed https://github.com/NREL/pysam/issues/107
+  - nrel-pysam>=3.0.1
   - nrel-pysam-stubs
   - numpy
   - openpyxl

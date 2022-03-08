@@ -1,4 +1,10 @@
 -------------------------------------------------------------------------------
+Commit 2022.03.08 (Version 0.19.0)
+-------------------------------------------------------------------------------
+
+- Updates MATCH model to be compatible with PySAM v3.0.1, which switches from Pvwattsv7 to Pvwattsv8, and allows for the option verbose=False to silence all of the output text from running the fetch resource file function
+
+-------------------------------------------------------------------------------
 Commit 2022.03.03 (Version 0.18.4)
 -------------------------------------------------------------------------------
 
