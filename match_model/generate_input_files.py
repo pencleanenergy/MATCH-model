@@ -288,10 +288,13 @@ def generate_inputs(model_workspace):
     # Scenarios
     xl_scenarios = pd.read_excel(io=model_inputs, sheet_name='scenarios', skiprows=1).dropna(axis=1, how='all')
 
+    # if there are any spaces in the scenario names, replace with underscore
+    xl_scenarios.columns = xl_scenarios.columns.str.replace(' ','_')
+
     scenario_list = list(xl_scenarios.iloc[:, 3:].columns)
 
     # determine if there are any modules that are not used by any scenarios
-    modules_used = xl_scenarios[xl_scenarios['Input Type'] == 'Optional Modules'].drop(columns=['Input Type','Description']).set_index('Parameter').sum(axis=1)
+    modules_used = xl_scenarios[xl_scenarios['Input_Type'] == 'Optional Modules'].drop(columns=['Input_Type','Description']).set_index('Parameter').sum(axis=1)
     unused_modules = list(modules_used[modules_used == 0].index)
 
     for scenario in scenario_list:
@@ -423,7 +426,7 @@ def generate_inputs(model_workspace):
     xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs', skiprows=1).dropna(axis=1, how='all')
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
-    vcf_sets = xl_scenarios[xl_scenarios['Input Type'].isin(['Resource year(s)', 'Generator Set'])].drop(columns=['Input Type','Parameter','Description']).transpose().reset_index()
+    vcf_sets = xl_scenarios[xl_scenarios['Input_Type'].isin(['Resource year(s)', 'Generator Set'])].drop(columns=['Input_Type','Parameter','Description']).transpose().reset_index()
     vcf_sets.columns = ['scenario','years','gen_set']
     vcf_sets = vcf_sets.groupby(['years','gen_set'])['scenario'].apply(list).reset_index()
 
@@ -598,7 +601,7 @@ def generate_inputs(model_workspace):
                                     'match_model.balancing.load_zones',
                                     'match_model.generators.build',
                                     'match_model.generators.dispatch']
-            module_list = list(xl_scenarios.loc[(xl_scenarios['Input Type'] == 'Optional Modules') & (xl_scenarios[scenario] == 1), 'Parameter'])
+            module_list = list(xl_scenarios.loc[(xl_scenarios['Input_Type'] == 'Optional Modules') & (xl_scenarios[scenario] == 1), 'Parameter'])
             if 'match_model.optional.wholesale_pricing' in module_list:
                 module_list.remove('match_model.optional.wholesale_pricing')
                 required_module_list.append('match_model.optional.wholesale_pricing')
@@ -667,7 +670,7 @@ def generate_inputs(model_workspace):
             df_timeseries.to_csv(input_dir / 'timeseries.csv', index=False)
 
             #get configuration options
-            option_list = list(xl_scenarios.loc[(xl_scenarios['Input Type'] == 'Options') & (xl_scenarios[scenario] != 0), 'Parameter'])
+            option_list = list(xl_scenarios.loc[(xl_scenarios['Input_Type'] == 'Options') & (xl_scenarios[scenario] != 0), 'Parameter'])
 
             # scenarios.txt
             scenarios = open(model_workspace / 'scenarios.txt', 'a+')

@@ -725,8 +725,8 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
                         y='MWh', 
                         color='Technology', 
                         color_discrete_map=technology_color_map, 
-                        category_orders={'Technology':['Consumed Geothermal','Consumed Small Hydro', 'Consumed Onshore Wind','Consumed Offshore Wind','Consumed Solar PV',
-                                                        'Storage Discharge', 'Grid Energy','Excess Solar PV', 'Excess Onshore Wind','Excess Offshore Wind']},
+                        category_orders={'Technology':['Consumed Geothermal','Consumed Small Hydro', 'Consumed Onshore Wind','Consumed Offshore Wind','Consumed Solar PV', 'Consumed Shaped'
+                                                        'Storage Discharge', 'Grid Energy','Excess Solar PV', 'Excess Onshore Wind','Excess Offshore Wind','Excess Shaped']},
                         labels={'timestamp':'Datetime','Technology':'Key'})
     dispatch_fig.update_traces(line={'width':0})
     dispatch_fig.layout.template = 'plotly_white'
