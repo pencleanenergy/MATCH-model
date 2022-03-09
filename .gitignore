@@ -1,5 +1,5 @@
 archives/
-switch_model.egg-info/
+match_model.egg-info/
 RESEARCH/
 #exclude the model run folder except for the example directory
 !MODEL_RUNS/

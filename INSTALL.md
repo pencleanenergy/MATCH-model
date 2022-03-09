@@ -60,21 +60,21 @@ Then you will need to open Git Bash and set up git following these instructions:
 # Download the codebase to a local repository
 Then, in a terminal window or Anaconda command prompt Anaconda command prompt,
 use the `cd` and `mkdir` commands to create and/or enter the directory (e.g. "Users/myusername/GitHub") where you
-would like to store the Switch model code and examples.
+would like to store the MATCH model code and examples.
 
-    git clone https://github.com/grgmiller/SWITCH247.git
+    git clone https://github.com/grgmiller/match_model.git
 
 # Setup the conda environment
-This will install all of the package dependencies needed to run Switch 24x7. Use `cd` to navigate to the directory where your local files are stored (e.g. "GitHub/SWITCH247")
+This will install all of the package dependencies needed to run MATCH. Use `cd` to navigate to the directory where your local files are stored (e.g. "GitHub/match_model")
 
     conda env create -f environment.yml
 
 Activate the new environment
 
-    conda activate switch_247
+    conda activate match_model
 
-# Install the switch package
-This will install the local codebase as switch
+# Install the match_model package
+This will install the local codebase as match_model
     
     pip install --upgrade --editable .
 
@@ -83,7 +83,7 @@ For open-source solvers, we recommend using COIN CBC.
 
 You can download the CBC solver executable from https://ampl.com/products/solvers/open-source/
 
-Once the CBC is downloaded and unzipped, move cbc.exe and coin-license.txt to the "switch_model" directory. 
+Once the CBC is downloaded and unzipped, move cbc.exe and coin-license.txt to the "match_model" directory. 
 
 # Install a Proprietary Solver (Optional)
 

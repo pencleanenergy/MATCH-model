@@ -1,24 +1,25 @@
-name: switch_247
+name: match_model
 channels:
   - nrel
   - conda-forge
   - defaults
 dependencies:
+  - cloudpickle
   - glpk
   - ipykernel
   - ipython
   - nbconvert
   - nbformat
-  - nrel-pysam
+  - nrel-pysam>=3.0.1
   - nrel-pysam-stubs
   - numpy
   - openpyxl
   - pandas
   - pint
   - plotly
-  - pyomo<=5.6.8
+  - pyomo>=6.0.0
   - python>=2.7.12
   - pytz
-  - pyutilib<=5.7.3
+  - pyutilib>=6.0.0
   - requests
   - xlrd

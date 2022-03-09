@@ -1,6 +1,20 @@
 # Below is a list of people and organizations that have contributed source
-# code to this implementation of the SWITCH model.  Names of individuals and
-# organizations should be added to this list in alphabetical order. Relative
+# code to this implementation of the MATCH model ("The MATCH Authors").  
+# Names of individuals and organizations should be added to this list in 
+# alphabetical order. Relative contributions of individuals can be tracked 
+# via git history.
+
+Gregory J. Miller <grmiller@ucdavis.edu>
+
+# Organizations
+
+Peninsula Clean Energy Authority
+
+
+# Below is a list of people and organizations that have contributed source
+# code to the implementation of the SWITCH model, from which this model is 
+# derived ("The Switch Authors").  Names of individuals and organizations 
+# should be added to this list in alphabetical order. Relative
 # contributions of individuals can be tracked via git history.
 
 Matthias Fripp <mfripp@hawaii.edu>
