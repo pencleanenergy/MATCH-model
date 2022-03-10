@@ -34,7 +34,7 @@ def define_components(mod):
 
         mod.Enforce_Annual_Excess_Generation_Limit = Constraint(
             mod.PERIODS,
-            rule = lambda m, p: m.total_generation_in_period[p] <= (sum(m.zone_total_demand_in_period_mwh[z,p] for z in m.LOAD_ZONES) + m.total_storage_losses_in_period[p]) * (1 + m.excess_generation_limit[p])
+            rule = lambda m, p: (m.total_generation_in_period[p] - m.total_storage_losses_in_period[p]) <= (sum(m.zone_total_demand_in_period_mwh[z,p] for z in m.LOAD_ZONES)) * (1 + m.excess_generation_limit[p])
         )
 
     elif mod.options.excess_generation_limit_type == "hourly":
