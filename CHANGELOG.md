@@ -3,6 +3,7 @@ Commit 2022.03.10 (Version 0.19.2)
 -------------------------------------------------------------------------------
 
 - Fix error in annual excess generation constraint. Previously storage losses were added to load, rather than substracted from generation. This makes the calculation consistent with how the annual renewable percentage is calculated in the reporting function.
+- Fix issue where the scenario_summary.csv output was excluding some new generation due to a dataframe merging issue
 
 
 -------------------------------------------------------------------------------

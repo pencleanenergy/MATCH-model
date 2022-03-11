@@ -194,10 +194,7 @@ def main(args=None):
                     i += 1
                 else:
                     summary_df2 = pd.read_csv(summary_file, index_col=0)
-                    if len(summary_df2) > len(summary_df):
-                        summary_df = summary_df.merge(summary_df2, how='right', left_index=True, right_index=True)
-                    else:
-                        summary_df = summary_df.merge(summary_df2, how='left', left_index=True, right_index=True)
+                    summary_df = summary_df.merge(summary_df2, how='outer', left_index=True, right_index=True)
 
                     capacity_df2 = pd.read_csv(capacity_file, usecols=['generation_project','GenCapacity']).rename(columns={'GenCapacity':s})
                     capacity_df = capacity_df.merge(capacity_df2, how='outer', on='generation_project')
