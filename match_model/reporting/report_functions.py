@@ -1169,7 +1169,7 @@ def calculate_load_shadow_price(results, timestamps, year):
 
     return dual_plot
 
-def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, total_emissions, peaks, ramps, emissions_unit, base_year, financial_year):
+def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, total_emissions, peaks, ramps, emissions_unit, base_year, financial_year, cambium_scenario):
     """
     Creates a csv file output of key metrics from the summary report to compare with other scenarios.
 
@@ -1202,14 +1202,8 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
     summary['Scenario Name'] = scenario_name
 
     #Goal Data
-    summary['Time-coincident %'] = hourly_renewable_percentage(load_balance)
     summary['Annual Volumetric %'] = annual_renewable_percentage(load_balance)
-
-    summary[f'Portfolio Cost per MWh ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total', f'Cost Per MWh ({base_year}$)'].item()
-    summary[f'Portfolio Cost per MWh No Resale ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total without REC/RA Resale', f'Cost Per MWh ({base_year}$)'].item()
-    summary[f'Portfolio Cost per MWh ({financial_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total', f'Cost Per MWh ({financial_year}$)'].item()
-    summary[f'Portfolio Cost per MWh No Resale ({financial_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total without REC/RA Resale', f'Cost Per MWh ({financial_year}$)'].item()
-
+    summary['Time-coincident %'] = hourly_renewable_percentage(load_balance)
 
     # if no sensitivity table was created, skip this
     try:
@@ -1217,6 +1211,17 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
             summary[f'Sensitivity Performance Year {year}'] = sensitivity_table.loc[sensitivity_table['Weather Year'] == year, 'Time-Coincident %'].item()
     except (AttributeError, TypeError) as e:
         pass
+
+    # portfolio cost per MWh
+    summary[f'Portfolio Cost per MWh ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total', f'Cost Per MWh ({base_year}$)'].item()
+    summary[f'Portfolio Cost per MWh No Resale ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total without REC/RA Resale', f'Cost Per MWh ({base_year}$)'].item()
+    summary[f'Portfolio Cost per MWh ({financial_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total', f'Cost Per MWh ({financial_year}$)'].item()
+    summary[f'Portfolio Cost per MWh No Resale ({financial_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total without REC/RA Resale', f'Cost Per MWh ({financial_year}$)'].item()
+    # total portfolio cost
+    summary[f'Total Portfolio Cost ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total', f'Annual Cost ({base_year}$)'].item()
+    summary[f'Total Portfolio Cos No Resale ({base_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total without REC/RA Resale', f'Annual Cost ({base_year}$)'].item()
+    summary[f'Total Portfolio Cost ({financial_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total', f'Annual Cost ({financial_year}$)'].item()
+    summary[f'Total Portfolio Cost No Resale ({financial_year}$)'] = cost_table.loc[cost_table['Cost Component'] == 'Total without REC/RA Resale', f'Annual Cost ({financial_year}$)'].item()
 
     #Portfolio Mix
     portfolio_summary = portfolio[['MW','Contract Status','Technology']].groupby(['Contract Status','Technology']).sum().reset_index()
@@ -1230,7 +1235,9 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
     summary[f'Annual Emissions Footprint ({emissions_unit.split("/")[0]})'] = round(total_emissions["Total Emission Rate"].sum(), 1)
     summary[f'Delivered Emissions Factor ({emissions_unit})'] = round(total_emissions["Delivered Emission Factor"].mean(), 3)
 
-    summary[f'Long-run Marginal Impact ({emissions_unit})'] = lr_impact.loc['Average','Total lbCO2/MWh']
+    for index in lr_impact.index:   
+        summary[f'Long-run Marginal Impact ({emissions_unit}) [{index}]'] = lr_impact.loc[index,f'Total {emissions_unit}']
+        summary[f'Long-run Marginal Impact ({emissions_unit.split("/")[0]}) [{index}]'] = lr_impact.loc[index,f'Total {emissions_unit.split("/")[0]}']
 
     summary['Impact on System Peak No Storage'] = peaks.loc['Average','portfolio_impact_no_storage']
     summary['Impact on System Peak With Storage'] = peaks.loc['Average','portfolio_impact_with_storage']

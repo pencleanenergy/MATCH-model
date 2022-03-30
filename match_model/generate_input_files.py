@@ -423,7 +423,7 @@ def generate_inputs(model_workspace):
     xl_rec_value = pd.read_excel(io=model_inputs, sheet_name='rec_value', skiprows=1).dropna(axis=1, how='all')
 
     # fixed_costs.csv
-    xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs', skiprows=1).dropna(axis=1, how='all')
+    xl_fixed_costs = pd.read_excel(io=model_inputs, sheet_name='fixed_costs', skiprows=1)
 
     # create a dataframe that contains the unique combinations of resource years and generator sets, and the scenarios associated with each
     vcf_sets = xl_scenarios[xl_scenarios['Input_Type'].isin(['Resource year(s)', 'Generator Set'])].drop(columns=['Input_Type','Parameter','Description']).transpose().reset_index()

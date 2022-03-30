@@ -186,20 +186,29 @@ def main(args=None):
             for s in scenarios:
                 summary_file = f'summary_reports/scenario_summary_{s}.csv'
                 capacity_file = f'outputs/{s}/gen_cap.csv'
+                predetermined = f'inputs/{s}/gen_build_predetermined.csv'
+                predetermined_list = list(pd.read_csv(predetermined, usecols=['GENERATION_PROJECT'])['GENERATION_PROJECT'])
 
                 if i == 0:
                     summary_df = pd.read_csv(summary_file, index_col=0)
                     capacity_df = pd.read_csv(capacity_file, usecols=['generation_project','gen_tech','GenCapacity']).rename(columns={'GenCapacity':s})
+                    capacity_df['predetermined'] = 'No'
+                    capacity_df.loc[capacity_df['generation_project'].isin(predetermined_list), 'predetermined'] = 'Yes'
 
                     i += 1
                 else:
                     summary_df2 = pd.read_csv(summary_file, index_col=0)
                     summary_df = summary_df.merge(summary_df2, how='outer', left_index=True, right_index=True)
 
-                    capacity_df2 = pd.read_csv(capacity_file, usecols=['generation_project','GenCapacity']).rename(columns={'GenCapacity':s})
-                    capacity_df = capacity_df.merge(capacity_df2, how='outer', on='generation_project')
+                    capacity_df2 = pd.read_csv(capacity_file, usecols=['generation_project','gen_tech','GenCapacity']).rename(columns={'GenCapacity':s})
+                    capacity_df2['predetermined'] = 'No'
+                    capacity_df2.loc[capacity_df2['generation_project'].isin(predetermined_list), 'predetermined'] = 'Yes'
 
-            summary_df.to_csv('summary_reports/scenario_comparison.csv', header=False)
+                    capacity_df = capacity_df.merge(capacity_df2, how='outer', on=['generation_project','gen_tech','predetermined'])
+
+            summary_df.columns = summary_df.loc['Scenario Name',:]
+            summary_df = summary_df.drop(index='Scenario Name')
+            summary_df.to_csv('summary_reports/scenario_comparison.csv')
             capacity_df.to_csv('summary_reports/portfolio_comparison.csv', index=False)
             
             # delete all of the individual files

@@ -468,7 +468,7 @@ def define_components(mod):
     mod.min_data_check('ppa_energy_cost','ppa_capacity_cost')
 
     # Curtialment Limits
-    #define the input parameter for the annual number of hours of curtialment/excess gen allowed
+    #define the input parameter for the annual number of hours of curtialment gen allowed
     mod.variable_gen_curtailment_limit = Param(mod.VARIABLE_GENS, within=NonNegativeReals, default=0)
 
     # define a new set of curtailable gens that have a curtailment limit
