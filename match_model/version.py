@@ -9,4 +9,4 @@ installed.
 
 NOTE: MATCH was originally forked from Switch version 2.0.5
 """
-__version__='0.19.3'
+__version__='0.20.0'

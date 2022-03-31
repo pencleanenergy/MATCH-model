@@ -336,8 +336,7 @@ def generate_inputs(model_workspace):
     xl_gen['gen_is_storage'] = 0
     # ensure that baseload_gen_scheduled_outage_rate is '.' for non baseload gens
     xl_gen.loc[xl_gen['gen_is_baseload'] == 0, 'baseload_gen_scheduled_outage_rate'] = '.'
-    # ensure that variable_gen_curtailment_limit is '.' for non variable gens
-    xl_gen.loc[xl_gen['gen_is_variable'] == 0, 'variable_gen_curtailment_limit'] = '.'
+
 
     # calculate the solar degredation discount for the model year, assuming a 0.5% annual degredation rate
     xl_gen['solar_age_degredation'] = 1
@@ -777,8 +776,7 @@ def generate_inputs(model_workspace):
                         'storage_hybrid_max_capacity_ratio',	
                         'solar_age_degredation',		
                         'baseload_gen_scheduled_outage_rate',	
-                        'gen_forced_outage_rate',
-                        'variable_gen_curtailment_limit']
+                        'gen_forced_outage_rate']
 
             generation_projects_info = set_gens[[col for col in set_gens.columns if col in gpi_columns]]
 
