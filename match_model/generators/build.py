@@ -467,15 +467,6 @@ def define_components(mod):
     mod.ppa_capacity_cost = Param (mod.GENERATION_PROJECTS, within=NonNegativeReals) 
     mod.min_data_check('ppa_energy_cost','ppa_capacity_cost')
 
-    # Curtialment Limits
-    #define the input parameter for the annual number of hours of curtialment gen allowed
-    mod.variable_gen_curtailment_limit = Param(mod.VARIABLE_GENS, within=NonNegativeReals, default=0)
-
-    # define a new set of curtailable gens that have a curtailment limit
-    mod.CURTAILABLE_GENS = Set(
-        initialize=mod.VARIABLE_GENS, 
-        filter=lambda m, g: m.variable_gen_curtailment_limit[g] > 0)
-
     # Derived annual costs
     mod.GenCapacityCost = Expression(
         mod.GENERATION_PROJECTS, mod.PERIODS,
@@ -534,7 +525,7 @@ def load_inputs(mod, match_data, inputs_dir):
                mod.gen_is_storage, mod.gen_is_baseload, mod.gen_variant_group,
                mod.gen_capacity_limit_mw, mod.gen_min_build_capacity, mod.ppa_energy_cost, 
                mod.ppa_capacity_cost, mod.gen_pricing_node, mod.gen_energy_source,
-               mod.baseload_gen_scheduled_outage_rate, mod.gen_forced_outage_rate, mod.variable_gen_curtailment_limit, 
+               mod.baseload_gen_scheduled_outage_rate, mod.gen_forced_outage_rate,
                mod.gen_unit_size, mod.cod_year])
     # Construct sets of unit-size-specified
     # projects. These sets include projects for which these parameters have

@@ -295,6 +295,7 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap, genera
     # rename columns
     gen_costs = gen_costs.rename(columns={'Contract_Cost':'Energy Contract Cost',
                                           'PPA_Capacity_Cost':'Capacity Contract Cost',
+                                          'Curtailed_Energy_Cost':'Curtailed Energy Cost',
                                           'Pnode_Revenue':'Pnode Revenue',
                                           'StorageDispatchPnodeCost':'Storage Arbitrage Revenue',
                                           'Delivery_Cost':'Delivery Cost',
@@ -303,6 +304,7 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap, genera
     # calculate per MWh costs
     gen_costs['Energy Contract Cost'] = gen_costs['Energy Contract Cost'] / gen_costs['Generation MWh']
     gen_costs['Capacity Contract Cost'] = gen_costs['Capacity Contract Cost'] / gen_costs['Generation MWh']
+    gen_costs['Curtailed Energy Cost'] = gen_costs['Curtailed Energy Cost'] / gen_costs['Generation MWh']
     gen_costs['Congestion Cost'] = gen_costs['Congestion Cost'] / gen_costs['Generation MWh']
     gen_costs['Pnode Revenue'] = gen_costs['Pnode Revenue'] / gen_costs['Generation MWh']
     gen_costs['Delivery Cost'] = gen_costs['Delivery Cost'] / gen_costs['Generation MWh']
@@ -318,7 +320,7 @@ def generator_costs(costs_by_gen, storage_dispatch, hybrid_pair, gen_cap, genera
     gen_costs = gen_costs.round(decimals=2)
 
     # only keep relevant columns
-    relevant_columns = ['generation_project', 'Energy Contract Cost', 'Capacity Contract Cost', 'Pnode Revenue', 'Delivery Cost','Congestion Cost','Storage Arbitrage Revenue','Total Cost']
+    relevant_columns = ['generation_project', 'Energy Contract Cost', 'Capacity Contract Cost', 'Curtailed Energy Cost', 'Pnode Revenue', 'Delivery Cost','Congestion Cost','Storage Arbitrage Revenue','Total Cost']
     gen_costs = gen_costs[[col for col in gen_costs.columns if col in relevant_columns]]
 
     return gen_costs
@@ -427,6 +429,9 @@ def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage
         mean_hedge_cost = system_power['hedge_premium_cost'].sum() / system_power['system_power_MW'].sum()
         if mean_hedge_cost == 1.00:
             hourly_costs['hedge_premium_cost'] = 0
+
+    # drop the curtailed energy value from cost_by_tp
+    costs_by_tp = costs_by_tp.drop(columns=['Curtailed Generation Pnode Value'])
 
     # add generator timepoint costs next
     hourly_costs = hourly_costs.merge(costs_by_tp, how='left', on='timestamp')
@@ -1169,7 +1174,7 @@ def calculate_load_shadow_price(results, timestamps, year):
 
     return dual_plot
 
-def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, total_emissions, peaks, ramps, emissions_unit, base_year, financial_year, cambium_scenario):
+def construct_summary_output_table(scenario_name, cost_table, load_balance, portfolio, sensitivity_table, lr_impact, total_emissions, peaks, ramps, emissions_unit, base_year, financial_year, dispatch):
     """
     Creates a csv file output of key metrics from the summary report to compare with other scenarios.
 
@@ -1244,6 +1249,8 @@ def construct_summary_output_table(scenario_name, cost_table, load_balance, port
 
     summary['Impact on System Ramp No Storage'] = ramps.loc['Average','portfolio_impact_no_storage']
     summary['Impact on System Ramp With Storage'] = ramps.loc['Average','portfolio_impact_with_storage']
+
+    summary['Curtailment'] = dispatch['CurtailGen_MW'].sum()
 
     summary = summary.transpose()
     summary.columns = [f'{scenario_name}']

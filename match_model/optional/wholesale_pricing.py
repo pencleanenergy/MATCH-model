@@ -3,10 +3,6 @@
 
 """
 This module adds the capability to track nodal prices at both the generation node and delivery node. 
-Currently, this is configured to track costs related to physical PPAs, in which the buyer is responsible
-for scheduling the energy in the wholesale market, and thus earns any wholesale market revenue. 
-This is in contrast to a virtual power purchase agreement, which are often set up as contracts for difference (CFD)
-in which the buyer pays the contract price and also settles the difference between the contract price and wholesale market price.
 """
 
 import os
@@ -56,7 +52,6 @@ def define_components(mod):
     # add Pnode revenue to objective function
     mod.Cost_Components_Per_TP.append('GenPnodeRevenueInTP')
 
-    # TODO: Add if statement to remove this in case of full curtailment
     mod.ExcessGenPnodeRevenue = Expression(
         mod.VARIABLE_GEN_TPS,
         rule=lambda m, g, t: -1 * ((m.ExcessGen[g, t]) * m.nodal_price[m.gen_pricing_node[g],t]))
@@ -65,12 +60,16 @@ def define_components(mod):
         rule=lambda m,t: sum(m.ExcessGenPnodeRevenue[g,t] for g in m.VARIABLE_GENS))
     mod.Cost_Components_Per_TP.append('ExcessGenPnodeRevenueInTP')
 
-    # TODO: Delete commented code
+    # Other Costs for Reporting
+    ###########################
+    mod.GenCurtailedEnergyValueInTP = Expression(
+        mod.TIMEPOINTS,
+        rule = lambda m,t: sum((m.CurtailGen[g,t] * m.nodal_price[m.gen_pricing_node[g],t]) for g in m.VARIABLE_GENS))
+
     # The delivery cost is the cost of offtaking the generated energy at the demand node
     mod.GenDeliveryCost = Expression(
         mod.NON_STORAGE_GEN_TPS,
         rule=lambda m, g, t: (m.TotalGen[g,t] * m.nodal_price[m.gen_load_zone[g],t]))
-
 
 
 def load_inputs(mod, match_data, inputs_dir):
@@ -91,6 +90,7 @@ def post_solve(instance, outdir):
         "timestamp": instance.tp_timestamp[t],
         "Generation_MW": value(instance.TotalGen[g, t]), 
         "Contract_Cost": value(instance.TotalGen[g, t] * instance.ppa_energy_cost[g]),
+        "Curtailed_Energy_Cost": value(instance.CurtailGen[g, t] * instance.ppa_energy_cost[g]) if instance.gen_is_variable[g] else 0,
         "Pnode_Revenue": value(instance.GenPnodeRevenue[g,t] + instance.ExcessGenPnodeRevenue[g,t]) if instance.gen_is_variable[g] else value(instance.GenPnodeRevenue[g, t]),
         "Delivery_Cost": value(instance.GenDeliveryCost[g,t]),
     } for (g, t) in instance.NON_STORAGE_GEN_TPS]
@@ -104,6 +104,8 @@ def post_solve(instance, outdir):
         "Excess Generation PPA Cost":value(instance.ExcessGenPPACostInTP[t]),
         "Dispatched Generation Pnode Revenue": value(instance.GenPnodeRevenueInTP[t]),
         "Excess Generation Pnode Revenue": value(instance.ExcessGenPnodeRevenueInTP[t]),
+        "Curtailed Generation PPA Cost":value(instance.GenCurtailedEnergyCostInTP[t]),
+        "Curtailed Generation Pnode Value":value(instance.GenCurtailedEnergyValueInTP[t]),
         "DLAP Cost": value(instance.DLAPLoadCostInTP[t]),
     } for t in instance.TIMEPOINTS]
     nodal_df = pd.DataFrame(nodal_data)
