@@ -1,4 +1,13 @@
 -------------------------------------------------------------------------------
+Commit 2022.04.01 (Version 0.20.1)
+-------------------------------------------------------------------------------
+
+When we updated the curtailment functionality in 0.20.0, we allowed any variable resource to be curtailed. When curtailed, the offtaker must still pay the PPA cost, but does not earn wholesale revenue (or pay wholesale cost when the nodal price is negative). However, some PPAs have a provision for "buyer curtailment" which specifies the number of hours that a resource can be curtailed per year without having to pay the PPA cost. Adding this as a separate decision variable would potentially slow the model, so instead we implemented this as a post-processing calculation in teh summary report that credits back this allowance if used. For each generator that has a buyer curtailment allowance, the available credit is calculated as `buyer_curtailment_allowance * GenCapacity * ppa_energy_cost`. We then take the minimum of this total allowance and the total cost of curtailed energy for each generator to make sure that we are crediting back only the part of the allowance that was actually used. 
+
+- Changed parameter `variable_gen_curtailment_limit` to `buyer_curtailment_allowance`
+- Added calculation to summary report to credit the buyer curtailment allowance when calculating the total portfolio cost. 
+
+-------------------------------------------------------------------------------
 Commit 2022.03.30 (Version 0.20.0)
 -------------------------------------------------------------------------------
 
@@ -203,7 +212,7 @@ Implements changes that reduce the number of decision variables in the model to 
 
 The variable `ExcessGen` has been converted to an Expression instead of a decision variable since it can be calculated as DispatchUpperLimit - DispatchGen. Because ExcessGen was indexed by [g,t], this is expected to significantly reduce model solve time.
 
-In addition, the variable `CurtailGen` has been reindexed to reduce the number of generators to which it applies. Previously, CurtailGen was indexed to all variable generators, even if those generators did not allow curtailment. We have now indexed this variable to a new set of generators `CURTAILABLE_GENS` which are defined based on whether the parameter `variable_gen_curtailment_limit` > 0. This should also significantly reduce the number of decision variables.
+In addition, the variable `CurtailGen` has been reindexed to reduce the number of generators to which it applies. Previously, CurtailGen was indexed to all variable generators, even if those generators did not allow curtailment. We have now indexed this variable to a new set of generators `CURTAILABLE_GENS` which are defined based on whether the parameter `buyer_curtailment_allowance` > 0. This should also significantly reduce the number of decision variables.
 
 -------------------------------------------------------------------------------
 Commit 2021.12.08 (Version 0.14.2)
@@ -362,7 +371,7 @@ Updates default values in `model_inputs.xlsx`
 Fixed a bug when generating single-year generation profiles in `generate_input_files.py`
 
 Changed the names of certain parameters to make it clearer what types of generators they apply to:
-  - Changed  `gen_curtailment_limit` to `variable_gen_curtailment_limit`
+  - Changed  `gen_curtailment_limit` to `buyer_curtailment_allowance`
   - changed `gen_scheduled_outage_rate` to `baseload_gen_scheduled_outage_rate`
 
 Updated the excess generation limit constraint in `renewable_target` to be based on the percentage of load, rather than the percentage of dispatched generation.

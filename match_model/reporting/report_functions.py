@@ -398,6 +398,30 @@ def power_content_label(load_balance, dispatch, generation_projects_info):
 
     return dispatch_mix
 
+def calculate_buyer_curtailment_credit(costs_by_gen, generation_projects_info, gen_cap):
+    """
+    Calculates the total value of buyer curtailment as allowed by the PPA contract
+    """
+    # identify the projects that allow free curtailment
+    gens_with_curtailment = list(generation_projects_info.loc[~generation_projects_info['buyer_curtailment_allowance'].isin(['.','0']), 'GENERATION_PROJECT'])
+
+    curtailment_credit = 0
+
+    for gen in gens_with_curtailment:
+        # calculate the value of the allowed curtailment
+        curtailment_limit = float(generation_projects_info.loc[generation_projects_info['GENERATION_PROJECT'] == gen, 'buyer_curtailment_allowance'].item())
+        ppa_cost = float(generation_projects_info.loc[generation_projects_info['GENERATION_PROJECT'] == gen, 'ppa_energy_cost'].item())
+        gen_capacity = gen_cap.loc[gen_cap['generation_project'] == gen, 'GenCapacity'].item()
+        curtailment_allowance = curtailment_limit * ppa_cost * gen_capacity
+
+        # calculate the total curtailment cost
+        curtailment_cost = costs_by_gen.loc[costs_by_gen['generation_project'] == gen, 'Curtailed_Energy_Cost'].sum()
+
+        # calculate the curtailed energy cost to credit back
+        curtailment_credit = curtailment_credit - min(curtailment_cost, curtailment_allowance)
+
+    return curtailment_credit
+
 def hourly_cost_of_power(system_power, costs_by_tp, ra_summary, gen_cap, storage_dispatch, fixed_costs, storage_exists):
     """
     Calculates the cost of power for each hour of the year in real $
@@ -533,7 +557,7 @@ def build_hourly_cost_plot(hourly_costs, load_balance, year):
 
     return hourly_cost_plot
 
-def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year):
+def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year, curtailment_credit):
     """
     Constructs tables that break down costs by component
 
@@ -542,6 +566,7 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
         load_balance: a dataframe containing hourly supply and demand balance data loaded from outputs/load_balance.csv
         financials: dataframe loaded from inputs/financials.csv
         year: the model year, as an integer (YYYY)
+        curtailment_credit: the $ value of contractually allowed curtailment, as calculated by calculate_curtailment_credit()
     Returns:
         cost_table: a dataframe summarizing delivered costs by total and cost per MWh
     """
@@ -569,6 +594,9 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
 
     cost_table = pd.concat([cost_table, pd.DataFrame.from_dict(data={'Cost Component':['REC Net Position Cost','REC Net Position Resale'],'Annual Real Cost': [net_rec_cost,net_rec_resale]})], ignore_index=True)
 
+    # add credit for curtailed energy
+    cost_table = pd.concat([cost_table, pd.DataFrame.from_dict(data={'Cost Component':['Buyer Curtailment Credit'],'Annual Real Cost': [curtailment_credit]})], ignore_index=True)
+    
     # calculate the total demand
     load = load_balance['zone_demand_mw'].sum()
 
@@ -584,6 +612,8 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
                         'Dispatched Generation PPA Cost':'Contract',
                         'Storage Energy PPA Cost':'Contract',
                         'Excess Generation PPA Cost':'Contract',
+                        'Buyer Curtailment Credit':'Contract',
+                        'Curtailed Generation PPA Cost':'Contract',
                         'Dispatched Generation Pnode Revenue':'Wholesale Market',
                         'Excess Generation Pnode Revenue':'Wholesale Market', 
                         'DLAP Load Cost':'Wholesale Market',
@@ -730,8 +760,8 @@ def build_dispatch_plot(generation_projects_info, dispatch, storage_dispatch, lo
                         y='MWh', 
                         color='Technology', 
                         color_discrete_map=technology_color_map, 
-                        category_orders={'Technology':['Consumed Geothermal','Consumed Small Hydro', 'Consumed Onshore Wind','Consumed Offshore Wind','Consumed Solar PV', 'Consumed Shaped'
-                                                        'Storage Discharge', 'Grid Energy','Excess Solar PV', 'Excess Onshore Wind','Excess Offshore Wind','Excess Shaped']},
+                        category_orders={'Technology':['Consumed Geothermal','Consumed Small Hydro', 'Consumed Onshore Wind','Consumed Offshore Wind','Consumed Solar PV', 'Consumed Shaped','Consumed Solar Thermal',
+                                                        'Storage Discharge', 'Grid Energy','Excess Solar PV', 'Excess Onshore Wind','Excess Offshore Wind','Excess Shaped','Excess Solar Thermal']},
                         labels={'timestamp':'Datetime','Technology':'Key'})
     dispatch_fig.update_traces(line={'width':0})
     dispatch_fig.layout.template = 'plotly_white'
@@ -898,8 +928,8 @@ def build_month_hour_dispatch_plot(dispatch_by_tech, load_line, storage_charge, 
                             facet_col_wrap=6,
                             color='Technology', 
                             color_discrete_map=technology_color_map, 
-                            category_orders={'Technology':['Consumed Geothermal','Consumed Small Hydro', 'Consumed Onshore Wind','Consumed Offshore Wind','Consumed Solar PV',
-                                                            'Storage Discharge', 'Grid Energy','Excess Solar PV', 'Excess Onshore Wind','Excess Offshore Wind']},
+                            category_orders={'Technology':['Consumed Geothermal','Consumed Small Hydro', 'Consumed Onshore Wind','Consumed Offshore Wind','Consumed Solar PV', 'Consumed Shaped','Consumed Solar Thermal',
+                                                        'Storage Discharge', 'Grid Energy','Excess Solar PV', 'Excess Onshore Wind','Excess Offshore Wind','Excess Shaped','Excess Solar Thermal']},
                             labels={'timestamp':'Datetime','Technology':'Key'})
     mh_fig.update_traces(line={'width':0})
     mh_fig.layout.template = 'plotly_white'

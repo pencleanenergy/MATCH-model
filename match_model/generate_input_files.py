@@ -777,7 +777,7 @@ def generate_inputs(model_workspace):
                         'solar_age_degredation',		
                         'baseload_gen_scheduled_outage_rate',	
                         'gen_forced_outage_rate',
-                        'variable_gen_curtailment_limit']
+                        'buyer_curtailment_allowance']
 
             generation_projects_info = set_gens[[col for col in set_gens.columns if col in gpi_columns]]
 
