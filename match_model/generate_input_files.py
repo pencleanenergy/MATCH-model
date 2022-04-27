@@ -868,7 +868,7 @@ def generate_inputs(model_workspace):
                     hedge_percent = xl_hedge_premium_cost.loc[xl_hedge_premium_cost['load_zone'] == zone, 'hedge_premium_percent'].item()
 
                     # get the hedge node data
-                    nodal_data = xl_nodal_prices[[hedge_node]]
+                    nodal_data = xl_nodal_prices.copy()[[hedge_node]]
                     nodal_data.index = pd.to_datetime(nodal_data.index)
                     nodal_data.loc[:,'month'] = nodal_data.index.month
                     nodal_data.loc[:,'hour'] = nodal_data.index.hour

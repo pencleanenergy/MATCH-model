@@ -580,17 +580,21 @@ def construct_cost_table(hourly_costs, load_balance, rec_value, financials, year
     rec_cost = rec_value['rec_cost'].item()
 
     # calculate net rec balance
-    rec_open = load_balance.sum()['SystemPower']
-    rec_excess = load_balance.sum()['ZoneTotalExcessGen']
-    net_rec_position = rec_open - rec_excess
+    storage_losses = load_balance.sum()['ZoneTotalStorageCharge'] - load_balance.sum()['ZoneTotalStorageDischarge']
+    loss_adj_load = load_balance.sum()['zone_demand_mw'] + storage_losses
+    retail_load = (load_balance.sum()['zone_demand_mw'] / 1.065) + storage_losses
+    total_recs = load_balance.sum()['ZoneTotalGeneratorDispatch'] + load_balance.sum()['ZoneTotalExcessGen']
 
     # calculate cost based on net rec position
-    if net_rec_position > 0:
-        net_rec_cost = net_rec_position * rec_cost
+    if total_recs < retail_load:
+        net_rec_cost = (retail_load - total_recs) * rec_cost
         net_rec_resale = 0
+    elif total_recs > loss_adj_load:
+        net_rec_cost = 0
+        net_rec_resale = (total_recs - loss_adj_load) * rec_resale_value * -1
     else:
         net_rec_cost = 0
-        net_rec_resale = net_rec_position * rec_resale_value
+        net_rec_resale = 0
 
     cost_table = pd.concat([cost_table, pd.DataFrame.from_dict(data={'Cost Component':['REC Net Position Cost','REC Net Position Resale'],'Annual Real Cost': [net_rec_cost,net_rec_resale]})], ignore_index=True)
 
