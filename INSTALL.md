@@ -62,7 +62,7 @@ Then, in a terminal window or Anaconda command prompt Anaconda command prompt,
 use the `cd` and `mkdir` commands to create and/or enter the directory (e.g. "Users/myusername/GitHub") where you
 would like to store the MATCH model code and examples.
 
-    git clone https://github.com/grgmiller/match_model.git
+    git clone https://github.com/grgmiller/MATCH-model.git
 
 # Setup the conda environment
 This will install all of the package dependencies needed to run MATCH. Use `cd` to navigate to the directory where your local files are stored (e.g. "GitHub/match_model")
