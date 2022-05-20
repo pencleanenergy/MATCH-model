@@ -1,4 +1,17 @@
 -------------------------------------------------------------------------------
+Commit 2022.05.20 (Version 0.21.0)
+-------------------------------------------------------------------------------
+
+Updates how the RA Value (NQC) of hybrid storage resources is calculated in both `optional.resource_adequacy`.
+Previously, the storage ELCC value was not considered in the calculation of the effective ELCC for hybrid storage resources. This update now considers ELCC, which should reduce the overall RA value of hybrid resources, assuming that the ELCC of storage is less than 100%. 
+
+Adds back an option to dispatch storage using a binary constraint to strictly prohibit simultaneous charging and discharging of storage. This functionality was previously implemented as as the primary storage dispatch in versions `0.3.0` through `0.12.1`. It was removed in version `0.13.0` to speed up solve time, but we have realized that in certain circumstances, the user may wish to have the ability to constrain this behavior using the binary constraint. This is accomplished using the option `storage_binary_discharge_constraint`. If True, the model uses the binary constraint to prevent simultaneous charge and discharge. If False, the model uses the formula that limits simultaneous charge and discharge.
+
+Updates `generate_input_files` so that the order of the scenarios in `scenarios.txt` matches the order of the scenarios in the scenarios tab of `model_inputs.xlsx`
+
+Fix error in RA capacity value output in `RA_value_by_generator.csv` for hybrid storage
+
+-------------------------------------------------------------------------------
 Commit 2022.04.07 (Version 0.20.2)
 -------------------------------------------------------------------------------
 

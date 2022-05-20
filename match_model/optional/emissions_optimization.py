@@ -143,6 +143,7 @@ def post_solve(instance, outdir):
     emissions_data = [{
         "generation_project": g,
         "timestamp": instance.tp_timestamp[t],
+        "lrmer": instance.lrmer[instance.gen_cambium_region[g],t],
         "Generation_MW": value(instance.TotalGen[g, t] if g in instance.NON_STORAGE_GENS else 0) + value(instance.DischargeStorage[g, t] - instance.ChargeStorage[g,t] if g in instance.STORAGE_GENS else 0), 
         "Consequential_Emissions_Impact": value(instance.GenTotalConsequentialEmissionsInTP[g,t]),
     } for (g, t) in instance.GEN_TPS]

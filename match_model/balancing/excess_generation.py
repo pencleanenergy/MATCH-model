@@ -33,15 +33,15 @@ def define_components(mod):
         
 
         mod.Enforce_Annual_Excess_Generation_Limit = Constraint(
-            mod.PERIODS,
-            rule = lambda m, p: (m.total_generation_in_period[p] - m.total_storage_losses_in_period[p]) <= (sum(m.zone_total_demand_in_period_mwh[z,p] for z in m.LOAD_ZONES)) * (1 + m.excess_generation_limit[p])
+            mod.LOAD_ZONES, mod.PERIODS,
+            rule = lambda m, z, p: sum(m.ZoneTotalExcessGen[z,t] + m.ZoneTotalCurtailmentDispatch[z,t] for t in m.TIMEPOINTS if m.tp_period[t] == p) <= sum(m.zone_demand_mw[z,t] for t in m.TIMEPOINTS if m.tp_period[t] == p) * m.excess_generation_limit[p]
         )
 
     elif mod.options.excess_generation_limit_type == "hourly":
 
         mod.Enforce_Hourly_Excess_Generation_Limit = Constraint(
             mod.LOAD_ZONES, mod.TIMEPOINTS,
-            rule = lambda m, z, t: m.ZoneTotalExcessGen[z,t] <= m.zone_demand_mw[z,t] * m.excess_generation_limit[m.tp_period[t]]
+            rule = lambda m, z, t: m.ZoneTotalExcessGen[z,t] + m.ZoneTotalCurtailmentDispatch[z,t] <= m.zone_demand_mw[z,t] * m.excess_generation_limit[m.tp_period[t]]
         )
 
     # Financial penalty for excess generation

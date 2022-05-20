@@ -15,6 +15,13 @@ dependencies = 'match_model.timescales', 'match_model.balancing.load_zones',\
     'match_model.financials', 'match_model.energy_sources.properties', \
     'match_model.generators.build', 'match_model.generators.dispatch'
 
+def define_arguments(argparser):
+    argparser.add_argument('--storage_binary_dispatch_constraint', choices=['True', 'False'], default='False',
+        help=
+            "If True, prevents simultaneous charging and discharging using a binary constraint."
+            "This will significantly slow down solve time."
+    )
+
 def define_components(mod):
     """
 
@@ -253,10 +260,28 @@ def define_components(mod):
         mod.STORAGE_GEN_TPS,
         rule=lambda m, g, t: (
             m.ChargeStorage[g,t] <= m.GenCapacityInTP[g, t] * m.storage_charge_to_discharge_ratio[g]))
+
+    #Variables and constraints to prevent simultaneous charging and discharging
+    if mod.options.storage_binary_dispatch_constraint == 'True':
     
-    mod.Limit_Storage_Simultaneous_Charge_Discharge = Constraint(
-        mod.STORAGE_GEN_TPS,
-        rule=lambda m, g, t: m.ChargeStorage[g,t] + m.DischargeStorage[g, t] <= m.GenCapacityInTP[g, t])
+        mod.ChargeBinary = Var(
+            mod.STORAGE_GEN_TPS,
+            within=Binary)
+
+        # forces ChargeBinary to be 1 when ChargeStorage > 0, using a "Big M" of 2000
+        # the world's largest battery is currently 1.2GW
+        mod.One_When_Charging = Constraint(
+            mod.STORAGE_GEN_TPS,
+            rule=lambda m,g,t: m.ChargeStorage[g,t] <= m.ChargeBinary[g,t] * 2000)
+
+        mod.Prevent_Simultaneous_Charge_Discharge = Constraint(
+            mod.STORAGE_GEN_TPS,
+            rule=lambda m,g,t: m.DischargeStorage[g,t] <= (1 - m.ChargeBinary[g,t]) * 2000)
+
+    elif mod.options.storage_binary_dispatch_constraint == 'False':
+        mod.Limit_Storage_Simultaneous_Charge_Discharge = Constraint(
+            mod.STORAGE_GEN_TPS,
+            rule=lambda m, g, t: m.ChargeStorage[g,t] + m.DischargeStorage[g, t] <= m.GenCapacityInTP[g, t])
 
     # Summarize storage charging for the energy balance equations
     mod.ZoneTotalStorageDischarge = Expression(

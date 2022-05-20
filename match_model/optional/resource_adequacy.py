@@ -130,7 +130,7 @@ def define_components(mod):
                 # however, since implementing min and max hybrid capacity ratios, the actual capacity ratio is no longer static
                 # to fix this, we take the average of the min and max ratio to minimize error in the calcukation
                 storage_hybrid_capacity_ratio = (m.storage_hybrid_min_capacity_ratio[g] + m.storage_hybrid_max_capacity_ratio[g]) / 2
-                effective_elcc = min(storage_hybrid_capacity_ratio, 
+                effective_elcc = min(storage_hybrid_capacity_ratio * m.elcc[p, m.gen_energy_source[g], mo], 
                                              (min(storage_hybrid_capacity_ratio * m.storage_energy_to_power_ratio[g],
                                                   m.ra_production_factor[p, m.gen_energy_source[m.storage_hybrid_generation_project[g]], mo])/4))
             elif m.gen_is_hybrid[g] and not m.gen_is_storage[g]:
@@ -395,7 +395,7 @@ def post_solve(instance, outdir):
         "Generation_Project": g,
         "Built Capacity":value(instance.GenCapacity[g,p]),
         "ELCC":value(instance.GeneratorELCC[g,p,mo]),
-        "System_RA_Value": value((instance.GeneratorELCC[g,p,mo] * instance.GenCapacity[instance.storage_hybrid_generation_project[g],p]) if g in instance.HYBRID_STORAGE_GENS else (instance.GeneratorELCC[g,p,mo] * instance.GenCapacity[g,p])),
+        "System_RA_Value": value((instance.GeneratorELCC[g,p,mo] * (instance.GenCapacity[g,p] / ((instance.storage_hybrid_min_capacity_ratio[g] + instance.storage_hybrid_max_capacity_ratio[g]) / 2))) if g in instance.HYBRID_STORAGE_GENS else (instance.GeneratorELCC[g,p,mo] * instance.GenCapacity[g,p])),
         "Flex_RA_Value": value(instance.GeneratorFlexRAValue[g,p])
     } for p in instance.PERIODS for mo in instance.MONTHS for g in instance.GENERATION_PROJECTS]
     gen_df = pd.DataFrame(gen_dat)

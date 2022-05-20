@@ -297,6 +297,7 @@ def generate_inputs(model_workspace):
     modules_used = xl_scenarios[xl_scenarios['Input_Type'] == 'Optional Modules'].drop(columns=['Input_Type','Description']).set_index('Parameter').sum(axis=1)
     unused_modules = list(modules_used[modules_used == 0].index)
 
+    # create input and output directories for each scenario
     for scenario in scenario_list:
         try:
             os.mkdir(model_workspace / f'inputs/{scenario}')
@@ -306,6 +307,55 @@ def generate_inputs(model_workspace):
             os.mkdir(model_workspace / f'outputs/{scenario}')
         except FileExistsError:
             pass
+
+    # create scenarios.txt
+    for scenario in scenario_list:
+        #get configuration options
+        option_list = list(xl_scenarios.loc[(xl_scenarios['Input_Type'] == 'Options') & (xl_scenarios[scenario] != 0), 'Parameter'])
+        renewable_target_type = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'goal_type'), scenario].item()
+        select_variants = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'select_variants'), scenario].item()
+        excess_generation_limit_type = xl_scenarios.loc[(xl_scenarios['Parameter'] == 'excess_generation_limit_type'), scenario].item()
+        
+        # write scenario configuration to scenarios.txt
+        scenarios = open(model_workspace / 'scenarios.txt', 'a+')
+        if select_variants != 0:
+            variant_option = f' --select_variants {select_variants}'
+        else:
+            variant_option = ''
+        
+        if renewable_target_type == 'annual':
+            target_option = ' --goal_type annual'
+        else:
+            target_option = ''
+        
+        if excess_generation_limit_type not in ['None','.']:
+            excess_option = f' --excess_generation_limit_type {excess_generation_limit_type}'
+        else:
+            excess_option = ''
+        
+        if 'sell_excess_RA' in option_list:
+            ra_option = ' --sell_excess_RA sell'
+        else:
+            ra_option = ''
+
+        if 'sell_excess_RECs' in option_list:
+            rec_option = ' --sell_excess_RECs sell'
+        else:
+            rec_option = '' 
+
+        if 'include_RA_MTR_requirement' in option_list:
+            mtr_option = ' --include_RA_MTR_requirement True'
+        else:
+            mtr_option = '' 
+        
+        if 'storage_binary_dispatch_constraint' in option_list:
+            storage_option = ' --storage_binary_dispatch_constraint True'
+        else:
+            storage_option = '' 
+
+        scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}{ra_option}{mtr_option}{rec_option}{storage_option}')
+        scenarios.write('\n')
+        scenarios.close()    
 
     # periods.csv
     df_periods = pd.DataFrame(columns=['INVESTMENT_PERIOD','period_start','period_end'], data=[[year,year,year]])
@@ -670,42 +720,6 @@ def generate_inputs(model_workspace):
 
             #get configuration options
             option_list = list(xl_scenarios.loc[(xl_scenarios['Input_Type'] == 'Options') & (xl_scenarios[scenario] != 0), 'Parameter'])
-
-            # scenarios.txt
-            scenarios = open(model_workspace / 'scenarios.txt', 'a+')
-            if select_variants != 0:
-                variant_option = f' --select_variants {select_variants}'
-            else:
-                variant_option = ''
-            
-            if renewable_target_type == 'annual':
-                target_option = ' --goal_type annual'
-            else:
-                target_option = ''
-            
-            if excess_generation_limit_type not in ['None','.']:
-                excess_option = f' --excess_generation_limit_type {excess_generation_limit_type}'
-            else:
-                excess_option = ''
-            
-            if 'sell_excess_RA' in option_list:
-                ra_option = ' --sell_excess_RA sell'
-            else:
-                ra_option = ''
-
-            if 'sell_excess_RECs' in option_list:
-                rec_option = ' --sell_excess_RECs sell'
-            else:
-                rec_option = '' 
-
-            if 'include_RA_MTR_requirement' in option_list:
-                mtr_option = ' --include_RA_MTR_requirement True'
-            else:
-                mtr_option = '' 
-
-            scenarios.write(f'--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}{ra_option}{mtr_option}{rec_option}')
-            scenarios.write('\n')
-            scenarios.close()
 
             # timepoints.csv
             df_timepoints = pd.DataFrame(index=pd.date_range(start=f'01/01/{year} 00:00', end=f'12/31/{year} 23:00', freq='1H'))

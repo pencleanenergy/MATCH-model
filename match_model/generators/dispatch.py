@@ -271,6 +271,14 @@ def define_components(mod):
         doc="Summarize costs for the objective function")
     mod.Cost_Components_Per_TP.append('GenCurtailedEnergyCostInTP')
 
+    mod.ZoneTotalCurtailmentDispatch = Expression(
+        mod.LOAD_ZONES, mod.TIMEPOINTS,
+        rule=lambda m, z, t: \
+            sum(m.CurtailGen[g, t]
+                for g in m.GENS_IN_ZONE[z]
+                if (g, t) in m.VARIABLE_GEN_TPS),
+        doc="Curtailment from variable generation projects.")
+
     # DISPATCH UPPER LIMITS
     #######################
 
