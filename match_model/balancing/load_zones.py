@@ -9,8 +9,9 @@ import os
 from pyomo.environ import *
 from match_model.reporting import write_table
 
-dependencies = 'match_model.timescales'
-optional_dependencies = 'match_model.transmission.local_td'
+dependencies = "match_model.timescales"
+optional_dependencies = "match_model.transmission.local_td"
+
 
 def define_dynamic_lists(mod):
     """
@@ -25,6 +26,7 @@ def define_dynamic_lists(mod):
     mod.Zone_Power_Injections = []
     mod.Zone_Power_Withdrawals = []
 
+
 """
 #TODO: Finish this
 def define_arguments(argparser):
@@ -35,6 +37,7 @@ def define_arguments(argparser):
             "If 'no_excess', the total available generation must equal the total annual load"
     )
 """
+
 
 def define_components(mod):
     """
@@ -69,30 +72,26 @@ def define_components(mod):
     """
 
     mod.LOAD_ZONES = Set(dimen=1)
-    mod.ZONE_TIMEPOINTS = Set(dimen=2,
+    mod.ZONE_TIMEPOINTS = Set(
+        dimen=2,
         initialize=lambda m: m.LOAD_ZONES * m.TIMEPOINTS,
-        doc="The cross product of load zones and timepoints, used for indexing.")
-    mod.zone_demand_mw = Param(
-        mod.ZONE_TIMEPOINTS,
-        within=NonNegativeReals)
-    mod.min_data_check('LOAD_ZONES', 'zone_demand_mw')
+        doc="The cross product of load zones and timepoints, used for indexing.",
+    )
+    mod.zone_demand_mw = Param(mod.ZONE_TIMEPOINTS, within=NonNegativeReals)
+    mod.min_data_check("LOAD_ZONES", "zone_demand_mw")
     try:
-        mod.Distributed_Power_Withdrawals.append('zone_demand_mw')
+        mod.Distributed_Power_Withdrawals.append("zone_demand_mw")
     except AttributeError:
-        mod.Zone_Power_Withdrawals.append('zone_demand_mw')
+        mod.Zone_Power_Withdrawals.append("zone_demand_mw")
 
     mod.zone_total_demand_in_period_mwh = Param(
-        mod.LOAD_ZONES, mod.PERIODS,
+        mod.LOAD_ZONES,
+        mod.PERIODS,
         within=NonNegativeReals,
         initialize=lambda m, z, p: (
-            sum(m.zone_demand_mw[z, t] * m.tp_weight[t]
-                for t in m.TPS_IN_PERIOD[p])))
-
-    """
-    #TODO: define optional no excess constraint
-
-
-    """
+            sum(m.zone_demand_mw[z, t] * m.tp_weight[t] for t in m.TPS_IN_PERIOD[p])
+        ),
+    )
 
 
 def define_dynamic_components(mod):
@@ -113,12 +112,12 @@ def define_dynamic_components(mod):
     mod.Zone_Energy_Balance = Constraint(
         mod.ZONE_TIMEPOINTS,
         rule=lambda m, z, t: (
-            sum(
-                getattr(m, component)[z, t]
-                for component in m.Zone_Power_Injections
-            ) == sum(
-                getattr(m, component)[z, t]
-                for component in m.Zone_Power_Withdrawals)))
+            sum(getattr(m, component)[z, t] for component in m.Zone_Power_Injections)
+            == sum(
+                getattr(m, component)[z, t] for component in m.Zone_Power_Withdrawals
+            )
+        ),
+    )
 
 
 def load_inputs(mod, match_data, inputs_dir):
@@ -144,12 +143,13 @@ def load_inputs(mod, match_data, inputs_dir):
     # column names, be indifferent to column order, and throw an error
     # message if some columns are not found.
     match_data.load_aug(
-        filename=os.path.join(inputs_dir, 'load_zones.csv'),
-        set=mod.LOAD_ZONES)
+        filename=os.path.join(inputs_dir, "load_zones.csv"), set=mod.LOAD_ZONES
+    )
     match_data.load_aug(
-        filename=os.path.join(inputs_dir, 'loads.csv'),
+        filename=os.path.join(inputs_dir, "loads.csv"),
         autoselect=True,
-        param=[mod.zone_demand_mw])
+        param=[mod.zone_demand_mw],
+    )
 
 
 def post_solve(instance, outdir):
@@ -163,14 +163,17 @@ def post_solve(instance, outdir):
 
     """
     write_table(
-        instance, instance.LOAD_ZONES, instance.TIMEPOINTS,
+        instance,
+        instance.LOAD_ZONES,
+        instance.TIMEPOINTS,
         output_file=os.path.join(outdir, "load_balance.csv"),
-        headings=("load_zone", "timestamp",) + tuple(
-            instance.Zone_Power_Injections +
-            instance.Zone_Power_Withdrawals) + ('ZoneTotalExcessGen',),
-        values=lambda m, z, t: (z, m.tp_timestamp[t],) + tuple(
+        headings=("load_zone", "timestamp",)
+        + tuple(instance.Zone_Power_Injections + instance.Zone_Power_Withdrawals)
+        + ("ZoneTotalExcessGen",),
+        values=lambda m, z, t: (z, m.tp_timestamp[t],)
+        + tuple(
             getattr(m, component)[z, t]
-            for component in (
-                m.Zone_Power_Injections +
-                m.Zone_Power_Withdrawals)) + 
-            (m.ZoneTotalExcessGen[z,t],))
+            for component in (m.Zone_Power_Injections + m.Zone_Power_Withdrawals)
+        )
+        + (m.ZoneTotalExcessGen[z, t],),
+    )

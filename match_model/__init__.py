@@ -17,9 +17,11 @@ Most applications of MATCH will also benefit from optional modules such as
 transmission, local_td, reserves, etc.
 """
 from .version import __version__
+
 core_modules = [
-    'match_model.timescales',
-    'match_model.financials',
-    'match_model.balancing.load_zones',
-    'match_model.generators',
-    'match_model.reporting']
+    "match_model.timescales",
+    "match_model.financials",
+    "match_model.balancing.load_zones",
+    "match_model.generators",
+    "match_model.reporting",
+]

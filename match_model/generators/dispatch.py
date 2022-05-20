@@ -4,24 +4,34 @@
 
 """
 Defines model components to describe generation projects build-outs for
-the MATCH model. 
+the MATCH model.
 
 """
 from __future__ import division
 
-import os, collections
+import os
+import collections
 from pyomo.environ import *
 from match_model.reporting import write_table
 import pandas as pd
 
-dependencies = 'match_model.timescales', 'match_model.balancing.load_zones',\
-    'match_model.financials', 'match_model.generators.build'
+dependencies = (
+    "match_model.timescales",
+    "match_model.balancing.load_zones",
+    "match_model.financials",
+    "match_model.generators.build",
+)
+
 
 def define_arguments(argparser):
-    argparser.add_argument('--sell_excess_RECs', choices=['none', 'sell'], default='none',
-        help=
-            "Whether or not to consider the resale value of excess RECs in the objective function. "
-            "Specify 'none' to disable.")
+    argparser.add_argument(
+        "--sell_excess_RECs",
+        choices=["none", "sell"],
+        default="none",
+        help="Whether or not to consider the resale value of excess RECs in the objective function. "
+        "Specify 'none' to disable.",
+    )
+
 
 def define_components(mod):
     """
@@ -136,230 +146,258 @@ def define_components(mod):
     """
 
     def period_active_gen_rule(m, period):
-        if not hasattr(m, 'period_active_gen_dict'):
+        if not hasattr(m, "period_active_gen_dict"):
             m.period_active_gen_dict = collections.defaultdict(set)
             for (_g, _period) in m.GEN_PERIODS:
                 m.period_active_gen_dict[_period].add(_g)
         result = m.period_active_gen_dict.pop(period)
         if len(m.period_active_gen_dict) == 0:
-            delattr(m, 'period_active_gen_dict')
+            delattr(m, "period_active_gen_dict")
         return result
-    mod.GENS_IN_PERIOD = Set(mod.PERIODS, initialize=period_active_gen_rule, ordered=False,
-        doc="The set of projects active in a given period.")
+
+    mod.GENS_IN_PERIOD = Set(
+        mod.PERIODS,
+        initialize=period_active_gen_rule,
+        ordered=False,
+        doc="The set of projects active in a given period.",
+    )
 
     mod.TPS_FOR_GEN = Set(
         mod.GENERATION_PROJECTS,
         within=mod.TIMEPOINTS,
         initialize=lambda m, g: (
             tp for p in m.PERIODS_FOR_GEN[g] for tp in m.TPS_IN_PERIOD[p]
-        )
+        ),
     )
-
 
     mod.GEN_TPS = Set(
         dimen=2,
         initialize=lambda m: (
-            (g, tp)
-                for g in m.GENERATION_PROJECTS
-                    for tp in m.TPS_FOR_GEN[g]))
+            (g, tp) for g in m.GENERATION_PROJECTS for tp in m.TPS_FOR_GEN[g]
+        ),
+    )
     mod.VARIABLE_GEN_TPS = Set(
         dimen=2,
         initialize=lambda m: (
-            (g, tp)
-                for g in m.VARIABLE_GENS
-                    for tp in m.TPS_FOR_GEN[g]))
+            (g, tp) for g in m.VARIABLE_GENS for tp in m.TPS_FOR_GEN[g]
+        ),
+    )
     mod.BASELOAD_GEN_TPS = Set(
         dimen=2,
         initialize=lambda m: (
-            (g, tp)
-                for g in m.BASELOAD_GENS
-                    for tp in m.TPS_FOR_GEN[g]))
+            (g, tp) for g in m.BASELOAD_GENS for tp in m.TPS_FOR_GEN[g]
+        ),
+    )
     mod.NON_STORAGE_GEN_TPS = Set(
         dimen=2,
         initialize=lambda m: (
-            (g, tp)
-                for g in m.NON_STORAGE_GENS
-                    for tp in m.TPS_FOR_GEN[g]))
-
-    mod.rec_resale_value = Param(
-        mod.PERIODS,
-        within=NonNegativeReals,
-        default=0
+            (g, tp) for g in m.NON_STORAGE_GENS for tp in m.TPS_FOR_GEN[g]
+        ),
     )
 
+    mod.rec_resale_value = Param(mod.PERIODS, within=NonNegativeReals, default=0)
+
     mod.GenCapacityInTP = Expression(
-        mod.GEN_TPS,
-        rule=lambda m, g, t: m.GenCapacity[g, m.tp_period[t]])
+        mod.GEN_TPS, rule=lambda m, g, t: m.GenCapacity[g, m.tp_period[t]]
+    )
 
     def init_gen_availability(m, g):
         if m.gen_is_baseload[g]:
-            return (
-                (1 - m.gen_forced_outage_rate[g]) *
-                (1 - m.baseload_gen_scheduled_outage_rate[g]))
-        elif m.gen_tech[g] == 'Solar_PV':
+            return (1 - m.gen_forced_outage_rate[g]) * (
+                1 - m.baseload_gen_scheduled_outage_rate[g]
+            )
+        elif m.gen_tech[g] == "Solar_PV":
             year = sum(m.period_start[p] for p in m.PERIODS_FOR_GEN[g])
             project_age = year - m.cod_year[g]
             if project_age < 0:
                 project_age = 0
             # calculate solar degredation assuming 0.5% per year linear panel degredation
-            return (1 - m.gen_forced_outage_rate[g]) * (1-(0.005*(project_age)))
+            return (1 - m.gen_forced_outage_rate[g]) * (1 - (0.005 * (project_age)))
         else:
-            return (1 - m.gen_forced_outage_rate[g])
-    mod.gen_availability = Param(
-        mod.NON_STORAGE_GENS,
-        within=NonNegativeReals,
-        initialize=init_gen_availability)
+            return 1 - m.gen_forced_outage_rate[g]
 
-    mod.VARIABLE_GEN_TPS_RAW = Set(
-        dimen=2,
-        within=mod.VARIABLE_GENS * mod.TIMEPOINTS
+    mod.gen_availability = Param(
+        mod.NON_STORAGE_GENS, within=NonNegativeReals, initialize=init_gen_availability
     )
+
+    mod.VARIABLE_GEN_TPS_RAW = Set(dimen=2, within=mod.VARIABLE_GENS * mod.TIMEPOINTS)
     mod.variable_capacity_factor = Param(
         mod.VARIABLE_GEN_TPS_RAW,
         within=Reals,
-        validate=lambda m, val, g, t: -1 < val < 2)
+        validate=lambda m, val, g, t: -1 < val < 2,
+    )
     # Validate that a variable_capacity_factor has been defined for every
     # variable gen / timepoint that we need. Extra cap factors (like beyond an
     # existing plant's lifetime) shouldn't cause any problems.
     mod.have_minimal_variable_capacity_factors = BuildCheck(
-        mod.VARIABLE_GEN_TPS,
-        rule=lambda m, g, t: (g,t) in m.VARIABLE_GEN_TPS_RAW)
+        mod.VARIABLE_GEN_TPS, rule=lambda m, g, t: (g, t) in m.VARIABLE_GEN_TPS_RAW
+    )
 
-    mod.BASELOAD_GEN_TPS_RAW = Set(
-        dimen=2,
-        within=mod.BASELOAD_GENS * mod.TIMEPOINTS)
+    mod.BASELOAD_GEN_TPS_RAW = Set(dimen=2, within=mod.BASELOAD_GENS * mod.TIMEPOINTS)
 
     mod.baseload_capacity_factor = Param(
         mod.BASELOAD_GEN_TPS_RAW,
         within=Reals,
-        validate=lambda m, val, g, t: -1 < val < 2)
-    
-    mod.DispatchGen = Var(
-        mod.NON_STORAGE_GEN_TPS,
-        within=NonNegativeReals)
-    
+        validate=lambda m, val, g, t: -1 < val < 2,
+    )
+
+    mod.DispatchGen = Var(mod.NON_STORAGE_GEN_TPS, within=NonNegativeReals)
+
     mod.ZoneTotalGeneratorDispatch = Expression(
-        mod.LOAD_ZONES, mod.TIMEPOINTS,
-        rule=lambda m, z, t: \
-            sum(m.DispatchGen[g, t]
-                for g in m.GENS_IN_ZONE[z]
-                if (g, t) in m.NON_STORAGE_GEN_TPS),
-        doc="Generation from generation projects.")
-    mod.Zone_Power_Injections.append('ZoneTotalGeneratorDispatch')
+        mod.LOAD_ZONES,
+        mod.TIMEPOINTS,
+        rule=lambda m, z, t: sum(
+            m.DispatchGen[g, t]
+            for g in m.GENS_IN_ZONE[z]
+            if (g, t) in m.NON_STORAGE_GEN_TPS
+        ),
+        doc="Generation from generation projects.",
+    )
+    mod.Zone_Power_Injections.append("ZoneTotalGeneratorDispatch")
 
     mod.GenPPACostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
-            m.DispatchGen[g, t] * (m.ppa_energy_cost[g]) 
+            m.DispatchGen[g, t] * (m.ppa_energy_cost[g])
             for g in m.GENS_IN_PERIOD[m.tp_period[t]]
-            if g in m.NON_STORAGE_GENS),
-        doc="Summarize costs for the objective function")
-    mod.Cost_Components_Per_TP.append('GenPPACostInTP')
+            if g in m.NON_STORAGE_GENS
+        ),
+        doc="Summarize costs for the objective function",
+    )
+    mod.Cost_Components_Per_TP.append("GenPPACostInTP")
 
     # ECONOMIC CURTAILMENT
     ######################
-    mod.CurtailGen = Var(
-        mod.VARIABLE_GEN_TPS,
-        within=NonNegativeReals)
+    mod.CurtailGen = Var(mod.VARIABLE_GEN_TPS, within=NonNegativeReals)
 
     mod.GenCurtailedEnergyCostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
-            m.CurtailGen[g, t] * (m.ppa_energy_cost[g]) 
+            m.CurtailGen[g, t] * (m.ppa_energy_cost[g])
             for g in m.GENS_IN_PERIOD[m.tp_period[t]]
-            if g in m.VARIABLE_GENS),
-        doc="Summarize costs for the objective function")
-    mod.Cost_Components_Per_TP.append('GenCurtailedEnergyCostInTP')
+            if g in m.VARIABLE_GENS
+        ),
+        doc="Summarize costs for the objective function",
+    )
+    mod.Cost_Components_Per_TP.append("GenCurtailedEnergyCostInTP")
 
     mod.ZoneTotalCurtailmentDispatch = Expression(
-        mod.LOAD_ZONES, mod.TIMEPOINTS,
-        rule=lambda m, z, t: \
-            sum(m.CurtailGen[g, t]
-                for g in m.GENS_IN_ZONE[z]
-                if (g, t) in m.VARIABLE_GEN_TPS),
-        doc="Curtailment from variable generation projects.")
+        mod.LOAD_ZONES,
+        mod.TIMEPOINTS,
+        rule=lambda m, z, t: sum(
+            m.CurtailGen[g, t]
+            for g in m.GENS_IN_ZONE[z]
+            if (g, t) in m.VARIABLE_GEN_TPS
+        ),
+        doc="Curtailment from variable generation projects.",
+    )
 
     # DISPATCH UPPER LIMITS
     #######################
 
     def DispatchUpperLimit_expr(m, g, t):
         if g in m.VARIABLE_GENS:
-            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
-                    m.variable_capacity_factor[g, t])
+            return (
+                m.GenCapacityInTP[g, t]
+                * m.gen_availability[g]
+                * m.variable_capacity_factor[g, t]
+            )
         elif g in m.BASELOAD_GENS:
-            return (m.GenCapacityInTP[g, t] * m.gen_availability[g] *
-                    m.baseload_capacity_factor[g, t])
+            return (
+                m.GenCapacityInTP[g, t]
+                * m.gen_availability[g]
+                * m.baseload_capacity_factor[g, t]
+            )
         else:
             return m.GenCapacityInTP[g, t] * m.gen_availability[g]
-    mod.DispatchUpperLimit = Expression(
-        mod.NON_STORAGE_GEN_TPS,
-        rule=DispatchUpperLimit_expr)
 
-    def EnforceDispatchUpperLimit_rule(m,g,t):
+    mod.DispatchUpperLimit = Expression(
+        mod.NON_STORAGE_GEN_TPS, rule=DispatchUpperLimit_expr
+    )
+
+    def EnforceDispatchUpperLimit_rule(m, g, t):
         if g in m.VARIABLE_GENS:
-            return (m.DispatchGen[g, t] + m.CurtailGen[g,t] <= m.DispatchUpperLimit[g, t]) 
+            return (
+                m.DispatchGen[g, t] + m.CurtailGen[g, t] <= m.DispatchUpperLimit[g, t]
+            )
         elif g in m.BASELOAD_GENS:
-            return (m.DispatchGen[g, t] == m.DispatchUpperLimit[g, t]) 
-        else: 
-            return (m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t])
+            return m.DispatchGen[g, t] == m.DispatchUpperLimit[g, t]
+        else:
+            return m.DispatchGen[g, t] <= m.DispatchUpperLimit[g, t]
+
     mod.Enforce_Dispatch_Upper_Limit = Constraint(
-        mod.NON_STORAGE_GEN_TPS,
-        rule=EnforceDispatchUpperLimit_rule)
+        mod.NON_STORAGE_GEN_TPS, rule=EnforceDispatchUpperLimit_rule
+    )
 
     # EXCESS GENERATION
     ###################
-    def ExcessGen_rule(m,g,t):
+    def ExcessGen_rule(m, g, t):
         if g in m.VARIABLE_GENS:
-            return m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] - m.CurtailGen[g,t]
+            return m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t] - m.CurtailGen[g, t]
         else:
             return m.DispatchUpperLimit[g, t] - m.DispatchGen[g, t]
-    mod.ExcessGen = Expression(
-        mod.VARIABLE_GEN_TPS,
-        rule=ExcessGen_rule)
+
+    mod.ExcessGen = Expression(mod.VARIABLE_GEN_TPS, rule=ExcessGen_rule)
 
     mod.TotalGen = Expression(
         mod.NON_STORAGE_GEN_TPS,
-        rule=lambda m, g, t: (m.DispatchGen[g, t] + m.ExcessGen[g,t]) if m.gen_is_variable[g] else m.DispatchGen[g, t])
+        rule=lambda m, g, t: (m.DispatchGen[g, t] + m.ExcessGen[g, t])
+        if m.gen_is_variable[g]
+        else m.DispatchGen[g, t],
+    )
 
     mod.AnnualTotalGen = Expression(
-        mod.NON_STORAGE_GENS, mod.PERIODS,
-        rule=lambda m, g, p: sum(m.TotalGen[g,t] for t in m.TIMEPOINTS if m.tp_period[t] == p))
+        mod.NON_STORAGE_GENS,
+        mod.PERIODS,
+        rule=lambda m, g, p: sum(
+            m.TotalGen[g, t] for t in m.TIMEPOINTS if m.tp_period[t] == p
+        ),
+    )
 
     mod.ZoneTotalExcessGen = Expression(
         mod.ZONE_TIMEPOINTS,
-        rule=lambda m, z, t: \
-            sum(m.ExcessGen[g, t]
-                for g in m.GENS_IN_ZONE[z]
-                if (g, t) in m.VARIABLE_GEN_TPS))
-    
-    #calculate the total excess energy for each variable generator in each period
+        rule=lambda m, z, t: sum(
+            m.ExcessGen[g, t] for g in m.GENS_IN_ZONE[z] if (g, t) in m.VARIABLE_GEN_TPS
+        ),
+    )
+
+    # calculate the total excess energy for each variable generator in each period
     def Calculate_Annual_Excess_Energy_By_Gen(m, g, p):
-        excess = sum(m.ExcessGen[g, t] 
-            for t in m.TIMEPOINTS #for each timepoint
-            if m.tp_period[t] == p #if the timepoint is in the current period and the generator is variable
+        excess = sum(
+            m.ExcessGen[g, t]
+            for t in m.TIMEPOINTS  # for each timepoint
+            if m.tp_period[t]
+            == p  # if the timepoint is in the current period and the generator is variable
         )
         return excess
+
     mod.AnnualExcessGen = Expression(
-        mod.VARIABLE_GENS, mod.PERIODS, #for each variable generator in each period
-        rule=Calculate_Annual_Excess_Energy_By_Gen) #calculate a value according to the rule 
+        mod.VARIABLE_GENS,
+        mod.PERIODS,  # for each variable generator in each period
+        rule=Calculate_Annual_Excess_Energy_By_Gen,
+    )  # calculate a value according to the rule
 
     mod.ExcessGenPPACostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
             m.ExcessGen[g, t] * (m.ppa_energy_cost[g])
-            for g in m.GENS_IN_PERIOD[m.tp_period[t]] if g in m.VARIABLE_GENS),
-        doc="Summarize costs for the objective function")
-    mod.Cost_Components_Per_TP.append('ExcessGenPPACostInTP')
+            for g in m.GENS_IN_PERIOD[m.tp_period[t]]
+            if g in m.VARIABLE_GENS
+        ),
+        doc="Summarize costs for the objective function",
+    )
+    mod.Cost_Components_Per_TP.append("ExcessGenPPACostInTP")
 
-    if mod.options.sell_excess_RECs == 'sell':
+    if mod.options.sell_excess_RECs == "sell":
         mod.ExcessRECValue = Expression(
             mod.PERIODS,
-            rule=lambda m, p: sum(m.AnnualExcessGen[g,p] for g in m.VARIABLE_GENS) * - m.rec_resale_value[p])
+            rule=lambda m, p: sum(m.AnnualExcessGen[g, p] for g in m.VARIABLE_GENS)
+            * -m.rec_resale_value[p],
+        )
 
-        #add to objective function
-        mod.Cost_Components_Per_Period.append('ExcessRECValue')
+        # add to objective function
+        mod.Cost_Components_Per_Period.append("ExcessRECValue")
 
-    
 
 def load_inputs(mod, match_data, inputs_dir):
     """
@@ -376,23 +414,25 @@ def load_inputs(mod, match_data, inputs_dir):
 
     match_data.load_aug(
         optional=True,
-        filename=os.path.join(inputs_dir, 'variable_capacity_factors.csv'),
+        filename=os.path.join(inputs_dir, "variable_capacity_factors.csv"),
         autoselect=True,
         index=mod.VARIABLE_GEN_TPS_RAW,
-        param=[mod.variable_capacity_factor])
+        param=[mod.variable_capacity_factor],
+    )
 
     match_data.load_aug(
         optional=True,
-        filename=os.path.join(inputs_dir, 'baseload_capacity_factors.csv'),
+        filename=os.path.join(inputs_dir, "baseload_capacity_factors.csv"),
         autoselect=True,
         index=mod.BASELOAD_GEN_TPS_RAW,
-        param=[mod.baseload_capacity_factor])
+        param=[mod.baseload_capacity_factor],
+    )
 
     match_data.load_aug(
-        filename=os.path.join(inputs_dir, 'rec_value.csv'),
-        select=('period','rec_resale_value'),
-        param=[mod.rec_resale_value])
-
+        filename=os.path.join(inputs_dir, "rec_value.csv"),
+        select=("period", "rec_resale_value"),
+        param=[mod.rec_resale_value],
+    )
 
 
 def post_solve(instance, outdir):
@@ -416,13 +456,20 @@ def post_solve(instance, outdir):
     if the ggplot python library is installed.
     """
 
-    gen_data = [{
-        "generation_project": g,
-        "timestamp": instance.tp_timestamp[t],
-        "DispatchGen_MW": value(instance.DispatchGen[g, t]),
-        "ExcessGen_MW":value(instance.ExcessGen[g, t]) if instance.gen_is_variable[g] else 0,
-        "CurtailGen_MW":value(instance.CurtailGen[g, t]) if instance.gen_is_variable[g] else 0
-    } for g, t in instance.NON_STORAGE_GEN_TPS]
+    gen_data = [
+        {
+            "generation_project": g,
+            "timestamp": instance.tp_timestamp[t],
+            "DispatchGen_MW": value(instance.DispatchGen[g, t]),
+            "ExcessGen_MW": value(instance.ExcessGen[g, t])
+            if instance.gen_is_variable[g]
+            else 0,
+            "CurtailGen_MW": value(instance.CurtailGen[g, t])
+            if instance.gen_is_variable[g]
+            else 0,
+        }
+        for g, t in instance.NON_STORAGE_GEN_TPS
+    ]
     dispatch_full_df = pd.DataFrame(gen_data)
     dispatch_full_df.set_index(["generation_project", "timestamp"], inplace=True)
     dispatch_full_df.to_csv(os.path.join(outdir, "dispatch.csv"))
