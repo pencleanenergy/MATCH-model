@@ -14,6 +14,7 @@ import os
 import requests
 import shutil
 import zipfile
+import warnings
 
 # Import the PySAM modules for simulating solar, CSP, and wind power generation
 import PySAM.ResourceTools as tools
@@ -21,6 +22,7 @@ import PySAM.Pvwattsv8 as pv
 import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
+warnings.filterwarnings("ignore", message="Data Validation extension is not supported and will be removed")
 
 def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, output_dir):
     xl_gen_validated = xl_gen.copy()
