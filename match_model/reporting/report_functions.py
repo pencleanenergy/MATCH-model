@@ -8,6 +8,8 @@ import plotly.express as px
 import math
 import os
 
+from pyomo.core import util
+
 """
 This module contains a collection of functions that are called from the summary_report.ipynb, used for reporting final outputs
 """
@@ -471,7 +473,9 @@ def calculate_generator_utilization(dispatch):
     """
 
     # calculate total annual generation in each category
-    utilization = dispatch.copy().groupby("generation_project").sum()
+    utilization = (
+        dispatch.copy().drop(columns="Nodal_Price").groupby("generation_project").sum()
+    )
 
     # sum all rows
     utilization["Total"] = utilization.sum(axis=1)
@@ -497,6 +501,34 @@ def calculate_generator_utilization(dispatch):
             "CurtailGen_MW": "Curtailed %",
         }
     )
+
+    # calculate what percentage of curtailment occured during negatively priced hours
+    curtailment = dispatch.copy()[
+        ["generation_project", "timestamp", "CurtailGen_MW", "Nodal_Price"]
+    ]
+    curtailment = curtailment.assign(
+        price=lambda x: np.where(
+            x.Nodal_Price <= 0,
+            "% Curtailed when price <=0",
+            "% curtailed when price > 0",
+        )
+    )
+    # calculate the total MWh of curtailment during positive and negative priced hours
+    curtailment = pd.DataFrame(curtailment.groupby(["generation_project", "price"]).sum()[
+        "CurtailGen_MW"
+    ])
+
+    total_curtailment = curtailment.reset_index().groupby("generation_project").sum()
+
+    curtailment = (curtailment.div(total_curtailment).fillna(0) * 100).reset_index()
+
+    curtailment = curtailment.pivot(index="generation_project", columns="price", values='CurtailGen_MW')
+
+    # merge this into the utilization
+    utilization = utilization.merge(
+        curtailment, how="left", left_index=True, right_index=True
+    )
+
 
     return utilization
 
@@ -1099,7 +1131,7 @@ def build_dispatch_plot(
         )
     )
 
-    dispatch_data = dispatch.copy()
+    dispatch_data = dispatch.copy().drop(columns="Nodal_Price")
 
     # add a generator technology column to the dispatch data
     dispatch_data["Technology"] = dispatch_data["generation_project"].map(
@@ -2769,11 +2801,15 @@ def calculate_emissions(
 ):
 
     # merge data about generation and generator-specific emission factors
-    generator_emissions = dispatch.copy().merge(
-        generation_projects_info[["GENERATION_PROJECT", "gen_emission_factor"]],
-        how="left",
-        left_on="generation_project",
-        right_on="GENERATION_PROJECT",
+    generator_emissions = (
+        dispatch.copy()
+        .drop(columns="Nodal_Price")
+        .merge(
+            generation_projects_info[["GENERATION_PROJECT", "gen_emission_factor"]],
+            how="left",
+            left_on="generation_project",
+            right_on="GENERATION_PROJECT",
+        )
     )
     # calculate the generator emission rate
     generator_emissions["Generator Emission Rate"] = (
@@ -2999,7 +3035,7 @@ def determine_additional_dispatch(
 
         # calculate dispatch from additional generators for long run marginal
         # filter the dispatch data to the additional gens
-        addl_dispatch = dispatch.copy()[
+        addl_dispatch = dispatch.copy().drop(columns="Nodal_Price")[
             dispatch["generation_project"].isin(additional_gens)
         ]
 

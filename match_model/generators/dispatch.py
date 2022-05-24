@@ -467,6 +467,7 @@ def post_solve(instance, outdir):
             "CurtailGen_MW": value(instance.CurtailGen[g, t])
             if instance.gen_is_variable[g]
             else 0,
+            "Nodal_Price": value(instance.nodal_price[instance.gen_pricing_node[g], t]),
         }
         for g, t in instance.NON_STORAGE_GEN_TPS
     ]

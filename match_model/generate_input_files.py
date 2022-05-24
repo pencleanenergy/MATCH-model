@@ -22,7 +22,10 @@ import PySAM.Pvwattsv8 as pv
 import PySAM.TcsmoltenSalt as csp_tower
 import PySAM.Windpower as wind
 
-warnings.filterwarnings("ignore", message="Data Validation extension is not supported and will be removed")
+warnings.filterwarnings(
+    "ignore", message="Data Validation extension is not supported and will be removed"
+)
+
 
 def validate_cost_inputs(xl_gen, df_vcf, nodal_prices, output_dir):
     xl_gen_validated = xl_gen.copy()
@@ -407,6 +410,8 @@ def generate_inputs(model_workspace):
             pass
 
     # create scenarios.txt
+    # write scenario configuration to scenarios.txt
+    scenarios = open(model_workspace / "scenarios.txt", "a+")
     for scenario in scenario_list:
         # get configuration options
         option_list = list(
@@ -426,8 +431,6 @@ def generate_inputs(model_workspace):
             (xl_scenarios["Parameter"] == "excess_generation_limit_type"), scenario
         ].item()
 
-        # write scenario configuration to scenarios.txt
-        scenarios = open(model_workspace / "scenarios.txt", "a+")
         if select_variants != 0:
             variant_option = f" --select_variants {select_variants}"
         else:
@@ -469,7 +472,7 @@ def generate_inputs(model_workspace):
             f"--scenario-name {scenario} --outputs-dir outputs/{scenario} --inputs-dir inputs/{scenario}{variant_option}{target_option}{excess_option}{ra_option}{mtr_option}{rec_option}{storage_option}"
         )
         scenarios.write("\n")
-        scenarios.close()
+    scenarios.close()
 
     # periods.csv
     df_periods = pd.DataFrame(

@@ -1,4 +1,13 @@
 -------------------------------------------------------------------------------
+Commit 2022.05.21 (Version 0.22.0)
+-------------------------------------------------------------------------------
+Updates the excess generation limits:
+ - The annual excess generation limit is now based on the total annual volume of generated electricity not exceeding the limit. 
+ - The hourly limit is now based on the annual volume of hourly excess generation not exceeding the limit. 
+
+Adds output to summary report describing what percentage of curtailment occured during negatively priced hours
+
+-------------------------------------------------------------------------------
 Commit 2022.05.20 (Version 0.21.1)
 -------------------------------------------------------------------------------
 Format code using black
