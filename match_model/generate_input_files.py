@@ -321,7 +321,7 @@ def generate_inputs(model_workspace):
 
     model_inputs = model_workspace / "model_inputs.xlsx"
 
-    print("Loading data from excel spreadsheet...")
+    print("Setting up model directory...")
     # Load all of the data from the excel file
 
     xl_general = pd.read_excel(io=model_inputs, sheet_name="general").dropna(
@@ -347,7 +347,6 @@ def generate_inputs(model_workspace):
         / 3600
     )
 
-    print("Writing options.txt...")
     xl_options = pd.read_excel(io=model_inputs, sheet_name="solver_options").dropna(
         axis=1, how="all"
     )
@@ -370,7 +369,6 @@ def generate_inputs(model_workspace):
         shutil.copy("cbc.exe", model_workspace)
         shutil.copy("coin-license.txt", model_workspace)
 
-    print("Creating input and output folders for each scenario...")
     # create the scenario folders in the input and output directories
     try:
         os.mkdir(model_workspace / "inputs")
@@ -473,6 +471,8 @@ def generate_inputs(model_workspace):
         )
         scenarios.write("\n")
     scenarios.close()
+
+    print("Loading data from model_inputs.xlsx")
 
     # periods.csv
     df_periods = pd.DataFrame(
@@ -1375,6 +1375,40 @@ def generate_inputs(model_workspace):
             df_vcf_scenario = df_vcf_scenario[
                 ~df_vcf_scenario["GENERATION_PROJECT"].isin(baseload_list)
             ]
+
+            # add a curtailment capacity factor
+            # merge in the pricing node
+            df_vcf_scenario = df_vcf_scenario.merge(
+                generation_projects_info[["GENERATION_PROJECT", "gen_pricing_node"]],
+                how="left",
+                on="GENERATION_PROJECT",
+                validate="m:1",
+            ).rename(columns={"gen_pricing_node": "pricing_node"})
+            # merge in the price
+            df_vcf_scenario = df_vcf_scenario.merge(
+                nodal_prices,
+                how="left",
+                on=["pricing_node", "timepoint"],
+                validate="m:1",
+            )
+            # create a binary variable if the price is negative or zero
+            df_vcf_scenario = df_vcf_scenario.assign(
+                negative_price=lambda x: np.where((x.nodal_price <= 0), 1, 0)
+            )
+            # create the curtailment capacity factor colunn
+            df_vcf_scenario["curtailment_capacity_factor"] = (
+                df_vcf_scenario["variable_capacity_factor"]
+                * df_vcf_scenario["negative_price"]
+            )
+            # ensure the capacity factor is greater than zero
+            df_vcf_scenario.loc[
+                df_vcf_scenario["curtailment_capacity_factor"] < 0,
+                "curtailment_capacity_factor",
+            ] = 0
+            # remove intermediate columns
+            df_vcf_scenario = df_vcf_scenario.drop(
+                columns=["pricing_node", "nodal_price", "negative_price"]
+            )
 
             # save data to csv
             df_vcf_scenario.to_csv(

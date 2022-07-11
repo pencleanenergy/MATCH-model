@@ -268,7 +268,22 @@ def define_components(mod):
 
     # ECONOMIC CURTAILMENT
     ######################
+    mod.curtailment_capacity_factor = Param(
+        mod.VARIABLE_GEN_TPS_RAW, within=NonNegativeReals,
+    )
+    mod.CurtailmentUpperLimit = Expression(
+        mod.VARIABLE_GEN_TPS,
+        rule=lambda m, g, t: m.GenCapacityInTP[g, t]
+        * m.gen_availability[g]
+        * m.curtailment_capacity_factor[g, t],
+    )
+
     mod.CurtailGen = Var(mod.VARIABLE_GEN_TPS, within=NonNegativeReals)
+
+    mod.Enforce_Curtailment_Only_When_LMP_negative = Constraint(
+        mod.VARIABLE_GEN_TPS,
+        rule=lambda m, g, t: m.CurtailGen[g, t] <= m.CurtailmentUpperLimit[g, t],
+    )
 
     mod.GenCurtailedEnergyCostInTP = Expression(
         mod.TIMEPOINTS,
@@ -417,7 +432,7 @@ def load_inputs(mod, match_data, inputs_dir):
         filename=os.path.join(inputs_dir, "variable_capacity_factors.csv"),
         autoselect=True,
         index=mod.VARIABLE_GEN_TPS_RAW,
-        param=[mod.variable_capacity_factor],
+        param=[mod.variable_capacity_factor, mod.curtailment_capacity_factor],
     )
 
     match_data.load_aug(
