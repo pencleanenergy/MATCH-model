@@ -1,4 +1,21 @@
 -------------------------------------------------------------------------------
+Commit 2022.07.11 (Version 0.22.1)
+-------------------------------------------------------------------------------
+Updates the decision variable `CurtailGen` so that economic curtailment is only allowed when LMP prices are negative.
+In reality the only time that an operator would choose to economically curtail a generator is when LMP prices are <= 0.
+Enforcing this constraint also prevents curtailment from being used excessivly by the model to satisfy other constraints.
+For example, when limiting the amount of excess generation allowed, previously the model could just curtail a lot of generation
+even when LMP prices were positive, even though this would not be realistic behavior. 
+
+To limit curtailment, we take an approach similar to how we limit `DispatchGen` to be <= an upper limit that is defined by its
+`variable_capacity_factor` and installed capacity. We create a new variable `curtailment_capacity_factor` which is set equal 
+to `variable_capacity_factor` when the LMP prices at a generator node are <= 0, and set to zero when prices are positive. This 
+new variable is defined in `variable_capacity_factors.csv`.
+
+To limit curtailment, we set the constraint `CurtailGen[g,t] <= GenCapacityInTP * gen_availability * curtailment_capacity_factor`
+for each g, t.
+
+-------------------------------------------------------------------------------
 Commit 2022.05.21 (Version 0.22.0)
 -------------------------------------------------------------------------------
 Updates the excess generation limits:
