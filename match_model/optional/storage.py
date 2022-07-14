@@ -9,7 +9,8 @@ storage, when to charge, energy accounting, etc.
 """
 
 from pyomo.environ import *
-import os, collections
+import os
+import collections
 
 dependencies = (
     "match_model.timescales",
@@ -334,7 +335,7 @@ def define_components(mod):
 
     # HYBRID STORAGE CHARGING
     #########################
-    # TODO: This will need to be modified if a dispatchable generator is a hybrid
+    # NOTE: This will need to be modified if a dispatchable generator is a hybrid
     mod.Charge_Hybrid_Storage_Upper_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
         rule=lambda m, g, t: m.ChargeStorage[g, t]
@@ -345,10 +346,11 @@ def define_components(mod):
     # the total combined dispatch from the storage portion and the generator portion should not be allowed to exceed that
     # nameplate capacity. For example, a 100MW solar + 50MW storage hybrid project should only be allowed to dispatch
     # a combined total of 100MW in any timepoint.
-    # TODO: This will need to be updated if dispatchable generators can be hybrids
+    # NOTE: This will need to be updated if dispatchable generators can be hybrids
     mod.Hybrid_Discharge_Limit = Constraint(
         mod.HYBRID_STORAGE_GEN_TPS,
         rule=lambda m, g, t: m.DischargeStorage[g, t]
+        - m.ChargeStorage[g, t]
         + m.DispatchGen[m.storage_hybrid_generation_project[g], t]
         + m.ExcessGen[m.storage_hybrid_generation_project[g], t]
         <= m.GenCapacityInTP[m.storage_hybrid_generation_project[g], t],
