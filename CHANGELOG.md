@@ -1,4 +1,13 @@
 -------------------------------------------------------------------------------
+Commit 2022.07.14 (Version 0.22.2)
+-------------------------------------------------------------------------------
+Updates the hybrid generator dispatch constraint such that the net dispatch must be less than or equal to
+the nameplate capacity (DispatchGen + DischargeStorage - ChargeStorage <= capacity).
+
+Previously, the constraint was DispatchGen + DischargeStorage <= capacity, so if a generator
+ever had a variable capacity factor > 1, it would curtail the generation.
+
+-------------------------------------------------------------------------------
 Commit 2022.07.11 (Version 0.22.1)
 -------------------------------------------------------------------------------
 Updates the decision variable `CurtailGen` so that economic curtailment is only allowed when LMP prices are negative.
