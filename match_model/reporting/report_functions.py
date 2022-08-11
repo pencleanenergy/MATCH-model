@@ -502,34 +502,6 @@ def calculate_generator_utilization(dispatch):
         }
     )
 
-    # calculate what percentage of curtailment occured during negatively priced hours
-    curtailment = dispatch.copy()[
-        ["generation_project", "timestamp", "CurtailGen_MW", "Nodal_Price"]
-    ]
-    curtailment = curtailment.assign(
-        price=lambda x: np.where(
-            x.Nodal_Price <= 0,
-            "% Curtailed when price <=0",
-            "% curtailed when price > 0",
-        )
-    )
-    # calculate the total MWh of curtailment during positive and negative priced hours
-    curtailment = pd.DataFrame(curtailment.groupby(["generation_project", "price"]).sum()[
-        "CurtailGen_MW"
-    ])
-
-    total_curtailment = curtailment.reset_index().groupby("generation_project").sum()
-
-    curtailment = (curtailment.div(total_curtailment).fillna(0) * 100).reset_index()
-
-    curtailment = curtailment.pivot(index="generation_project", columns="price", values='CurtailGen_MW')
-
-    # merge this into the utilization
-    utilization = utilization.merge(
-        curtailment, how="left", left_index=True, right_index=True
-    )
-
-
     return utilization
 
 
@@ -990,51 +962,73 @@ def construct_cost_table(
         ignore_index=True,
     )
     # add a total with no resale
-    cost_table = pd.concat(
-        [
-            cost_table,
-            pd.DataFrame(
-                {
-                    "Cost Category": ["Total"],
-                    "Cost Component": ["Total without REC/RA Resale"],
-                    "Annual Real Cost": [
-                        (
-                            cost_table.loc[
-                                cost_table["Cost Component"] == "Total",
-                                "Annual Real Cost",
-                            ].item()
-                            - cost_table.loc[
-                                cost_table["Cost Component"]
-                                == "REC Net Position Resale",
-                                "Annual Real Cost",
-                            ].item()
-                            - cost_table.loc[
-                                cost_table["Cost Component"] == "Excess RA Value",
-                                "Annual Real Cost",
-                            ].item()
-                        )
-                    ],
-                    "Cost Per MWh": [
-                        (
-                            cost_table.loc[
-                                cost_table["Cost Component"] == "Total", "Cost Per MWh"
-                            ].item()
-                            - cost_table.loc[
-                                cost_table["Cost Component"]
-                                == "REC Net Position Resale",
-                                "Cost Per MWh",
-                            ].item()
-                            - cost_table.loc[
-                                cost_table["Cost Component"] == "Excess RA Value",
-                                "Cost Per MWh",
-                            ].item()
-                        )
-                    ],
-                }
-            ),
-        ],
-        ignore_index=True,
-    )
+    if "Excess RA Value" in list(cost_table["Cost Component"]):
+        total_rows = pd.DataFrame(
+            {
+                "Cost Category": ["Total"],
+                "Cost Component": ["Total without REC/RA Resale"],
+                "Annual Real Cost": [
+                    (
+                        cost_table.loc[
+                            cost_table["Cost Component"] == "Total", "Annual Real Cost",
+                        ].item()
+                        - cost_table.loc[
+                            cost_table["Cost Component"] == "REC Net Position Resale",
+                            "Annual Real Cost",
+                        ].item()
+                        - cost_table.loc[
+                            cost_table["Cost Component"] == "Excess RA Value",
+                            "Annual Real Cost",
+                        ].item()
+                    )
+                ],
+                "Cost Per MWh": [
+                    (
+                        cost_table.loc[
+                            cost_table["Cost Component"] == "Total", "Cost Per MWh"
+                        ].item()
+                        - cost_table.loc[
+                            cost_table["Cost Component"] == "REC Net Position Resale",
+                            "Cost Per MWh",
+                        ].item()
+                        - cost_table.loc[
+                            cost_table["Cost Component"] == "Excess RA Value",
+                            "Cost Per MWh",
+                        ].item()
+                    )
+                ],
+            }
+        )
+    else:
+        total_rows = pd.DataFrame(
+            {
+                "Cost Category": ["Total"],
+                "Cost Component": ["Total without REC Resale"],
+                "Annual Real Cost": [
+                    (
+                        cost_table.loc[
+                            cost_table["Cost Component"] == "Total", "Annual Real Cost",
+                        ].item()
+                        - cost_table.loc[
+                            cost_table["Cost Component"] == "REC Net Position Resale",
+                            "Annual Real Cost",
+                        ].item()
+                    )
+                ],
+                "Cost Per MWh": [
+                    (
+                        cost_table.loc[
+                            cost_table["Cost Component"] == "Total", "Cost Per MWh"
+                        ].item()
+                        - cost_table.loc[
+                            cost_table["Cost Component"] == "REC Net Position Resale",
+                            "Cost Per MWh",
+                        ].item()
+                    )
+                ],
+            }
+        )
+    cost_table = pd.concat([cost_table, total_rows], ignore_index=True,)
 
     if to_pv != 1:
         # rename the columns
@@ -2171,14 +2165,20 @@ def construct_summary_output_table(
         cost_table["Cost Component"] == "Total", f"Cost Per MWh ({base_year}$)"
     ].item()
     summary[f"Portfolio Cost per MWh No Resale ({base_year}$)"] = cost_table.loc[
-        cost_table["Cost Component"] == "Total without REC/RA Resale",
+        (
+            (cost_table["Cost Component"] == "Total without REC/RA Resale")
+            | (cost_table["Cost Component"] == "Total without REC Resale")
+        ),
         f"Cost Per MWh ({base_year}$)",
     ].item()
     summary[f"Portfolio Cost per MWh ({financial_year}$)"] = cost_table.loc[
         cost_table["Cost Component"] == "Total", f"Cost Per MWh ({financial_year}$)"
     ].item()
     summary[f"Portfolio Cost per MWh No Resale ({financial_year}$)"] = cost_table.loc[
-        cost_table["Cost Component"] == "Total without REC/RA Resale",
+        (
+            (cost_table["Cost Component"] == "Total without REC/RA Resale")
+            | (cost_table["Cost Component"] == "Total without REC Resale")
+        ),
         f"Cost Per MWh ({financial_year}$)",
     ].item()
     # total portfolio cost
@@ -2186,14 +2186,20 @@ def construct_summary_output_table(
         cost_table["Cost Component"] == "Total", f"Annual Cost ({base_year}$)"
     ].item()
     summary[f"Total Portfolio Cos No Resale ({base_year}$)"] = cost_table.loc[
-        cost_table["Cost Component"] == "Total without REC/RA Resale",
+        (
+            (cost_table["Cost Component"] == "Total without REC/RA Resale")
+            | (cost_table["Cost Component"] == "Total without REC Resale")
+        ),
         f"Annual Cost ({base_year}$)",
     ].item()
     summary[f"Total Portfolio Cost ({financial_year}$)"] = cost_table.loc[
         cost_table["Cost Component"] == "Total", f"Annual Cost ({financial_year}$)"
     ].item()
     summary[f"Total Portfolio Cost No Resale ({financial_year}$)"] = cost_table.loc[
-        cost_table["Cost Component"] == "Total without REC/RA Resale",
+        (
+            (cost_table["Cost Component"] == "Total without REC/RA Resale")
+            | (cost_table["Cost Component"] == "Total without REC Resale")
+        ),
         f"Annual Cost ({financial_year}$)",
     ].item()
 
