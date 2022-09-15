@@ -3245,7 +3245,17 @@ def compare_system_ramps(cambium, addl_dispatch, addl_storage_dispatch, ramp_len
     """
     """
     pre_net_load = cambium.copy()[["net_load_busbar"]]
+    pre_net_load_storage = cambium.copy()[
+        ["net_load_busbar", "storage_charging", "phs_MWh", "battery_MWh"]
+    ]
+    pre_net_load_storage["net_load_busbar"] = (
+        pre_net_load_storage["net_load_busbar"]
+        + pre_net_load_storage["storage_charging"]
+        - pre_net_load_storage["phs_MWh"]
+        - pre_net_load_storage["battery_MWh"]
+    )
     post_net_load = pre_net_load.copy()
+    
 
     # change the index of the dispatch data to match the net load data
     addl_dispatch.index = post_net_load.index
@@ -3343,6 +3353,16 @@ def compare_system_peaks(cambium, addl_dispatch, addl_storage_dispatch):
     """
     """
     pre_net_load = cambium.copy()[["net_load_busbar"]]
+    # net out storage
+    pre_net_load_storage = cambium.copy()[
+        ["net_load_busbar", "storage_charging", "phs_MWh", "battery_MWh"]
+    ]
+    pre_net_load_storage["net_load_busbar"] = (
+        pre_net_load_storage["net_load_busbar"]
+        + pre_net_load_storage["storage_charging"]
+        - pre_net_load_storage["phs_MWh"]
+        - pre_net_load_storage["battery_MWh"]
+    )
     post_net_load = pre_net_load.copy()
 
     # change the index of the dispatch data to match the net load data
