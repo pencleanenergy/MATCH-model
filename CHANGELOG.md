@@ -1,4 +1,11 @@
 -------------------------------------------------------------------------------
+Commit 2022.09.14 (Version 0.22.4)
+-------------------------------------------------------------------------------
+Updates the summary report to fix a how the avoided emissions per MWh is calculated. Previously, this metric used only additional dispatch to normalize the emissions, but it should use the total portfolio generation to do so.
+
+Also updates the grid impact metrics to factor in system-level battery dispatch into the metrics for the ones that calculate net demand as demand - wind, solar, and batteries.
+
+-------------------------------------------------------------------------------
 Commit 2022.07.14 (Version 0.22.2)
 -------------------------------------------------------------------------------
 Updates the hybrid generator dispatch constraint such that the net dispatch must be less than or equal to
