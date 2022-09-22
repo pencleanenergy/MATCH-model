@@ -18,6 +18,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+MATCH was copied and adapted from version 2.0.5 of the Switch Model (https://github.com/switch-model/switch/releases/tag/2.0.5)
+
 This file includes work covered by the following copyright and permission notices:
 
    # Short boilerplate
