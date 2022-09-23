@@ -24,7 +24,7 @@ def fv_to_pv(financials):
         year: the model year, as an integer (YYYY)
 
     Outputs:
-        future value to present value conversion factor 
+        future value to present value conversion factor
     """
     return (1 + financials.loc[0, "discount_rate"]) ** -(
         financials.loc[0, "dollar_year"] - financials.loc[0, "base_financial_year"]
@@ -54,7 +54,7 @@ def format_percent(x):
     The input number must be a percentage on a 0-100 scale
 
     Inputs:
-        x: float number 
+        x: float number
     Returns:
         formatted: formatted number as a string
     """
@@ -92,7 +92,7 @@ def annual_renewable_percentage(load_balance):
     Calculates the percent of delivered energy from renewable sources, using an annual volumetric method
 
     The renewable percentage is net generation / load, where net generation is total generation less storage losses
-    
+
     NOTE: this will need to be modified to calculate net load if DSR is used
 
     Inputs:
@@ -824,7 +824,13 @@ def build_hourly_cost_plot(hourly_costs, load_balance, year):
 
 
 def construct_cost_table(
-    hourly_costs, load_balance, rec_value, financials, year, curtailment_credit
+    hourly_costs,
+    load_balance,
+    rec_value,
+    financials,
+    year,
+    curtailment_credit,
+    td_losses,
 ):
     """
     Constructs tables that break down costs by component
@@ -857,7 +863,9 @@ def construct_cost_table(
         - load_balance.sum()["ZoneTotalStorageDischarge"]
     )
     loss_adj_load = load_balance.sum()["zone_demand_mw"] + storage_losses
-    retail_load = (load_balance.sum()["zone_demand_mw"] / 1.065) + storage_losses
+    retail_load = (
+        load_balance.sum()["zone_demand_mw"] / (1 + td_losses)
+    ) + storage_losses
     total_recs = (
         load_balance.sum()["ZoneTotalGeneratorDispatch"]
         + load_balance.sum()["ZoneTotalExcessGen"]
@@ -970,7 +978,8 @@ def construct_cost_table(
                 "Annual Real Cost": [
                     (
                         cost_table.loc[
-                            cost_table["Cost Component"] == "Total", "Annual Real Cost",
+                            cost_table["Cost Component"] == "Total",
+                            "Annual Real Cost",
                         ].item()
                         - cost_table.loc[
                             cost_table["Cost Component"] == "REC Net Position Resale",
@@ -1007,7 +1016,8 @@ def construct_cost_table(
                 "Annual Real Cost": [
                     (
                         cost_table.loc[
-                            cost_table["Cost Component"] == "Total", "Annual Real Cost",
+                            cost_table["Cost Component"] == "Total",
+                            "Annual Real Cost",
                         ].item()
                         - cost_table.loc[
                             cost_table["Cost Component"] == "REC Net Position Resale",
@@ -1028,7 +1038,10 @@ def construct_cost_table(
                 ],
             }
         )
-    cost_table = pd.concat([cost_table, total_rows], ignore_index=True,)
+    cost_table = pd.concat(
+        [cost_table, total_rows],
+        ignore_index=True,
+    )
 
     if to_pv != 1:
         # rename the columns
@@ -1335,7 +1348,7 @@ def build_state_of_charge_plot(
 ):
     """
     Description
-    
+
     Inputs:
         storage_dispatch: a dataframe containing hourly charge, discharge, state of charge, and nodal cost data for storage assets, loaded from outputs/storage_dispatch.csv
         storage_builds: a dataframe containing data on built storage power and energy capacity loaded from outputs/storage_builds.csv
@@ -2710,7 +2723,7 @@ def load_cambium_data(scenario, year, region):
 
 def calculate_residual_mix(cambium, emissions_unit):
     """
-    This function estimates an hourly residual mix emission rate using data from Cambium. 
+    This function estimates an hourly residual mix emission rate using data from Cambium.
     Because Cambium does not report residual mix, we must estimate it as the emission factor of all fossil generation in the region
     """
     if "CO2e" in emissions_unit:
@@ -2870,7 +2883,7 @@ def calculate_emissions(
 def calculate_levelized_lrmer(start_year, period, discount, emissions_unit, region):
     """
     Calculates a levelized LRMER from the Cambium data
-    
+
     Inputs:
         start_year: the start year for the levelization (should be the model year)
         period: the number of years of expected project lifetime
@@ -3242,8 +3255,7 @@ def calculate_system_ramp(net_load, ramp_length):
 
 
 def compare_system_ramps(cambium, addl_dispatch, addl_storage_dispatch, ramp_length):
-    """
-    """
+    """ """
     pre_net_load = cambium.copy()[["net_load_busbar"]]
     pre_net_load_storage = cambium.copy()[
         ["net_load_busbar", "storage_charging", "phs_MWh", "battery_MWh"]
@@ -3255,7 +3267,6 @@ def compare_system_ramps(cambium, addl_dispatch, addl_storage_dispatch, ramp_len
         - pre_net_load_storage["battery_MWh"]
     )
     post_net_load = pre_net_load.copy()
-    
 
     # change the index of the dispatch data to match the net load data
     addl_dispatch.index = post_net_load.index
@@ -3350,8 +3361,7 @@ def calculate_system_peak(net_load):
 
 
 def compare_system_peaks(cambium, addl_dispatch, addl_storage_dispatch):
-    """
-    """
+    """ """
     pre_net_load = cambium.copy()[["net_load_busbar"]]
     # net out storage
     pre_net_load_storage = cambium.copy()[

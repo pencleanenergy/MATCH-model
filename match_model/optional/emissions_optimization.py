@@ -134,8 +134,7 @@ def define_components(mod):
 
 
 def load_inputs(mod, match_data, inputs_dir):
-    """
-    """
+    """ """
     match_data.load_aug(
         filename=os.path.join(inputs_dir, "generation_projects_info.csv"),
         auto_select=True,
@@ -197,4 +196,3 @@ def post_solve(instance, outdir):
     emissions_data_df = pd.DataFrame(emissions_data)
     emissions_data_df.set_index(["generation_project", "timestamp"], inplace=True)
     emissions_data_df.to_csv(os.path.join(outdir, "gen_emissions.csv"))
-

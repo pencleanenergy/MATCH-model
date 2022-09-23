@@ -31,4 +31,3 @@ def post_solve(instance, outdir, inputs_dir):
     )
     # delete the notebook from the inputs directory
     os.remove(f"{inputs_dir}/summary_report.ipynb")
-

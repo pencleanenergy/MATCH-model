@@ -339,6 +339,9 @@ def generate_inputs(model_workspace):
     emissions_unit = xl_general.loc[
         xl_general["Parameter"] == "GHG Emissions Unit", "Input"
     ].item()
+    td_losses = xl_general.loc[
+        xl_general["Parameter"] == "Transmission & Distribution Losses", "Input"
+    ].item()
 
     tz_offset = np.round(
         datetime(year=2020, month=1, day=1, tzinfo=pytz.timezone(timezone))
@@ -1092,6 +1095,11 @@ def generate_inputs(model_workspace):
             ghg_emissions_unit = open(input_dir / "ghg_emissions_unit.txt", "w+")
             ghg_emissions_unit.write(emissions_unit)
             ghg_emissions_unit.close()
+
+            # td_losses.txt
+            td_loss = open(input_dir / "td_losses.txt", "w+")
+            td_loss.write(td_losses)
+            td_loss.close()
 
             # fixed_costs.csv
             xl_fixed_costs.to_csv(input_dir / "fixed_costs.csv", index=False)

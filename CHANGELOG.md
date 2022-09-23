@@ -1,4 +1,12 @@
 -------------------------------------------------------------------------------
+Commit 2022.09.23 (Version 0.23.0)
+-------------------------------------------------------------------------------
+Scrubs any PCE-specific data/notes from the code. 
+
+Adds a new input to the model_inputs.xlsx file for T&D losses. This was previously hard-coded into the report_functions.py script using a PCE-specific distribution loss value. 
+
+
+-------------------------------------------------------------------------------
 Commit 2022.09.14 (Version 0.22.4)
 -------------------------------------------------------------------------------
 Updates the summary report to fix a how the avoided emissions per MWh is calculated. Previously, this metric used only additional dispatch to normalize the emissions, but it should use the total portfolio generation to do so.
@@ -63,7 +71,7 @@ Commit 2022.04.07 (Version 0.20.2)
 -------------------------------------------------------------------------------
 
 Update how REC costs are calculated in the summary report. If there is a REC open position, only procure enough RECs to meet base load plus storage losses (rather than loss-adjusted load). 
-However, if long on RECs, only sell RECs in excess of loss-adjusted load. We assume that Loss adjusted load = base load * 1.065
+However, if long on RECs, only sell RECs in excess of loss-adjusted load. We assume that Loss adjusted load = base load * (1 + td_losses)
 
 
 -------------------------------------------------------------------------------

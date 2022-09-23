@@ -269,7 +269,8 @@ def define_components(mod):
     # ECONOMIC CURTAILMENT
     ######################
     mod.curtailment_capacity_factor = Param(
-        mod.VARIABLE_GEN_TPS_RAW, within=NonNegativeReals,
+        mod.VARIABLE_GEN_TPS_RAW,
+        within=NonNegativeReals,
     )
     mod.CurtailmentUpperLimit = Expression(
         mod.VARIABLE_GEN_TPS,

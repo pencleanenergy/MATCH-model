@@ -56,9 +56,9 @@ def define_components(mod):
     LOCAL_RELIABILITY_AREAS
 
     RAR_AREAS
-    
+
     tp_month[t] defines which month (1-12) each timepoint belongs to
-    
+
     """
 
     # Define Parameters
@@ -349,7 +349,7 @@ def define_components(mod):
         )
 
         # another part of the rule is a certain amount of long-duration energy storage is required in the portfolio
-        # long-duration energy storage is defined as storage with an EPR >= 8 hours
+        # long-duration energy storage is defined as storage with an energy-to-power ratio >= 8 hours
         mod.LONG_DURATION_STORAGE = Set(
             initialize=mod.STORAGE_GENS,
             filter=lambda m, g: m.storage_energy_to_power_ratio[g] >= 8,
@@ -427,9 +427,7 @@ def load_inputs(mod, match_data, inputs_dir):
 
 
 def post_solve(instance, outdir):
-    """
-
-    """
+    """ """
     ra_dat = [
         {
             "Period": p,

@@ -57,7 +57,7 @@ def define_components(mod):
 
     gen_is_variable[g]
 
-    gen_is_baseload 
+    gen_is_baseload
 
     gen_is_storage
 
@@ -201,7 +201,7 @@ def define_components(mod):
     --- COSTS ---
 
 
-    The following cost components are defined for each project. 
+    The following cost components are defined for each project.
 
     ppa_energy_cost[g]
 
@@ -630,4 +630,3 @@ def post_solve(m, outdir):
             m.GenCapacityCost[g, p],
         ),
     )
-
