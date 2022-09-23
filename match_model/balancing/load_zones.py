@@ -27,18 +27,6 @@ def define_dynamic_lists(mod):
     mod.Zone_Power_Withdrawals = []
 
 
-"""
-#TODO: Finish this
-def define_arguments(argparser):
-    argparser.add_argument('--annual_balance', choices=['excess', 'no_excess'], default='excess',
-        help=
-            "Whether excess generation is allowed." 
-            "If 'excess' (default), excess generation is allowed"
-            "If 'no_excess', the total available generation must equal the total annual load"
-    )
-"""
-
-
 def define_components(mod):
     """
     Augments a Pyomo abstract model object with sets and parameters that
@@ -167,10 +155,16 @@ def post_solve(instance, outdir):
         instance.LOAD_ZONES,
         instance.TIMEPOINTS,
         output_file=os.path.join(outdir, "load_balance.csv"),
-        headings=("load_zone", "timestamp",)
+        headings=(
+            "load_zone",
+            "timestamp",
+        )
         + tuple(instance.Zone_Power_Injections + instance.Zone_Power_Withdrawals)
         + ("ZoneTotalExcessGen",),
-        values=lambda m, z, t: (z, m.tp_timestamp[t],)
+        values=lambda m, z, t: (
+            z,
+            m.tp_timestamp[t],
+        )
         + tuple(
             getattr(m, component)[z, t]
             for component in (m.Zone_Power_Injections + m.Zone_Power_Withdrawals)
