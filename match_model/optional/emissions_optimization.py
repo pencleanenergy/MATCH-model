@@ -26,7 +26,7 @@ def define_components(mod):
     ###################
 
     # TODO: Load this data
-    mod.social_cost_of_carbon = Param(mod.PERIODS, within=NonNegativeReals, default=0)
+    mod.internal_carbon_price = Param(mod.PERIODS, within=NonNegativeReals, default=0)
 
     mod.gen_is_additional = Param(mod.GENERATION_PROJECTS, within=Boolean)
 
@@ -125,7 +125,7 @@ def define_components(mod):
     mod.GenEmissionsCostInTP = Expression(
         mod.TIMEPOINTS,
         rule=lambda m, t: sum(
-            m.social_cost_of_carbon[m.tp_period[t]]
+            m.internal_carbon_price[m.tp_period[t]]
             * m.GenTotalConsequentialEmissionsInTP[g, t]
             for g in m.GENERATION_PROJECTS
         ),
@@ -157,9 +157,9 @@ def load_inputs(mod, match_data, inputs_dir):
         }
 
     match_data.load_aug(
-        filename=os.path.join(inputs_dir, "social_cost_of_carbon.csv"),
+        filename=os.path.join(inputs_dir, "internal_carbon_price.csv"),
         autoselect=True,
-        param=[mod.social_cost_of_carbon],
+        param=[mod.internal_carbon_price],
     )
 
     match_data.load_aug(

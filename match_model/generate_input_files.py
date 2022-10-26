@@ -1021,17 +1021,17 @@ def generate_inputs(model_workspace):
             # if emissions optimization module in use, generate inputs for module
             if "match_model.optional.emissions_optimization" in module_list:
                 # social cost of carbon
-                social_cost_of_carbon = xl_scenarios.loc[
-                    (xl_scenarios["Parameter"] == "social_cost_of_carbon"), scenario
+                internal_carbon_price = xl_scenarios.loc[
+                    (xl_scenarios["Parameter"] == "internal_carbon_price"), scenario
                 ].item()
-                social_cost_of_carbon = pd.DataFrame(
+                internal_carbon_price = pd.DataFrame(
                     data={
                         "period": [year],
-                        "social_cost_of_carbon": [social_cost_of_carbon],
+                        "internal_carbon_price": [internal_carbon_price],
                     }
                 )
-                social_cost_of_carbon.to_csv(
-                    input_dir / "social_cost_of_carbon.csv", index=False
+                internal_carbon_price.to_csv(
+                    input_dir / "internal_carbon_price.csv", index=False
                 )
 
                 # filter the lrmer data for the module

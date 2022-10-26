@@ -1,4 +1,11 @@
 -------------------------------------------------------------------------------
+Commit 2022.10.26 (Version 0.22.5)
+-------------------------------------------------------------------------------
+Changes the variable name "social_cost_of_carbon" to "internal_carbon_price"
+
+Updates model_inputs.xlsx.
+
+-------------------------------------------------------------------------------
 Commit 2022.09.14 (Version 0.22.4)
 -------------------------------------------------------------------------------
 Updates the summary report to fix a how the avoided emissions per MWh is calculated. Previously, this metric used only additional dispatch to normalize the emissions, but it should use the total portfolio generation to do so.
