@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2019 The Switch Authors. All rights reserved.
-# Modifications copyright (c) 2021 The MATCH Authors. All rights reserved.
+# Modifications copyright (c) 2022 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 """
 Defines generation projects build-outs.
@@ -57,7 +57,7 @@ def define_components(mod):
 
     gen_is_variable[g]
 
-    gen_is_baseload 
+    gen_is_baseload
 
     gen_is_storage
 
@@ -201,7 +201,7 @@ def define_components(mod):
     --- COSTS ---
 
 
-    The following cost components are defined for each project. 
+    The following cost components are defined for each project.
 
     ppa_energy_cost[g]
 
@@ -630,4 +630,3 @@ def post_solve(m, outdir):
             m.GenCapacityCost[g, p],
         ),
     )
-

@@ -1,4 +1,4 @@
-# Copyright (c) 2021 The MATCH Authors. All rights reserved.
+# Copyright (c) 2022 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
@@ -161,4 +161,3 @@ def post_solve(instance, outdir):
     nodal_df = pd.DataFrame(nodal_data)
     nodal_df.set_index(["timestamp"], inplace=True)
     nodal_df.to_csv(os.path.join(outdir, "costs_by_tp.csv"))
-

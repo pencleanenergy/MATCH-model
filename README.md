@@ -114,5 +114,5 @@ If you plan on contributing edits to the codebase that will be merged into the m
 	- From here, you should write a brief description of what you actually changed (you can copy and paste this from the changelog). 
 	- Click the "Reviewers" tab and select Greg as a reviewer. 
 	- Click "Create pull request"
-	- Greg will then review the edit and merge it into the master branch, which will then delete the feature branch.
+	- It will then be reviewed by the code authors and merged it into the master branch if approved.
 

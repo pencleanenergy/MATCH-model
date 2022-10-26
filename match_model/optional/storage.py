@@ -1,5 +1,5 @@
 # Copyright (c) 2016-2017 The Switch Authors. All rights reserved.
-# Modifications copyright (c) 2021 The MATCH Authors. All rights reserved.
+# Modifications copyright (c) 2022 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
@@ -107,7 +107,7 @@ def define_components(mod):
     storage_charge_to_discharge_ratio)
 
     Charge_Hybrid_Storage_Upper_Limit[(g, t) in HYBRID_STORAGE_GEN_TPS]
-    constrains ChargeStorage to be no greater than the dispatch of its 
+    constrains ChargeStorage to be no greater than the dispatch of its
     paired generator in each timepoint
 
     StateOfCharge[(g, t) in STORAGE_GEN_TPS] is a variable
@@ -568,4 +568,3 @@ def post_solve(instance, outdir):
             m.Battery_Cycle_Count[g, p],
         ),
     )
-

@@ -1,4 +1,4 @@
-# Copyright (c) 2021 The MATCH Authors. All rights reserved.
+# Copyright (c) 2022 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 import os
@@ -31,4 +31,3 @@ def post_solve(instance, outdir, inputs_dir):
     )
     # delete the notebook from the inputs directory
     os.remove(f"{inputs_dir}/summary_report.ipynb")
-

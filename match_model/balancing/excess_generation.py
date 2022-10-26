@@ -1,4 +1,4 @@
-# Copyright (c) 2021 The MATCH Authors. All rights reserved.
+# Copyright (c) 2022 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
@@ -33,7 +33,6 @@ def define_components(mod):
 
     # Hard limit on excess generation
     #################################
-    # define limit, set the default at 1000% of load (arbitrarily high value)
     mod.excess_generation_limit = Param(mod.PERIODS, within=PercentFraction)
 
     # Enforce limit on excess generation
@@ -98,4 +97,3 @@ def load_inputs(mod, match_data, inputs_dir):
         autoselect=True,
         param=[mod.excess_generation_limit, mod.excessgen_penalty],
     )
-

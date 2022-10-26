@@ -1,4 +1,4 @@
-# Copyright (c) 2021 The MATCH Authors. All rights reserved.
+# Copyright (c) 2022 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
@@ -9,7 +9,6 @@ Defines the type of renewable energy goal (annual or time-coincident) and the go
 import os
 from sys import modules
 from pyomo.environ import *
-import pandas as pd
 
 dependencies = (
     "match_model.timescales",
@@ -37,16 +36,16 @@ def define_components(mod):
     renewable_target[p] is a parameter that describes how much of load (as a percentage) must be served by GENERATION_PROJECTS.
     This assumes that all GENERATION_PROJECTS are renewable generators that count toward the goal.
 
-    hedge_premium_cost[z] 
+    hedge_premium_cost[z]
 
-    SystemPower[z, t] is a decision variable for how many average MW of grid power to use to meet demand in each timepoint in each zone. 
-    This decision variable is considered a power injection in the load balance equation. 
+    SystemPower[z, t] is a decision variable for how many average MW of grid power to use to meet demand in each timepoint in each zone.
+    This decision variable is considered a power injection in the load balance equation.
 
     SystemPowerCost[t] is an expression that summarizes the total cost of consuming system power at a given timepoint
 
     AnnualSystemPower[z,p] is an expression that describes the total system power used in each zone in each period (year)
 
-    Enforce_Hourly_Renewable_Target[z,p] is a contraint that requires time coincident renewable generation from GENERATION_PROJECTS to 
+    Enforce_Hourly_Renewable_Target[z,p] is a contraint that requires time coincident renewable generation from GENERATION_PROJECTS to
     meet or exceed the renewable_target. It is defined by requiring the percentage of system power used to be less than 1 - the target.
 
 
@@ -141,4 +140,3 @@ def load_inputs(mod, match_data, inputs_dir):
         autoselect=True,
         param=[mod.renewable_target],
     )
-

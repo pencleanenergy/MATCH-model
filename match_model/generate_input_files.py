@@ -1,4 +1,4 @@
-# Copyright (c) 2021 The MATCH Authors. All rights reserved.
+# Copyright (c) 2022 The MATCH Authors. All rights reserved.
 # Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
 
 """
@@ -338,6 +338,9 @@ def generate_inputs(model_workspace):
     ].item()
     emissions_unit = xl_general.loc[
         xl_general["Parameter"] == "GHG Emissions Unit", "Input"
+    ].item()
+    td_losses = xl_general.loc[
+        xl_general["Parameter"] == "Transmission & Distribution Losses", "Input"
     ].item()
 
     tz_offset = np.round(
@@ -1092,6 +1095,11 @@ def generate_inputs(model_workspace):
             ghg_emissions_unit = open(input_dir / "ghg_emissions_unit.txt", "w+")
             ghg_emissions_unit.write(emissions_unit)
             ghg_emissions_unit.close()
+
+            # td_losses.txt
+            td_loss = open(input_dir / "td_losses.txt", "w+")
+            td_loss.write(td_losses)
+            td_loss.close()
 
             # fixed_costs.csv
             xl_fixed_costs.to_csv(input_dir / "fixed_costs.csv", index=False)
