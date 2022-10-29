@@ -15,11 +15,14 @@ Copyright (C) 2022 The MATCH Authors
 **Contact**  
 Greg Miller <grmiller@ucdavis.edu>
 
-**Notice of Third Party Software**  
+## Notice of Third Party Software
 
 This software includes code from Switch. Copyright (c) 2015-2019 The Switch Authors. All rights reserved. Licensed under the Apache License, Version 2.0  http://www.apache.org/licenses/LICENSE-2.0 
 
 Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+## Contribution License Agreement
+This repository includes a Contribution License Agreement (CLA) in the `CLA.md` file. We use `cla-assistant` to allow contributors to sign the CLA agreement from within a pull request.
 
 # INSTALLATION
 
@@ -59,12 +62,6 @@ See "INSTALL.md" for instructions on how to download and install MATCH on your m
  ┣ 📜utilities.py: utility functions for MATCH
  ┗ 📜version.py: defines the current model version number
 ```
-
-# Documentation
-To generate documentation, go to the doc folder and run ./make_doc.sh.
-This will build html documentation files from python doc strings which
-will include descriptions of each module, their intentions, model
-components they define, and what input files they expect.
 
 # CONFIGURING MODEL RUNS
 1. Determine where you want all of your model runs to be stored.
@@ -135,3 +132,8 @@ If you plan on contributing edits to the codebase that will be merged into the m
 	- Click "Create pull request"
 	- It will then be reviewed by the code authors and merged it into the master branch if approved.
 
+# DOCUMENTATION
+To generate documentation, go to the doc folder and run ./make_doc.sh.
+This will build html documentation files from python doc strings which
+will include descriptions of each module, their intentions, model
+components they define, and what input files they expect.
