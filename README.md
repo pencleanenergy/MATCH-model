@@ -1,10 +1,25 @@
-This contains "MATCH", a time-coincident renewable energy portfolio
-planning model that is derived from version 2 of the Switch electricity planning model.
+The MATCH Model is energy procurement planning model that can be used to
+identify the lowest-cost portfolio of clean and/or renewable energy contracts
+that can be used to meet annual, time-coincident, and/or emissions-optimized 
+energy procurement goals. The model is derived from version 2 of the Switch 
+electricity planning model.
 
-To generate documentation, go to the doc folder and run ./make_doc.sh.
-This will build html documentation files from python doc strings which
-will include descriptions of each module, their intentions, model
-components they define, and what input files they expect.
+# LICENSE
+
+MATCH is licensed under the GNU AFFERO GENERAL PUBLIC LICENSE Version 3 (or later), a copy of which can be found in the LICENSE.md file in this repository. You can redistribute it and/or modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU AFFERO GENERAL PUBLIC LICENSE version 3 license for more details. 
+
+Copyright (C) 2022 The MATCH Authors
+
+**Contact**  
+Greg Miller <grmiller@ucdavis.edu>
+
+**Notice of Third Party Software**  
+
+This software includes code from Switch. Copyright (c) 2015-2019 The Switch Authors. All rights reserved. Licensed under the Apache License, Version 2.0  http://www.apache.org/licenses/LICENSE-2.0 
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
 # INSTALLATION
 
@@ -45,9 +60,13 @@ See "INSTALL.md" for instructions on how to download and install MATCH on your m
  ┗ 📜version.py: defines the current model version number
 ```
 
+# Documentation
+To generate documentation, go to the doc folder and run ./make_doc.sh.
+This will build html documentation files from python doc strings which
+will include descriptions of each module, their intentions, model
+components they define, and what input files they expect.
+
 # CONFIGURING MODEL RUNS
-
-
 1. Determine where you want all of your model runs to be stored.
 Your can use the default `MODEL_RUNS` folder in your github repository, or you can create a folder somewhere else on your computer. 
 We do not recommend creating this folder within Box Drive or similar cloud storage location.

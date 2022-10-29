@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2019 The Switch Authors. All rights reserved.
-# Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
+# Licensed under the Apache License, Version 2.0, which can be found at http://www.apache.org/licenses/LICENSE-2.0.
 
 """Script to handle match <cmd> calls from the command line."""
 from __future__ import print_function

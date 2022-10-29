@@ -32,7 +32,7 @@ setup(
     version=__version__,
     maintainer="Gregory Miller",
     maintainer_email="grmiller@ucdavis.edu",
-    license="Apache License 2.0",
+    license="GNU AFFERO GENERAL PUBLIC LICENSE Version 3",
     platforms=["any"],
     description="MATCH 24x7 Portfolio Planning Model",
     long_description=read("README.md"),
@@ -69,8 +69,6 @@ setup(
     python_requires=">=2.7.12",
     install_requires=[
         "Pyomo",  # We need a version that works with glpk 4.60+
-        "pint",  # needed by Pyomo when we run our tests, but not included
-        "testfixtures",  # used for standard tests
         "pandas",  # used for input upgrades and testing that functionality
         "pyutilib",
     ],

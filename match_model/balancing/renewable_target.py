@@ -1,5 +1,5 @@
 # Copyright (c) 2022 The MATCH Authors. All rights reserved.
-# Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
+# Licensed under the GNU AFFERO GENERAL PUBLIC LICENSE Version 3 (or later), which is in the LICENSE file.
 
 """
 Defines the type of renewable energy goal (annual or time-coincident) and the goal percentage (0-100%)

@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # Copyright (c) 2015-2019 The Switch Authors. All rights reserved.
-# Modifications Copyright (c) 2022 The MATCH Authors. All rights reserved.
-# Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
+# Licensed under the Apache License, Version 2.0, which can be found at http://www.apache.org/licenses/LICENSE-2.0.
+
+# Modifications copyright (c) 2022 The MATCH Authors. All rights reserved.
+# Licensed under the GNU AFFERO GENERAL PUBLIC LICENSE Version 3 (or later), which is in the LICENSE file.
+
 from __future__ import print_function
 
 from pyomo.environ import *

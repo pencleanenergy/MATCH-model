@@ -1,5 +1,5 @@
 # Copyright (c) 2022 The MATCH Authors. All rights reserved.
-# Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
+# Licensed under the GNU AFFERO GENERAL PUBLIC LICENSE Version 3 (or later), which is in the LICENSE file.
 
 """
 Defines the cost of any system power that the model relies on to meet load. System power will be used to serve any load that is not served by contracted generation.
