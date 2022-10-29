@@ -1,5 +1,5 @@
 # Copyright (c) 2022 The MATCH Authors. All rights reserved.
-# Licensed under the Apache License, Version 2.0, which is in the LICENSE file.
+# Licensed under the GNU AFFERO GENERAL PUBLIC LICENSE Version 3 (or later), which is in the LICENSE file.
 
 """
 This takes data from an input excel file and formats into individual csv files for inputs
