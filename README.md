@@ -13,7 +13,7 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 Copyright (C) 2022 The MATCH Authors
 
 **Contact**  
-Greg Miller <grmiller@ucdavis.edu>
+Greg Miller <grmiller@ucdavis.edu>  
 Mehdi Shahriari <mshahriari@peninsulacleanenergy.com>
 
 ## Notice of Third Party Software
