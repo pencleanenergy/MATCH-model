@@ -14,6 +14,7 @@ Copyright (C) 2022 The MATCH Authors
 
 **Contact**  
 Greg Miller <grmiller@ucdavis.edu>
+Mehdi Shahriari <mshahriari@peninsulacleanenergy.com>
 
 ## Notice of Third Party Software
 
@@ -22,7 +23,7 @@ This software includes code from Switch. Copyright (c) 2015-2019 The Switch Auth
 Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
 ## Contribution License Agreement
-This repository includes a Contribution License Agreement (CLA) in the `CLA.md` file. We use `cla-assistant` to allow contributors to sign the CLA agreement from within a pull request.
+This repository includes a Contribution License Agreement (CLA) in the `CLA.md` file. If you submit a pull request, we will reach out to you about signing the CLA before merging your contribution into the repository.
 
 # INSTALLATION
 
