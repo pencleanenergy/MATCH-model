@@ -41,11 +41,11 @@ can just use jupyter notebook instead of installing an IDE. If you installed the
 Anaconda installation, Jupyter Notebook should come installed. If you are using miniconda,
 you will need to manually install jupyter notebook by opening Anaconda prompt and typing:
 
-    conda install -c conda-forge notebook
+    conda install jupyter
     
 To launch the jupyter notebook app in your browser, you would just open anaconda and type
 
-    conda install -c conda-forge notebook
+    jupyter notebook
 
 # Install and setup git software manager
 After installing Anaconda or Miniconda, open an Anaconda Command Prompt
