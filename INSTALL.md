@@ -65,7 +65,7 @@ would like to store the MATCH model code and examples.
     git clone https://github.com/grgmiller/MATCH-model.git
 
 # Setup the conda environment
-This will install all of the package dependencies needed to run MATCH. Use `cd` to navigate to the directory where your local files are stored (e.g. "GitHub/match_model")
+This will install all of the package dependencies needed to run MATCH. Use `cd` to navigate to the directory where your local files are stored (e.g. "GitHub/MATCH-model")
 
     conda env create -f environment.yml
 
@@ -90,7 +90,7 @@ Once the CBC is downloaded and unzipped, move cbc.exe and coin-license.txt to th
 To solve larger models, you will need to install the cplex or gurobi solvers,
 which are an order of magnitude faster than glpk or coincbc. Both of these have
 free trials available, and are free long-term for academics. You can install
-one of these now or after you install Switch. More information on these solvers
+one of these now or after you install MATCH. More information on these solvers
 can be found at the following links:
 
 Professional:
