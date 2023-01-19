@@ -17,7 +17,7 @@ dependencies:
   - pandas              # BSD-3-Clause license
   - pint                # BSD license
   - plotly              # MIT license
-  - pyomo>=6.0.0        # BSD license
+  - pyomo>=6.0.0,<=6.4.0       # BSD license
   - python>=2.7.12      # Python Software Foundation License
   - pytz                # MIT license
   - pyutilib>=6.0.0     # GNU AGPLv3 license

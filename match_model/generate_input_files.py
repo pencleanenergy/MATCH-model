@@ -1098,7 +1098,7 @@ def generate_inputs(model_workspace):
 
             # td_losses.txt
             td_loss = open(input_dir / "td_losses.txt", "w+")
-            td_loss.write(td_losses)
+            td_loss.write(str(td_losses))
             td_loss.close()
 
             # fixed_costs.csv
