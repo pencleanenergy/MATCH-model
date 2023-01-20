@@ -79,11 +79,11 @@ This will install the local codebase as match_model
     pip install --upgrade --editable .
 
 # Download your solver
-For open-source solvers, we recommend using COIN CBC.
+For open-source solvers, we recommend using CBC.
 
-You can download the CBC solver executable from https://ampl.com/products/solvers/open-source/
+You can download the CBC solver executable from https://ampl.com/products/solvers/open-source/. You will need to create an account to download the file.
 
-Once the CBC is downloaded and unzipped, move cbc.exe and coin-license.txt to the "match_model" directory. 
+Once the CBC is downloaded and unzipped, move cbc.exe to the "MATCH-model" directory. 
 
 # Install a Proprietary Solver (Optional)
 
