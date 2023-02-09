@@ -5,9 +5,9 @@ RESEARCH/
 !MODEL_RUNS/
 MODEL_RUNS/*
 !MODEL_RUNS/model_inputs.xlsx
-!MODEL_RUNS/generic_office_example/
-MODEL_RUNS/generic_office_example/*
-!MODEL_RUNS/generic_office_example/model_inputs.xlsx
+!MODEL_RUNS/example/
+MODEL_RUNS/example/*
+!MODEL_RUNS/example/model_inputs.xlsx
 
 *pyc
 **parse_table_datacmds.py

@@ -3187,6 +3187,8 @@ def determine_additional_variable_dispatch(
         addl_dispatch = addl_dispatch.pivot(
             index="timestamp", columns="Type", values="Generator_Dispatch"
         )
+        if "Variable_Dispatch" not in list(addl_dispatch.columns):
+            addl_dispatch["Variable_Dispatch"] = 0
 
         # calculate a total column and drop the nonvariable data
         addl_dispatch["Total_Dispatch"] = addl_dispatch.sum(axis=1)
