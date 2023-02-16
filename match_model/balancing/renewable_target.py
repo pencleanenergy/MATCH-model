@@ -88,7 +88,7 @@ def define_components(mod):
                 if m.tp_period[t] == p
             ),
         )
-    except ValueError:
+    except (ValueError, AttributeError):
         mod.total_storage_losses_in_period = Param(mod.PERIODS, default=0)
 
     if mod.options.goal_type == "hourly":
