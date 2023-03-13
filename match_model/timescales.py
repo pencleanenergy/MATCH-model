@@ -147,12 +147,12 @@ def define_components(mod):
     the expected number of hours.
 
     Example 1: The month of January is described by two timeseries: one
-    to represent a median load day (example 1) and one to represent a
-    peak day (example 2). In these examples, the timeseries for the
+    to represent a median load day (a) and one to represent a
+    peak day (b). In these examples, the timeseries for the
     median load day has a much larger weight than the timeseries for the
     peak load day.
 
-    January median timeseries: A timeseries describing a median day in
+    (a) January median timeseries: A timeseries describing a median day in
     January is composed of 6 timepoints, each representing a 4-hour
     block. This is scaled up by factor of 30 to represent all but 1 day
     in January, then scaled up by a factor of 10 to represent all
@@ -170,7 +170,7 @@ def define_components(mod):
     * tp_weight[t] = 1200 hr/period
         = 4 hr/tp * 1 tp/ts * 300 ts/period
 
-    January peak timeseries: This timeseries describing a peak day in
+    (b) January peak timeseries: This timeseries describing a peak day in
     January is also composed of 6 timepoints, each representing a 4-hour
     block. This is scaled up by factor of 1 to represent a single peak
     day of the month January, then scaled up by a factor of 10 to

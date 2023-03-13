@@ -45,13 +45,13 @@ def define_components(mod):
     parameter names and as z for indexes.
 
     zone_demand_mw[z,t] describes the power demand from the high voltage
-    transmission grid each load zone z and timepoint t. This will either go
+    transmission grid for each load zone z and timepoint t. This will either go
     into the Zone_Power_Withdrawals or the Distributed_Power_Withdrawals power
     balance equations, depending on whether the local_td module is included
     and has defined a distributed node for power balancing. If the local_td
     module is excluded, this value should be the total withdrawals from the
     central grid and should include any distribution losses. If the local_td
-    module is included, this should be set to total end-use demand (aka sales)
+    module is included, this should be the total end-use demand (aka sales)
     and should not include distribution losses. zone_demand_mw must be
     non-negative.
 

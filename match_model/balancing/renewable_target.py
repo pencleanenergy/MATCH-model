@@ -114,7 +114,7 @@ def define_components(mod):
 
     elif mod.options.goal_type == "annual":
         mod.Enforce_Annual_Renewable_Target = Constraint(
-            mod.PERIODS,  # for each zone in each period
+            mod.PERIODS,  # for each period
             rule=lambda m, p: (
                 m.total_generation_in_period[p] - m.total_storage_losses_in_period[p]
                 >= m.renewable_target[p] * m.total_demand_in_period[p]
