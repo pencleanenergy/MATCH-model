@@ -474,11 +474,11 @@ def calculate_generator_utilization(dispatch):
 
     # calculate total annual generation in each category
     utilization = (
-        dispatch.copy().drop(columns="Nodal_Price").groupby("generation_project").sum()
+        dispatch.copy().drop(columns=["Nodal_Price"]).groupby("generation_project").sum()
     )
 
     # sum all rows
-    utilization["Total"] = utilization.sum(axis=1)
+    utilization["Total"] = utilization.drop(columns=["timestamp","gen_tech"]).sum(axis=1)
 
     # drop rows with zero generation
     utilization = utilization[utilization["Total"] > 0]
@@ -1448,7 +1448,7 @@ def build_month_hour_dispatch_plot(
     """
 
     mh_dispatch = dispatch_by_tech.copy()
-    mh_dispatch = mh_dispatch.set_index("timestamp")
+    mh_dispatch = mh_dispatch.drop(columns=['Generation Type']).set_index("timestamp")
 
     # groupby month and hour
     mh_dispatch = mh_dispatch.groupby(
@@ -1770,6 +1770,7 @@ def build_open_position_plot(load_balance, storage_exists):
     """
     # merge mismatch data
     mismatch = load_balance.copy()
+    mismatch.drop(columns='load_zone', inplace=True)
     mismatch["timestamp"] = pd.to_datetime(mismatch["timestamp"])
 
     mismatch["Net generation"] = (
