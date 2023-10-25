@@ -4,22 +4,22 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - cloudpickle         # BSD-3-Clause license
-  - glpk                # GNU GPL license
-  - ipykernel           # BSD-3-Clause license
-  - ipython             # BSD License
-  - nbconvert           # BSD-3-Clause license
-  - nbformat            # BSD-3-Clause license
+  - cloudpickle==3.0.0         # BSD-3-Clause license
+  - glpk==5.0                # GNU GPL license
+  - ipykernel==6.26.0           # BSD-3-Clause license
+  - ipython==8.16.1             # BSD License
+  - nbconvert==7.9.2           # BSD-3-Clause license
+  - nbformat==5.9.2            # BSD-3-Clause license
   - nrel-pysam==3.0.2   # BSD-3-Clause license
   - nrel-pysam-stubs    # BSD-3-Clause license
-  - numpy               # BSD-3-Clause license
-  - openpyxl            # MIT license
-  - pandas              # BSD-3-Clause license
-  - pint                # BSD license
-  - plotly              # MIT license
-  - pyomo>=6.0.0,<=6.4.0       # BSD license
-  - python>=2.7.12      # Python Software Foundation License
+  - numpy==1.26.0               # BSD-3-Clause license
+  - openpyxl==3.1.2            # MIT license
+  - pandas==2.1.1              # BSD-3-Clause license
+  - pint==0.22                # BSD license
+  - plotly==5.17.0              # MIT license
+  - pyomo==6.4.0       # BSD license
+  - python==3.10.12      # Python Software Foundation License
   - pytz                # MIT license
-  - pyutilib>=6.0.0     # GNU AGPLv3 license
-  - requests            # Apache 2.0 license
-  - xlrd                # BSD license
+  - pyutilib==6.0.0     # GNU AGPLv3 license
+  - requests==2.31.0         # Apache 2.0 license
+  - xlrd==2.0.1                # BSD license
