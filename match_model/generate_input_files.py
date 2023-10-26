@@ -369,7 +369,10 @@ def generate_inputs(model_workspace):
     if solver == "cbc":
         print("Copying CBC solver to model run directory...")
         # copy the cbc solver to the model workspace
-        shutil.copy("../../cbc.exe", model_workspace)
+        if os.path.exists("../../cbc"):
+            shutil.copy("../../cbc", model_workspace)
+        elif os.path.exists("../../cbc.exe"):
+            shutil.copy("../../cbc.exe", model_workspace)
 
     # create the scenario folders in the input and output directories
     try:

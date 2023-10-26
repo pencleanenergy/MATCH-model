@@ -841,9 +841,18 @@ def solve(model):
         # with its own solver object (e.g., with runph or a parallel solver server).
         # In those cases, we don't want to go through the expense of creating an
         # unused solver object, or get errors if the solver options are invalid.
-        model.solver = SolverFactory(
-            model.options.solver, solver_io=model.options.solver_io
-        )
+
+        # Uncomment Below if you are want to use old MATCH Model behaviour that works for windows
+        # model.solver = SolverFactory(
+        #     model.options.solver, solver_io=model.options.solver_io
+        # )
+
+        # Use for Mac. 
+        model.solver = SolverFactory(model.options.solver)
+        solvername = 'cbc'
+        solverpath_exe = os.getcwd() + '/cbc'
+        model.solver=SolverFactory(solvername,executable=solverpath_exe)
+
 
         # patch for Pyomo < 4.2
         # note: Pyomo added an options_string argument to solver.solve() in Pyomo 4.2 rev 10587.
@@ -857,7 +866,6 @@ def solve(model):
             ).items():
                 model.solver.options[k] = v
 
-        # import pdb; pdb.set_trace()
         model.solver_manager = SolverManagerFactory(model.options.solver_manager)
 
     # get solver arguments
@@ -899,8 +907,9 @@ def solve(model):
 
         TempfileManager.tempdir = model.options.tempdir
 
-    results = model.solver_manager.solve(model, opt=model.solver, **solver_args)
-    # import pdb; pdb.set_trace()
+    # results = model.solver_manager.solve(model, opt=model.solver, **solver_args)
+    results = SolverFactory("cbc").solve(model)#, **solver_args) #add the solver options parameters
+
 
     if model.options.verbose:
         print(
